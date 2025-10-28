@@ -31,12 +31,35 @@ export function GardenSection({
       return;
     }
 
+    const available = emojiInventory[selectedEmoji] ?? 0;
+
+    if (available <= 0) {
+      Alert.alert('Out of stock', 'Purchase more of this emoji to keep decorating!');
+      setSelectedEmoji(null);
+      return;
+    }
+
     const { locationX, locationY } = event.nativeEvent;
     const placed = placeEmoji(selectedEmoji, { x: locationX, y: locationY });
 
     if (!placed) {
       Alert.alert('Out of stock', 'Purchase more of this emoji to keep decorating!');
+      setSelectedEmoji(null);
+      return;
     }
+
+    if (available === 1) {
+      setSelectedEmoji(null);
+    }
+  };
+
+  const handleSelect = (emojiId: string, owned: number) => {
+    if (owned <= 0) {
+      Alert.alert('Purchase required', 'Buy this decoration before placing it in the garden.');
+      return;
+    }
+
+    setSelectedEmoji(emojiId);
   };
 
   const handlePurchase = (emojiId: string) => {
@@ -76,13 +99,21 @@ export function GardenSection({
         {emojiCatalog.map((item) => {
           const owned = emojiInventory[item.id] ?? 0;
           const isSelected = selectedEmoji === item.id;
+          const isOutOfStock = owned === 0;
 
           return (
-            <View key={item.id} style={[styles.emojiCard, isSelected && styles.emojiCardSelected]}>
-              <Pressable style={styles.selectionArea} onPress={() => setSelectedEmoji(item.id)}>
+            <View
+              key={item.id}
+              style={[
+                styles.emojiCard,
+                isSelected && styles.emojiCardSelected,
+                isOutOfStock && styles.emojiCardOutOfStock,
+              ]}>
+              <Pressable style={styles.selectionArea} onPress={() => handleSelect(item.id, owned)}>
                 <Text style={styles.emojiGlyph}>{item.emoji}</Text>
                 <Text style={styles.emojiName}>{item.name}</Text>
                 <Text style={styles.emojiOwned}>Owned: {owned}</Text>
+                {isOutOfStock && <Text style={styles.outOfStock}>Purchase to place</Text>}
                 {isSelected && <Text style={styles.selectedPill}>Selected</Text>}
               </Pressable>
               <Pressable
@@ -183,6 +214,9 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#38a169',
   },
+  emojiCardOutOfStock: {
+    opacity: 0.7,
+  },
   selectionArea: {
     alignItems: 'center',
     gap: 10,
@@ -198,6 +232,11 @@ const styles = StyleSheet.create({
   emojiOwned: {
     fontSize: 14,
     color: '#2f855a',
+  },
+  outOfStock: {
+    fontSize: 12,
+    color: '#c05621',
+    fontWeight: '600',
   },
   selectedPill: {
     marginTop: 6,

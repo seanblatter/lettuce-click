@@ -9,7 +9,11 @@ export default function GardenScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator
+      >
         <GardenSection
           harvest={harvest}
           emojiCatalog={emojiCatalog}
@@ -29,9 +33,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f0fff4',
   },
+  scroll: {
+    flex: 1,
+  },
   content: {
     padding: 24,
     paddingBottom: 80,
     gap: 24,
+    flexGrow: 1,
   },
 });

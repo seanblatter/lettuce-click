@@ -2,6 +2,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { GardenSection } from '@/components/GardenSection';
+import { OrbitingUpgradeEmojis } from '@/components/OrbitingUpgradeEmojis';
 import { UpgradeSection } from '@/components/UpgradeSection';
 import { useGame } from '@/context/GameContext';
 
@@ -15,6 +16,7 @@ export default function HomeScreen() {
     upgrades,
     purchasedUpgrades,
     purchaseUpgrade,
+    orbitingUpgradeEmojis,
     emojiCatalog,
     emojiInventory,
     placements,
@@ -29,17 +31,24 @@ export default function HomeScreen() {
         <View style={styles.header}>
           <Text style={styles.headerText}>🥬 Lettuce Park Gardens</Text>
         </View>
-        <ScrollView contentContainerStyle={styles.content}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator
+        >
           <Text style={styles.title}>Lettuce Click</Text>
-          <Pressable
-            accessibilityLabel="Harvest lettuce"
-            onPress={addHarvest}
-            style={({ pressed }) => [styles.lettuceButton, pressed && styles.lettucePressed]}>
-            <View style={styles.circleOuter} />
-            <View style={styles.circleInner} />
-            <Text style={styles.lettuceEmoji}>🥬</Text>
-            <Text style={styles.tapHint}>Tap to harvest</Text>
-          </Pressable>
+          <View style={styles.lettuceWrapper}>
+            <OrbitingUpgradeEmojis emojis={orbitingUpgradeEmojis} />
+            <Pressable
+              accessibilityLabel="Harvest lettuce"
+              onPress={addHarvest}
+              style={({ pressed }) => [styles.lettuceButton, pressed && styles.lettucePressed]}>
+              <View style={styles.circleOuter} />
+              <View style={styles.circleInner} />
+              <Text style={styles.lettuceEmoji}>🥬</Text>
+              <Text style={styles.tapHint}>Tap to harvest</Text>
+            </Pressable>
+          </View>
 
           <View style={styles.statsCard}>
             <Text style={styles.statsTitle}>Harvest Ledger</Text>
@@ -52,7 +61,7 @@ export default function HomeScreen() {
               <Text style={styles.statValue}>{lifetimeHarvest.toLocaleString()}</Text>
             </View>
             <View style={styles.statRow}>
-              <Text style={styles.statLabel}>Auto speed (per second)</Text>
+              <Text style={styles.statLabel}>Auto clicks /s</Text>
               <Text style={styles.statValue}>{autoPerSecond.toLocaleString()}</Text>
             </View>
             <View style={styles.statRow}>
@@ -127,10 +136,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#f7fbea',
   },
+  scroll: {
+    flex: 1,
+  },
   content: {
     padding: 24,
     paddingBottom: 120,
     gap: 32,
+    flexGrow: 1,
   },
   title: {
     fontSize: 32,
@@ -138,10 +151,16 @@ const styles = StyleSheet.create({
     color: '#2f855a',
     textAlign: 'center',
   },
-  lettuceButton: {
+  lettuceWrapper: {
     alignSelf: 'center',
     width: 220,
     height: 220,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lettuceButton: {
+    width: '100%',
+    height: '100%',
     borderRadius: 110,
     backgroundColor: '#ffffff',
     alignItems: 'center',

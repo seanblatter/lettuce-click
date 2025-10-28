@@ -95,33 +95,39 @@ export function GardenSection({
         </Text>
       </View>
 
-      <View style={styles.shopContainer}>
+      <View style={styles.shopGrid}>
         {emojiCatalog.map((item) => {
           const owned = emojiInventory[item.id] ?? 0;
           const isSelected = selectedEmoji === item.id;
           const isOutOfStock = owned === 0;
+          const canAfford = harvest >= item.cost;
 
           return (
-            <View
-              key={item.id}
-              style={[
-                styles.emojiCard,
-                isSelected && styles.emojiCardSelected,
-                isOutOfStock && styles.emojiCardOutOfStock,
-              ]}>
-              <Pressable style={styles.selectionArea} onPress={() => handleSelect(item.id, owned)}>
+            <View key={item.id} style={styles.emojiCell}>
+              <Pressable
+                style={[
+                  styles.emojiSlot,
+                  isSelected && styles.emojiSlotSelected,
+                  isOutOfStock && styles.emojiSlotEmpty,
+                ]}
+                onPress={() => handleSelect(item.id, owned)}>
                 <Text style={styles.emojiGlyph}>{item.emoji}</Text>
-                <Text style={styles.emojiName}>{item.name}</Text>
-                <Text style={styles.emojiOwned}>Owned: {owned}</Text>
-                {isOutOfStock && <Text style={styles.outOfStock}>Purchase to place</Text>}
-                {isSelected && <Text style={styles.selectedPill}>Selected</Text>}
+                <View style={styles.ownedBadge}>
+                  <Text style={styles.ownedBadgeText}>x{owned}</Text>
+                </View>
+                {isSelected && <Text style={styles.selectedBadge}>Selected</Text>}
               </Pressable>
+              <Text style={styles.emojiName}>{item.name}</Text>
               <Pressable
                 accessibilityLabel={`Purchase ${item.name}`}
                 onPress={() => handlePurchase(item.id)}
-                style={styles.purchaseButton}>
-                <Text style={styles.purchaseButtonText}>Buy for {item.cost.toLocaleString()}</Text>
+                disabled={!canAfford}
+                style={[styles.purchaseButton, !canAfford && styles.purchaseButtonDisabled]}>
+                <Text style={[styles.purchaseButtonText, !canAfford && styles.purchaseButtonTextDisabled]}>
+                  Buy {item.cost.toLocaleString()}
+                </Text>
               </Pressable>
+              {isOutOfStock && <Text style={styles.outOfStock}>Purchase to place</Text>}
             </View>
           );
         })}
@@ -197,70 +203,92 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
-  shopContainer: {
-    gap: 12,
+  shopGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+    justifyContent: 'space-between',
   },
-  emojiCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 18,
-    padding: 16,
-    shadowColor: '#22543d',
-    shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  emojiCardSelected: {
-    borderWidth: 2,
-    borderColor: '#38a169',
-  },
-  emojiCardOutOfStock: {
-    opacity: 0.7,
-  },
-  selectionArea: {
+  emojiCell: {
+    width: '30%',
+    minWidth: 96,
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
+  },
+  emojiSlot: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 18,
+    backgroundColor: '#f7fafc',
+    borderWidth: 2,
+    borderColor: '#cbd5e0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  emojiSlotSelected: {
+    borderColor: '#38a169',
+    backgroundColor: '#c6f6d5',
+  },
+  emojiSlotEmpty: {
+    opacity: 0.85,
   },
   emojiGlyph: {
-    fontSize: 44,
+    fontSize: 40,
+  },
+  ownedBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    backgroundColor: 'rgba(34, 84, 61, 0.85)',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  ownedBadgeText: {
+    color: '#f0fff4',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  selectedBadge: {
+    position: 'absolute',
+    bottom: 6,
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#22543d',
   },
   emojiName: {
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: '700',
     color: '#22543d',
-  },
-  emojiOwned: {
-    fontSize: 14,
-    color: '#2f855a',
-  },
-  outOfStock: {
-    fontSize: 12,
-    color: '#c05621',
-    fontWeight: '600',
-  },
-  selectedPill: {
-    marginTop: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 999,
-    backgroundColor: '#c6f6d5',
-    color: '#22543d',
-    fontWeight: '700',
-    fontSize: 12,
+    textAlign: 'center',
   },
   purchaseButton: {
     backgroundColor: '#2f855a',
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderRadius: 12,
     alignSelf: 'stretch',
     alignItems: 'center',
-    marginTop: 12,
+  },
+  purchaseButtonDisabled: {
+    backgroundColor: '#cbd5e0',
   },
   purchaseButtonText: {
     color: '#f0fff4',
     fontWeight: '700',
-    fontSize: 15,
+    fontSize: 13,
     textAlign: 'center',
+  },
+  purchaseButtonTextDisabled: {
+    color: '#4a5568',
+  },
+  outOfStock: {
+    fontSize: 11,
+    color: '#c05621',
+    fontWeight: '600',
   },
   canvas: {
     backgroundColor: '#ffffff',

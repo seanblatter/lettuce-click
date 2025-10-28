@@ -30,7 +30,7 @@ type GameContextValue = {
   autoPerSecond: number;
   upgrades: UpgradeDefinition[];
   purchasedUpgrades: Record<string, number>;
-  orbitingUpgradeEmojis: string[];
+  orbitingUpgradeEmojis: OrbitingEmoji[];
   emojiCatalog: EmojiDefinition[];
   emojiInventory: Record<string, number>;
   placements: Placement[];
@@ -103,15 +103,20 @@ const gardenEmojiCatalog: EmojiDefinition[] = [
   { id: 'star', emoji: '⭐️', name: 'Shooting Star', cost: 800 },
 ];
 
+export type OrbitingEmoji = {
+  id: string;
+  emoji: string;
+};
+
 const GameContext = createContext<GameContextValue | undefined>(undefined);
 
 export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
   const [harvest, setHarvest] = useState(0);
   const [lifetimeHarvest, setLifetimeHarvest] = useState(0);
   const [tapValue] = useState(1);
-  const [autoPerSecond, setAutoPerSecond] = useState(1);
+  const [autoPerSecond, setAutoPerSecond] = useState(0);
   const [purchasedUpgrades, setPurchasedUpgrades] = useState<Record<string, number>>({});
-  const [orbitingUpgradeEmojis, setOrbitingUpgradeEmojis] = useState<string[]>([]);
+  const [orbitingUpgradeEmojis, setOrbitingUpgradeEmojis] = useState<OrbitingEmoji[]>([]);
   const [emojiInventory, setEmojiInventory] = useState<Record<string, number>>({});
   const [placements, setPlacements] = useState<Placement[]>([]);
 
@@ -160,7 +165,11 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
 
     setAutoPerSecond((prev) => prev + upgrade.increment);
     setOrbitingUpgradeEmojis((prev) => {
-      const next = [...prev, upgrade.emoji];
+      const entry: OrbitingEmoji = {
+        id: `${upgrade.id}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        emoji: upgrade.emoji,
+      };
+      const next = [...prev, entry];
       if (next.length > 100) {
         return next.slice(next.length - 100);
       }

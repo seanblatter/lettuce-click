@@ -5,7 +5,6 @@ import { UpgradeDefinition } from '@/context/GameContext';
 type Props = {
   harvest: number;
   autoPerSecond: number;
-  tapValue: number;
   upgrades: UpgradeDefinition[];
   purchasedUpgrades: Record<string, number>;
   purchaseUpgrade: (upgradeId: string) => boolean;
@@ -15,7 +14,6 @@ type Props = {
 export function UpgradeSection({
   harvest,
   autoPerSecond,
-  tapValue,
   upgrades,
   purchasedUpgrades,
   purchaseUpgrade,
@@ -32,10 +30,6 @@ export function UpgradeSection({
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>Auto clicks /s</Text>
           <Text style={styles.summaryValue}>{autoPerSecond.toLocaleString()}</Text>
-        </View>
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Click value</Text>
-          <Text style={styles.summaryValue}>{tapValue.toLocaleString()}</Text>
         </View>
       </View>
 

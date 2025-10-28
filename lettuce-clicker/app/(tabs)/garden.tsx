@@ -1,5 +1,14 @@
 import { useState } from 'react';
-import { Alert, GestureResponderEvent, LayoutChangeEvent, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Alert,
+  GestureResponderEvent,
+  LayoutChangeEvent,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { EncodingType, documentDirectory, writeAsStringAsync } from 'expo-file-system';
 
@@ -113,11 +122,7 @@ export default function GardenScreen() {
           })}
         </View>
 
-        <View
-          style={styles.canvas}
-          onStartShouldSetResponder={() => true}
-          onResponderRelease={handleCanvasPress}
-          onLayout={handleCanvasLayout}>
+        <Pressable style={styles.canvas} onPress={handleCanvasPress} onLayout={handleCanvasLayout}>
           {placements.map((placement) => {
             const emoji = emojiCatalog.find((item) => item.id === placement.emojiId);
             if (!emoji) {
@@ -138,7 +143,7 @@ export default function GardenScreen() {
               </Text>
             );
           })}
-        </View>
+        </Pressable>
 
         <View style={styles.canvasActions}>
           <Pressable style={styles.secondaryButton} onPress={clearGarden}>

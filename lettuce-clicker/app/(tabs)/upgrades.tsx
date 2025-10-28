@@ -5,7 +5,7 @@ import { UpgradeSection } from '@/components/UpgradeSection';
 import { useGame } from '@/context/GameContext';
 
 export default function UpgradesScreen() {
-  const { harvest, autoPerSecond, tapValue, upgrades, purchasedUpgrades, purchaseUpgrade } = useGame();
+  const { harvest, autoPerSecond, upgrades, purchasedUpgrades, purchaseUpgrade } = useGame();
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -13,11 +13,11 @@ export default function UpgradesScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator
+        alwaysBounceVertical
       >
         <UpgradeSection
           harvest={harvest}
           autoPerSecond={autoPerSecond}
-          tapValue={tapValue}
           upgrades={upgrades}
           purchasedUpgrades={purchasedUpgrades}
           purchaseUpgrade={purchaseUpgrade}
@@ -39,6 +39,5 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: 80,
     gap: 20,
-    flexGrow: 1,
   },
 });

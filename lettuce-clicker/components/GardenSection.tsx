@@ -206,12 +206,14 @@ const styles = StyleSheet.create({
   shopGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 16,
-    justifyContent: 'space-between',
+    gap: 12,
+    justifyContent: 'flex-start',
   },
   emojiCell: {
-    width: '30%',
-    minWidth: 96,
+    width: '23%',
+    minWidth: 80,
+    flexGrow: 0,
+    flexShrink: 0,
     alignItems: 'center',
     gap: 8,
   },

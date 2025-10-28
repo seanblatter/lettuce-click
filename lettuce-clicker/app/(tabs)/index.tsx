@@ -11,7 +11,6 @@ export default function HomeScreen() {
     harvest,
     lifetimeHarvest,
     autoPerSecond,
-    tapValue,
     addHarvest,
     upgrades,
     purchasedUpgrades,
@@ -35,6 +34,7 @@ export default function HomeScreen() {
           style={styles.scroll}
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator
+          alwaysBounceVertical
         >
           <Text style={styles.title}>Lettuce Click</Text>
           <View style={styles.lettuceWrapper}>
@@ -45,8 +45,8 @@ export default function HomeScreen() {
               style={({ pressed }) => [styles.lettuceButton, pressed && styles.lettucePressed]}>
               <View style={styles.circleOuter} />
               <View style={styles.circleInner} />
+              <View style={styles.circleHighlight} />
               <Text style={styles.lettuceEmoji}>🥬</Text>
-              <Text style={styles.tapHint}>Tap to harvest</Text>
             </Pressable>
           </View>
 
@@ -64,10 +64,6 @@ export default function HomeScreen() {
               <Text style={styles.statLabel}>Auto clicks /s</Text>
               <Text style={styles.statValue}>{autoPerSecond.toLocaleString()}</Text>
             </View>
-            <View style={styles.statRow}>
-              <Text style={styles.statLabel}>Click value</Text>
-              <Text style={styles.statValue}>{tapValue.toLocaleString()}</Text>
-            </View>
           </View>
 
           <View style={styles.callouts}>
@@ -84,7 +80,6 @@ export default function HomeScreen() {
             <UpgradeSection
               harvest={harvest}
               autoPerSecond={autoPerSecond}
-              tapValue={tapValue}
               upgrades={upgrades}
               purchasedUpgrades={purchasedUpgrades}
               purchaseUpgrade={purchaseUpgrade}
@@ -114,10 +109,11 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f2f9f2',
+    backgroundColor: '#2f855a',
   },
   container: {
     flex: 1,
+    backgroundColor: '#f2f9f2',
   },
   header: {
     paddingVertical: 16,
@@ -140,10 +136,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: 24,
-    paddingBottom: 120,
+    paddingHorizontal: 24,
+    paddingTop: 28,
+    paddingBottom: 160,
     gap: 32,
-    flexGrow: 1,
   },
   title: {
     fontSize: 32,
@@ -162,7 +158,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     borderRadius: 110,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#f9fff7',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -177,26 +173,29 @@ const styles = StyleSheet.create({
   },
   circleOuter: {
     position: 'absolute',
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: 'rgba(46, 204, 113, 0.25)',
+    width: 204,
+    height: 204,
+    borderRadius: 102,
+    backgroundColor: '#d8f5dd',
+    borderWidth: 2,
+    borderColor: '#b7ebc3',
   },
   circleInner: {
     position: 'absolute',
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: 'rgba(39, 174, 96, 0.35)',
+    width: 156,
+    height: 156,
+    borderRadius: 78,
+    backgroundColor: 'rgba(56, 161, 105, 0.28)',
+  },
+  circleHighlight: {
+    position: 'absolute',
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: 'rgba(240, 255, 244, 0.55)',
   },
   lettuceEmoji: {
     fontSize: 72,
-  },
-  tapHint: {
-    marginTop: 16,
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#2f855a',
   },
   statsCard: {
     backgroundColor: '#ffffff',

@@ -13,6 +13,7 @@ export default function GardenScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator
+        alwaysBounceVertical
       >
         <GardenSection
           harvest={harvest}
@@ -40,6 +41,5 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: 80,
     gap: 24,
-    flexGrow: 1,
   },
 });

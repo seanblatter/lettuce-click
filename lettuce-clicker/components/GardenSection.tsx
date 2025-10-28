@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Alert, GestureResponderEvent, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { EmojiDefinition, Placement } from '@/context/GameContext';
@@ -25,6 +25,20 @@ export function GardenSection({
   title = 'Garden Atelier',
 }: Props) {
   const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null);
+  const [activePanel, setActivePanel] = useState<'shop' | 'inventory'>('shop');
+
+  const inventoryList = useMemo(
+    () =>
+      emojiCatalog
+        .map((item) => ({
+          ...item,
+          owned: emojiInventory[item.id] ?? 0,
+        }))
+        .sort((a, b) => a.cost - b.cost),
+    [emojiCatalog, emojiInventory]
+  );
+
+  const ownedInventory = inventoryList.filter((item) => item.owned > 0);
 
   const handleCanvasPress = (event: GestureResponderEvent) => {
     if (!selectedEmoji) {
@@ -60,6 +74,7 @@ export function GardenSection({
     }
 
     setSelectedEmoji(emojiId);
+    setActivePanel('inventory');
   };
 
   const handlePurchase = (emojiId: string) => {
@@ -71,6 +86,7 @@ export function GardenSection({
     }
 
     setSelectedEmoji(emojiId);
+    setActivePanel('inventory');
   };
 
   const handleClearGarden = () => {
@@ -81,7 +97,7 @@ export function GardenSection({
   const handleSaveSnapshot = () => {
     Alert.alert(
       'Save your garden',
-      'Use your device\'s screenshot tools to capture the garden canvas once you finish decorating.'
+      "Use your device's screenshot tools to capture the garden canvas once you finish decorating."
     );
   };
 
@@ -95,43 +111,90 @@ export function GardenSection({
         </Text>
       </View>
 
-      <View style={styles.shopGrid}>
-        {emojiCatalog.map((item) => {
-          const owned = emojiInventory[item.id] ?? 0;
-          const isSelected = selectedEmoji === item.id;
-          const isOutOfStock = owned === 0;
-          const canAfford = harvest >= item.cost;
-
-          return (
-            <View key={item.id} style={styles.emojiCell}>
-              <Pressable
-                style={[
-                  styles.emojiSlot,
-                  isSelected && styles.emojiSlotSelected,
-                  isOutOfStock && styles.emojiSlotEmpty,
-                ]}
-                onPress={() => handleSelect(item.id, owned)}>
-                <Text style={styles.emojiGlyph}>{item.emoji}</Text>
-                <View style={styles.ownedBadge}>
-                  <Text style={styles.ownedBadgeText}>x{owned}</Text>
-                </View>
-                {isSelected && <Text style={styles.selectedBadge}>Selected</Text>}
-              </Pressable>
-              <Text style={styles.emojiName}>{item.name}</Text>
-              <Pressable
-                accessibilityLabel={`Purchase ${item.name}`}
-                onPress={() => handlePurchase(item.id)}
-                disabled={!canAfford}
-                style={[styles.purchaseButton, !canAfford && styles.purchaseButtonDisabled]}>
-                <Text style={[styles.purchaseButtonText, !canAfford && styles.purchaseButtonTextDisabled]}>
-                  Buy {item.cost.toLocaleString()}
-                </Text>
-              </Pressable>
-              {isOutOfStock && <Text style={styles.outOfStock}>Purchase to place</Text>}
-            </View>
-          );
-        })}
+      <View style={styles.panelTabs}>
+        <Pressable
+          style={[styles.tabButton, activePanel === 'shop' && styles.tabButtonActive]}
+          onPress={() => setActivePanel('shop')}>
+          <Text style={[styles.tabButtonText, activePanel === 'shop' && styles.tabButtonTextActive]}>Shop</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.tabButton, activePanel === 'inventory' && styles.tabButtonActive]}
+          onPress={() => setActivePanel('inventory')}>
+          <Text style={[styles.tabButtonText, activePanel === 'inventory' && styles.tabButtonTextActive]}>
+            Inventory
+          </Text>
+        </Pressable>
       </View>
+
+      {activePanel === 'shop' ? (
+        <View style={styles.grid}>
+          {inventoryList.map((item) => {
+            const owned = item.owned;
+            const isSelected = selectedEmoji === item.id;
+            const canAfford = harvest >= item.cost;
+
+            return (
+              <View key={item.id} style={styles.card}>
+                <Pressable
+                  style={[styles.emojiSlot, isSelected && styles.emojiSlotSelected]}
+                  onPress={() => handleSelect(item.id, owned)}>
+                  <Text style={styles.emojiGlyph}>{item.emoji}</Text>
+                  <View style={styles.ownedBadge}>
+                    <Text style={styles.ownedBadgeText}>x{owned}</Text>
+                  </View>
+                  {isSelected && <Text style={styles.selectedBadge}>Selected</Text>}
+                </Pressable>
+                <View style={styles.cardCopy}>
+                  <Text style={styles.emojiName}>{item.name}</Text>
+                  <Text style={styles.emojiCost}>{item.cost.toLocaleString()} harvest</Text>
+                </View>
+                <Pressable
+                  accessibilityLabel={`Purchase ${item.name}`}
+                  onPress={() => handlePurchase(item.id)}
+                  disabled={!canAfford}
+                  style={[styles.purchaseButton, !canAfford && styles.purchaseButtonDisabled]}>
+                  <Text style={[styles.purchaseButtonText, !canAfford && styles.purchaseButtonTextDisabled]}>
+                    {canAfford ? 'Buy' : 'Need harvest'}
+                  </Text>
+                </Pressable>
+              </View>
+            );
+          })}
+        </View>
+      ) : (
+        <View style={styles.grid}>
+          {ownedInventory.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateTitle}>No decorations yet</Text>
+              <Text style={styles.emptyStateCopy}>Visit the shop to purchase new friends for your garden.</Text>
+            </View>
+          ) : (
+            ownedInventory.map((item) => {
+              const isSelected = selectedEmoji === item.id;
+              return (
+                <View key={item.id} style={styles.card}>
+                  <Pressable
+                    style={[styles.emojiSlot, isSelected && styles.emojiSlotSelected]}
+                    onPress={() => handleSelect(item.id, item.owned)}>
+                    <Text style={styles.emojiGlyph}>{item.emoji}</Text>
+                    <View style={styles.ownedBadge}>
+                      <Text style={styles.ownedBadgeText}>x{item.owned}</Text>
+                    </View>
+                    {isSelected && <Text style={styles.selectedBadge}>Selected</Text>}
+                  </Pressable>
+                  <View style={styles.cardCopy}>
+                    <Text style={styles.emojiName}>{item.name}</Text>
+                    <Text style={styles.emojiCost}>Owned • {item.owned}</Text>
+                  </View>
+                  <Pressable style={styles.secondaryButton} onPress={() => handleSelect(item.id, item.owned)}>
+                    <Text style={styles.secondaryText}>Choose</Text>
+                  </Pressable>
+                </View>
+              );
+            })
+          )}
+        </View>
+      )}
 
       <Pressable style={styles.canvas} onPress={handleCanvasPress}>
         {placements.map((placement) => {
@@ -159,13 +222,13 @@ export function GardenSection({
 
       <View style={styles.canvasActions}>
         <Pressable
-          style={[styles.secondaryButton, placements.length === 0 && styles.disabledSecondary]}
+          style={[styles.ghostButton, placements.length === 0 && styles.disabledSecondary]}
           disabled={placements.length === 0}
           onPress={handleClearGarden}>
-          <Text style={[styles.secondaryText, placements.length === 0 && styles.disabledText]}>Clear Garden</Text>
+          <Text style={[styles.ghostButtonText, placements.length === 0 && styles.disabledText]}>Clear Garden</Text>
         </Pressable>
         <Pressable style={styles.primaryButton} onPress={handleSaveSnapshot}>
-          <Text style={styles.primaryText}>Save Snapshot</Text>
+          <Text style={styles.primaryText}>Save</Text>
         </Pressable>
       </View>
     </View>
@@ -185,6 +248,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     shadowRadius: 12,
     elevation: 4,
+    gap: 10,
   },
   harvestTitle: {
     fontSize: 20,
@@ -195,32 +259,64 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '800',
     color: '#c6f6d5',
-    marginTop: 8,
   },
   harvestHint: {
-    marginTop: 12,
+    marginTop: 4,
     color: '#e6fffa',
     fontSize: 14,
     lineHeight: 20,
   },
-  shopGrid: {
+  panelTabs: {
+    flexDirection: 'row',
+    backgroundColor: '#e6fffa',
+    borderRadius: 16,
+    padding: 4,
+    gap: 6,
+  },
+  tabButton: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 10,
+  },
+  tabButtonActive: {
+    backgroundColor: '#22543d',
+    shadowColor: '#0f2e20',
+    shadowOpacity: 0.14,
+    shadowOffset: { width: 0, height: 3 },
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  tabButtonText: {
+    textAlign: 'center',
+    fontWeight: '600',
+    color: '#276749',
+    fontSize: 15,
+  },
+  tabButtonTextActive: {
+    color: '#f0fff4',
+  },
+  grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
-    justifyContent: 'flex-start',
+    gap: 16,
+    justifyContent: 'space-between',
   },
-  emojiCell: {
-    width: '23%',
-    minWidth: 80,
-    flexGrow: 0,
-    flexShrink: 0,
-    alignItems: 'center',
-    gap: 8,
+  card: {
+    width: '47%',
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 14,
+    shadowColor: '#2f855a',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 12,
+    elevation: 3,
+    gap: 12,
   },
   emojiSlot: {
     width: '100%',
     aspectRatio: 1,
-    borderRadius: 18,
+    borderRadius: 16,
     backgroundColor: '#f7fafc',
     borderWidth: 2,
     borderColor: '#cbd5e0',
@@ -232,11 +328,8 @@ const styles = StyleSheet.create({
     borderColor: '#38a169',
     backgroundColor: '#c6f6d5',
   },
-  emojiSlotEmpty: {
-    opacity: 0.85,
-  },
   emojiGlyph: {
-    fontSize: 40,
+    fontSize: 42,
   },
   ownedBadge: {
     position: 'absolute',
@@ -262,17 +355,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#22543d',
   },
+  cardCopy: {
+    gap: 4,
+  },
   emojiName: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
     color: '#22543d',
+    textAlign: 'center',
+  },
+  emojiCost: {
+    fontSize: 12,
+    color: '#4a5568',
     textAlign: 'center',
   },
   purchaseButton: {
     backgroundColor: '#2f855a',
     paddingVertical: 8,
     borderRadius: 12,
-    alignSelf: 'stretch',
     alignItems: 'center',
   },
   purchaseButtonDisabled: {
@@ -287,10 +387,34 @@ const styles = StyleSheet.create({
   purchaseButtonTextDisabled: {
     color: '#4a5568',
   },
-  outOfStock: {
-    fontSize: 11,
-    color: '#c05621',
+  secondaryButton: {
+    backgroundColor: '#e6fffa',
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  secondaryText: {
+    textAlign: 'center',
+    color: '#22543d',
     fontWeight: '600',
+  },
+  emptyState: {
+    width: '100%',
+    backgroundColor: '#f0fff4',
+    borderRadius: 18,
+    padding: 24,
+    alignItems: 'center',
+    gap: 6,
+  },
+  emptyStateTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#22543d',
+  },
+  emptyStateCopy: {
+    fontSize: 13,
+    color: '#2d3748',
+    textAlign: 'center',
+    lineHeight: 18,
   },
   canvas: {
     backgroundColor: '#ffffff',
@@ -306,22 +430,23 @@ const styles = StyleSheet.create({
   },
   canvasEmoji: {
     position: 'absolute',
-    fontSize: 32,
+    fontSize: 34,
   },
   canvasActions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 12,
   },
-  secondaryButton: {
+  ghostButton: {
     flex: 1,
-    backgroundColor: '#e6fffa',
     borderRadius: 14,
     paddingVertical: 12,
     borderWidth: 1,
-    borderColor: '#81e6d9',
+    borderColor: '#22543d',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  secondaryText: {
+  ghostButtonText: {
     textAlign: 'center',
     color: '#22543d',
     fontWeight: '600',

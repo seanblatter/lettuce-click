@@ -1,98 +1,185 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import { useGame } from '@/context/GameContext';
 
 export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+  const { harvest, lifetimeHarvest, autoPerSecond, tapValue, addHarvest } = useGame();
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerText}>🥬 Lettuce Park Gardens</Text>
+        </View>
+        <ScrollView contentContainerStyle={styles.content}>
+          <Text style={styles.title}>Lettuce Click</Text>
+          <Pressable
+            accessibilityLabel="Harvest lettuce"
+            onPress={addHarvest}
+            style={({ pressed }) => [styles.lettuceButton, pressed && styles.lettucePressed]}>
+            <View style={styles.circleOuter} />
+            <View style={styles.circleInner} />
+            <Text style={styles.lettuceEmoji}>🥬</Text>
+            <Text style={styles.tapHint}>Tap to harvest</Text>
+          </Pressable>
+
+          <View style={styles.statsCard}>
+            <Text style={styles.statsTitle}>Harvest Ledger</Text>
+            <View style={styles.statRow}>
+              <Text style={styles.statLabel}>Available harvest</Text>
+              <Text style={styles.statValue}>{harvest.toLocaleString()}</Text>
+            </View>
+            <View style={styles.statRow}>
+              <Text style={styles.statLabel}>Lifetime harvest</Text>
+              <Text style={styles.statValue}>{lifetimeHarvest.toLocaleString()}</Text>
+            </View>
+            <View style={styles.statRow}>
+              <Text style={styles.statLabel}>Auto speed (per second)</Text>
+              <Text style={styles.statValue}>{autoPerSecond.toLocaleString()}</Text>
+            </View>
+            <View style={styles.statRow}>
+              <Text style={styles.statLabel}>Click value</Text>
+              <Text style={styles.statValue}>{tapValue.toLocaleString()}</Text>
+            </View>
+          </View>
+
+          <View style={styles.callouts}>
+            <Text style={styles.calloutTitle}>Grow your park</Text>
+            <Text style={styles.calloutCopy}>
+              Spend harvest on upgrades to unlock faster auto clicks and stronger tap values. Visit the
+              Garden tab to plant emoji friends and capture your masterpiece once it is ready.
+            </Text>
+          </View>
+        </ScrollView>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#f2f9f2',
+  },
+  container: {
+    flex: 1,
+  },
+  header: {
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    backgroundColor: '#2f855a',
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  headerText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#f7fbea',
+  },
+  content: {
+    padding: 24,
+    paddingBottom: 64,
+    gap: 24,
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#2f855a',
+    textAlign: 'center',
+  },
+  lettuceButton: {
+    alignSelf: 'center',
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    shadowColor: '#2f855a',
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 10,
+  },
+  lettucePressed: {
+    transform: [{ scale: 0.96 }],
+  },
+  circleOuter: {
+    position: 'absolute',
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(46, 204, 113, 0.25)',
+  },
+  circleInner: {
+    position: 'absolute',
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: 'rgba(39, 174, 96, 0.35)',
+  },
+  lettuceEmoji: {
+    fontSize: 72,
+  },
+  tapHint: {
+    marginTop: 16,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2f855a',
+  },
+  statsCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    padding: 20,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  statsTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#22543d',
+  },
+  statRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  statLabel: {
+    fontSize: 16,
+    color: '#2d3748',
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  statValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#22543d',
+  },
+  callouts: {
+    backgroundColor: '#e6fffa',
+    borderRadius: 20,
+    padding: 18,
+    gap: 6,
+    borderColor: '#81e6d9',
+    borderWidth: 1,
+  },
+  calloutTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#285e61',
+  },
+  calloutCopy: {
+    fontSize: 15,
+    color: '#234e52',
+    lineHeight: 20,
   },
 });

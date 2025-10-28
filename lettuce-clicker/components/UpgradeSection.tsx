@@ -30,11 +30,11 @@ export function UpgradeSection({
           <Text style={styles.summaryValue}>{harvest.toLocaleString()}</Text>
         </View>
         <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Auto harvest /s</Text>
+          <Text style={styles.summaryLabel}>Auto clicks /s</Text>
           <Text style={styles.summaryValue}>{autoPerSecond.toLocaleString()}</Text>
         </View>
         <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Tap value</Text>
+          <Text style={styles.summaryLabel}>Click value</Text>
           <Text style={styles.summaryValue}>{tapValue.toLocaleString()}</Text>
         </View>
       </View>
@@ -45,10 +45,14 @@ export function UpgradeSection({
         return (
           <View key={upgrade.id} style={styles.upgradeCard}>
             <View style={styles.upgradeHeader}>
-              <Text style={styles.upgradeTitle}>{upgrade.name}</Text>
+              <View style={styles.upgradeTitleGroup}>
+                <Text style={styles.upgradeEmoji}>{upgrade.emoji}</Text>
+                <Text style={styles.upgradeTitle}>{upgrade.name}</Text>
+              </View>
               <Text style={styles.upgradeCost}>{upgrade.cost.toLocaleString()} harvest</Text>
             </View>
             <Text style={styles.upgradeDescription}>{upgrade.description}</Text>
+            <Text style={styles.upgradeBoost}>+{upgrade.increment.toLocaleString()} auto clicks /s</Text>
             <Text style={styles.upgradeOwned}>Owned: {owned}</Text>
             <Pressable
               accessibilityLabel={`Purchase ${upgrade.name}`}
@@ -116,10 +120,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  upgradeTitleGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   upgradeTitle: {
     fontSize: 17,
     fontWeight: '700',
     color: '#1a4731',
+  },
+  upgradeEmoji: {
+    fontSize: 20,
   },
   upgradeCost: {
     fontSize: 15,
@@ -130,6 +142,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#2d3748',
     lineHeight: 20,
+  },
+  upgradeBoost: {
+    fontSize: 13,
+    color: '#2f855a',
+    fontWeight: '600',
   },
   upgradeOwned: {
     fontSize: 13,

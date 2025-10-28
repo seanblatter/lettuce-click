@@ -9,7 +9,11 @@ export default function UpgradesScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator
+      >
         <UpgradeSection
           harvest={harvest}
           autoPerSecond={autoPerSecond}
@@ -28,9 +32,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f0fff4',
   },
+  scroll: {
+    flex: 1,
+  },
   content: {
     padding: 24,
     paddingBottom: 80,
     gap: 20,
+    flexGrow: 1,
   },
 });

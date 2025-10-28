@@ -5,8 +5,8 @@ export type UpgradeDefinition = {
   name: string;
   description: string;
   cost: number;
-  type: 'auto' | 'tap';
   increment: number;
+  emoji: string;
 };
 
 export type EmojiDefinition = {
@@ -30,6 +30,7 @@ type GameContextValue = {
   autoPerSecond: number;
   upgrades: UpgradeDefinition[];
   purchasedUpgrades: Record<string, number>;
+  orbitingUpgradeEmojis: string[];
   emojiCatalog: EmojiDefinition[];
   emojiInventory: Record<string, number>;
   placements: Placement[];
@@ -44,51 +45,62 @@ const upgradeCatalog: UpgradeDefinition[] = [
   {
     id: 'watering-can',
     name: 'Watering Can',
-    description: 'Adds +1 harvest per second with a gentle sprinkle.',
+    description: 'Adds +1 click per second with a gentle sprinkle.',
     cost: 50,
-    type: 'auto',
     increment: 1,
+    emoji: '💧',
   },
   {
     id: 'gardeners-gloves',
     name: "Gardener's Gloves",
-    description: 'Boost tap value by +1 for every careful pluck.',
+    description: 'Adds +5 clicks per second with perfect plucking form.',
     cost: 100,
-    type: 'tap',
-    increment: 1,
+    increment: 5,
+    emoji: '🧤',
   },
   {
     id: 'sun-soaker',
     name: 'Sun Soaker Panels',
-    description: 'Solar warmth grants +5 harvest per second.',
+    description: 'Solar warmth adds +10 clicks per second.',
     cost: 400,
-    type: 'auto',
-    increment: 5,
+    increment: 10,
+    emoji: '☀️',
   },
   {
     id: 'greenhouse',
     name: 'Mini Greenhouse',
-    description: 'Doubles your tap value with a climate-controlled boost.',
+    description: 'Climate control adds +20 clicks per second.',
     cost: 600,
-    type: 'tap',
-    increment: 5,
+    increment: 20,
+    emoji: '🏡',
   },
   {
     id: 'irrigation',
     name: 'Irrigation Network',
-    description: 'Adds +15 harvest per second with automated watering.',
+    description: 'A flowing network adds +35 clicks per second.',
     cost: 1200,
-    type: 'auto',
-    increment: 15,
+    increment: 35,
+    emoji: '🚿',
   },
 ];
 
 const gardenEmojiCatalog: EmojiDefinition[] = [
   { id: 'sprout', emoji: '🌱', name: 'Sprout', cost: 25 },
-  { id: 'seedling', emoji: '🪴', name: 'Potted Seedling', cost: 75 },
-  { id: 'butterfly', emoji: '🦋', name: 'Butterfly', cost: 120 },
+  { id: 'seedling', emoji: '🪴', name: 'Potted Seedling', cost: 60 },
+  { id: 'butterfly', emoji: '🦋', name: 'Butterfly', cost: 90 },
+  { id: 'ladybug', emoji: '🐞', name: 'Ladybug', cost: 120 },
+  { id: 'honeybee', emoji: '🐝', name: 'Honeybee', cost: 150 },
   { id: 'snail', emoji: '🐌', name: 'Helpful Snail', cost: 200 },
-  { id: 'hedgehog', emoji: '🦔', name: 'Hedgehog Friend', cost: 350 },
+  { id: 'frog', emoji: '🐸', name: 'Lily Pad Frog', cost: 260 },
+  { id: 'hedgehog', emoji: '🦔', name: 'Hedgehog Friend', cost: 320 },
+  { id: 'fox', emoji: '🦊', name: 'Fox Visitor', cost: 380 },
+  { id: 'owl', emoji: '🦉', name: 'Wise Owl', cost: 420 },
+  { id: 'cat', emoji: '🐱', name: 'Garden Cat', cost: 460 },
+  { id: 'dog', emoji: '🐶', name: 'Puppy Pal', cost: 500 },
+  { id: 'unicorn', emoji: '🦄', name: 'Mythic Unicorn', cost: 650 },
+  { id: 'rainbow', emoji: '🌈', name: 'Prismatic Rainbow', cost: 700 },
+  { id: 'sparkles', emoji: '✨', name: 'Sparkle Dust', cost: 750 },
+  { id: 'star', emoji: '⭐️', name: 'Shooting Star', cost: 800 },
 ];
 
 const GameContext = createContext<GameContextValue | undefined>(undefined);
@@ -96,9 +108,10 @@ const GameContext = createContext<GameContextValue | undefined>(undefined);
 export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
   const [harvest, setHarvest] = useState(0);
   const [lifetimeHarvest, setLifetimeHarvest] = useState(0);
-  const [tapValue, setTapValue] = useState(1);
-  const [autoPerSecond, setAutoPerSecond] = useState(0);
+  const [tapValue] = useState(1);
+  const [autoPerSecond, setAutoPerSecond] = useState(1);
   const [purchasedUpgrades, setPurchasedUpgrades] = useState<Record<string, number>>({});
+  const [orbitingUpgradeEmojis, setOrbitingUpgradeEmojis] = useState<string[]>([]);
   const [emojiInventory, setEmojiInventory] = useState<Record<string, number>>({});
   const [placements, setPlacements] = useState<Placement[]>([]);
 
@@ -145,11 +158,14 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       [upgradeId]: (prev[upgradeId] ?? 0) + 1,
     }));
 
-    if (upgrade.type === 'auto') {
-      setAutoPerSecond((prev) => prev + upgrade.increment);
-    } else {
-      setTapValue((prev) => prev + upgrade.increment);
-    }
+    setAutoPerSecond((prev) => prev + upgrade.increment);
+    setOrbitingUpgradeEmojis((prev) => {
+      const next = [...prev, upgrade.emoji];
+      if (next.length > 100) {
+        return next.slice(next.length - 100);
+      }
+      return next;
+    });
 
     return true;
   };
@@ -223,6 +239,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     autoPerSecond,
     upgrades: upgradeCatalog,
     purchasedUpgrades,
+    orbitingUpgradeEmojis,
     emojiCatalog: gardenEmojiCatalog,
     emojiInventory,
     placements,
@@ -237,6 +254,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     tapValue,
     autoPerSecond,
     purchasedUpgrades,
+    orbitingUpgradeEmojis,
     emojiInventory,
     placements,
   ]);

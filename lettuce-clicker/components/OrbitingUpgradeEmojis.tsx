@@ -1,13 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import { Animated, Dimensions, Easing, StyleSheet, Text, View } from 'react-native';
 
 import type { HomeEmojiTheme, OrbitingEmoji } from '@/context/GameContext';
 
 const FULL_ROTATION_RADIANS = Math.PI * 2;
 const DEFAULT_RADIUS = 120;
-const SPIRAL_STEP = 18;
+const SPIRAL_STEP = 12;
 const MATRIX_MAX_EMOJIS = 12;
-const MATRIX_WIDTH = 220;
+
+const WINDOW = Dimensions.get('window');
+const WINDOW_WIDTH = WINDOW.width;
+const WINDOW_HEIGHT = WINDOW.height;
+const MATRIX_EXTRA_SPREAD = 160;
+const MATRIX_WIDTH = WINDOW_WIDTH + MATRIX_EXTRA_SPREAD;
+const MATRIX_HEIGHT = WINDOW_HEIGHT * 1.6;
+const MATRIX_START_Y = -WINDOW_HEIGHT * 0.6;
+const MATRIX_END_Y = WINDOW_HEIGHT + 160;
+const MATRIX_EMOJI_SIZE = 26;
 
 type OrbitingUpgradeEmojisProps = {
   emojis: OrbitingEmoji[];
@@ -21,7 +30,7 @@ export function OrbitingUpgradeEmojis({ emojis, radius = DEFAULT_RADIUS, theme =
   }
 
   if (theme === 'matrix') {
-    return <MatrixEmojiRain emojis={emojis} />;
+    return <MatrixEmojiRain emojis={emojis} radius={radius} />;
   }
 
   return <OrbitingRing emojis={emojis} radius={radius} theme={theme} />;
@@ -121,9 +130,10 @@ type MatrixDrop = {
 
 type MatrixEmojiRainProps = {
   emojis: OrbitingEmoji[];
+  radius: number;
 };
 
-function MatrixEmojiRain({ emojis }: MatrixEmojiRainProps) {
+function MatrixEmojiRain({ emojis, radius }: MatrixEmojiRainProps) {
   const [drops, setDrops] = useState<MatrixDrop[]>([]);
   const dropsRef = useRef<MatrixDrop[]>([]);
 
@@ -139,13 +149,15 @@ function MatrixEmojiRain({ emojis }: MatrixEmojiRainProps) {
       const next: MatrixDrop[] = [];
       const retained = new Set<string>();
 
-      limited.forEach((emoji) => {
+      limited.forEach((emoji, index) => {
+        const startAtTop = index === 0;
+        const targetLeft = getMatrixLeft(index);
         const existing = prev.find((drop) => drop.id === emoji.id);
         if (existing) {
           retained.add(existing.id);
-          next.push(existing);
+          next.push({ ...existing, left: targetLeft });
         } else {
-          next.push(createMatrixDrop(emoji.id));
+          next.push(createMatrixDrop(emoji.id, startAtTop, targetLeft));
         }
       });
 
@@ -164,8 +176,20 @@ function MatrixEmojiRain({ emojis }: MatrixEmojiRainProps) {
     return null;
   }
 
+  const horizontalOffset = -(MATRIX_WIDTH - radius * 2) / 2;
+
   return (
-    <View pointerEvents="none" style={styles.matrixWrapper}>
+    <View
+      pointerEvents="none"
+      style={[
+        styles.matrixWrapper,
+        {
+          width: MATRIX_WIDTH,
+          height: MATRIX_HEIGHT,
+          top: 0,
+          left: horizontalOffset,
+        },
+      ]}>
       {drops.map((drop) => {
         const emoji = emojis.find((item) => item.id === drop.id);
         if (!emoji) {
@@ -190,8 +214,8 @@ function MatrixEmojiRain({ emojis }: MatrixEmojiRainProps) {
   );
 }
 
-function createMatrixDrop(id: string): MatrixDrop {
-  const animated = new Animated.Value(Math.random());
+function createMatrixDrop(id: string, startAtTop: boolean, left: number): MatrixDrop {
+  const animated = new Animated.Value(startAtTop ? 0 : Math.random());
   const duration = 3600 + Math.random() * 2400;
 
   const loop = Animated.loop(
@@ -214,10 +238,8 @@ function createMatrixDrop(id: string): MatrixDrop {
 
   const translateY = animated.interpolate({
     inputRange: [0, 1],
-    outputRange: [-160, 200],
+    outputRange: [MATRIX_START_Y, MATRIX_END_Y],
   });
-
-  const left = Math.random() * MATRIX_WIDTH - MATRIX_WIDTH / 2;
 
   return {
     id,
@@ -226,6 +248,15 @@ function createMatrixDrop(id: string): MatrixDrop {
     loop,
     left,
   };
+}
+
+function getMatrixLeft(index: number) {
+  if (index === 0) {
+    return MATRIX_WIDTH / 2 - MATRIX_EMOJI_SIZE / 2;
+  }
+
+  const padding = 32;
+  return padding + Math.random() * (MATRIX_WIDTH - padding * 2);
 }
 
 const styles = StyleSheet.create({
@@ -256,9 +287,7 @@ const styles = StyleSheet.create({
   },
   matrixWrapper: {
     position: 'absolute',
-    width: MATRIX_WIDTH,
-    height: 220,
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   matrixEmoji: {
     position: 'absolute',

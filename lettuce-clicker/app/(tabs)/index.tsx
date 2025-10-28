@@ -1,28 +1,25 @@
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useGame } from '@/context/GameContext';
 
 export default function HomeScreen() {
   const { harvest, lifetimeHarvest, autoPerSecond, tapValue, addHarvest } = useGame();
-  const insets = useSafeAreaInsets();
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+    <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        <View style={[styles.header, { paddingTop: insets.top + 18 }]}>
-          <Text style={styles.headerText}>🥬Lettuce Park Gardens</Text>
+        <View style={styles.header}>
+          <Text style={styles.headerText}>🥬 Lettuce Park Gardens</Text>
         </View>
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={styles.content}>
           <Text style={styles.title}>Lettuce Click</Text>
           <Pressable
             accessibilityLabel="Harvest lettuce"
             onPress={addHarvest}
             style={({ pressed }) => [styles.lettuceButton, pressed && styles.lettucePressed]}>
-            <View style={styles.circleGlow} />
             <View style={styles.circleOuter} />
             <View style={styles.circleInner} />
-            <View style={styles.circleHighlight} />
             <Text style={styles.lettuceEmoji}>🥬</Text>
             <Text style={styles.tapHint}>Tap to harvest</Text>
           </Pressable>
@@ -69,9 +66,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    paddingBottom: 20,
+    paddingVertical: 16,
     paddingHorizontal: 24,
-    backgroundColor: '#0d7a42',
+    backgroundColor: '#2f855a',
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
     shadowColor: '#000',
     shadowOpacity: 0.15,
     shadowOffset: { width: 0, height: 4 },
@@ -81,12 +80,11 @@ const styles = StyleSheet.create({
   headerText: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#f2ffe8',
+    color: '#f7fbea',
   },
   content: {
     padding: 24,
-    paddingBottom: 120,
-    flexGrow: 1,
+    paddingBottom: 64,
     gap: 24,
   },
   title: {
@@ -104,45 +102,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    shadowColor: '#0d7a42',
-    shadowOpacity: 0.28,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 16 },
-    elevation: 12,
+    shadowColor: '#2f855a',
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 10,
   },
   lettucePressed: {
     transform: [{ scale: 0.96 }],
-  },
-  circleGlow: {
-    position: 'absolute',
-    width: 230,
-    height: 230,
-    borderRadius: 115,
-    backgroundColor: 'rgba(13, 122, 66, 0.15)',
-    opacity: 0.8,
   },
   circleOuter: {
     position: 'absolute',
     width: 200,
     height: 200,
     borderRadius: 100,
-    backgroundColor: 'rgba(67, 160, 71, 0.28)',
+    backgroundColor: 'rgba(46, 204, 113, 0.25)',
   },
   circleInner: {
     position: 'absolute',
     width: 150,
     height: 150,
     borderRadius: 75,
-    backgroundColor: 'rgba(56, 142, 60, 0.35)',
-  },
-  circleHighlight: {
-    position: 'absolute',
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(250, 255, 250, 0.55)',
-    top: 46,
-    left: 50,
+    backgroundColor: 'rgba(39, 174, 96, 0.35)',
   },
   lettuceEmoji: {
     fontSize: 72,

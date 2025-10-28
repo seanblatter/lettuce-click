@@ -1,10 +1,13 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { GardenSection } from '@/components/GardenSection';
 import { OrbitingUpgradeEmojis } from '@/components/OrbitingUpgradeEmojis';
-import { UpgradeSection } from '@/components/UpgradeSection';
 import { useGame } from '@/context/GameContext';
+
+const HEADER_HEIGHT = 88;
+const MODAL_STORAGE_KEY = 'lettuce-click:grow-your-park-dismissed';
 
 export default function HomeScreen() {
   const {
@@ -12,40 +15,73 @@ export default function HomeScreen() {
     lifetimeHarvest,
     autoPerSecond,
     addHarvest,
-    upgrades,
-    purchasedUpgrades,
-    purchaseUpgrade,
     orbitingUpgradeEmojis,
-    emojiCatalog,
-    emojiInventory,
-    placements,
-    purchaseEmoji,
-    placeEmoji,
-    clearGarden,
   } = useGame();
+  const [showGrowModal, setShowGrowModal] = useState(false);
+  const scrollY = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    AsyncStorage.getItem(MODAL_STORAGE_KEY)
+      .then((value) => {
+        if (value === 'true') {
+          return;
+        }
+        setShowGrowModal(true);
+      })
+      .catch(() => {
+        setShowGrowModal(true);
+      });
+  }, []);
+
+  const handleDismissGrow = useCallback(async () => {
+    setShowGrowModal(false);
+    try {
+      await AsyncStorage.setItem(MODAL_STORAGE_KEY, 'true');
+    } catch (error) {
+      // Best effort persistence only.
+    }
+  }, []);
+
+  const headerTranslateY = scrollY.interpolate({
+    inputRange: [0, HEADER_HEIGHT * 1.2],
+    outputRange: [0, -HEADER_HEIGHT - 16],
+    extrapolate: 'clamp',
+  });
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        <View style={styles.header}>
+        <Animated.View style={[styles.header, { transform: [{ translateY: headerTranslateY }] }]}>
           <Text style={styles.headerText}>🥬 Lettuce Park Gardens</Text>
-        </View>
-        <ScrollView
+        </Animated.View>
+
+        <Animated.ScrollView
           style={styles.scroll}
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, { paddingTop: HEADER_HEIGHT + 32 }]}
           showsVerticalScrollIndicator
           alwaysBounceVertical
+          scrollEventThrottle={16}
+          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+            useNativeDriver: true,
+          })}
         >
           <Text style={styles.title}>Lettuce Click</Text>
+
           <View style={styles.lettuceWrapper}>
+            <View style={styles.lettuceBackdrop}>
+              <View style={[styles.backdropBubble, styles.backdropBubbleOne]} />
+              <View style={[styles.backdropBubble, styles.backdropBubbleTwo]} />
+              <View style={[styles.backdropBubble, styles.backdropBubbleThree]} />
+            </View>
             <OrbitingUpgradeEmojis emojis={orbitingUpgradeEmojis} />
             <Pressable
               accessibilityLabel="Harvest lettuce"
               onPress={addHarvest}
-              style={({ pressed }) => [styles.lettuceButton, pressed && styles.lettucePressed]}>
-              <View style={styles.circleOuter} />
-              <View style={styles.circleInner} />
-              <View style={styles.circleHighlight} />
+              style={({ pressed }) => [styles.lettuceButton, pressed && styles.lettucePressed]}
+            >
+              <View style={[styles.ring, styles.ringOuter]} />
+              <View style={[styles.ring, styles.ringMiddle]} />
+              <View style={[styles.ring, styles.ringInner]} />
               <Text style={styles.lettuceEmoji}>🥬</Text>
             </Pressable>
           </View>
@@ -65,43 +101,29 @@ export default function HomeScreen() {
               <Text style={styles.statValue}>{autoPerSecond.toLocaleString()}</Text>
             </View>
           </View>
-
-          <View style={styles.callouts}>
-            <Text style={styles.calloutTitle}>Grow your park</Text>
-            <Text style={styles.calloutCopy}>
-              Spend harvest on upgrades to unlock faster auto clicks and stronger tap values. Scroll
-              down to plant emoji friends in the garden studio and capture your masterpiece once it is
-              ready.
-            </Text>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionHeading}>Upgrade Market</Text>
-            <UpgradeSection
-              harvest={harvest}
-              autoPerSecond={autoPerSecond}
-              upgrades={upgrades}
-              purchasedUpgrades={purchasedUpgrades}
-              purchaseUpgrade={purchaseUpgrade}
-              title="Conservatory Upgrades"
-            />
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionHeading}>Garden Studio</Text>
-            <GardenSection
-              harvest={harvest}
-              emojiCatalog={emojiCatalog}
-              emojiInventory={emojiInventory}
-              placements={placements}
-              purchaseEmoji={purchaseEmoji}
-              placeEmoji={placeEmoji}
-              clearGarden={clearGarden}
-              title="Garden Atelier"
-            />
-          </View>
-        </ScrollView>
+        </Animated.ScrollView>
       </View>
+
+      <Modal
+        visible={showGrowModal}
+        animationType="fade"
+        transparent
+        onRequestClose={handleDismissGrow}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Grow your park</Text>
+            <Text style={styles.modalCopy}>
+              Spend harvest on upgrades to unlock faster auto clicks and stronger tap values. Visit the
+              Upgrades tab to power up, then bring your harvest to the Garden tab to decorate your
+              dream park.
+            </Text>
+            <Pressable accessibilityLabel="Close grow your park message" style={styles.modalButton} onPress={handleDismissGrow}>
+              <Text style={styles.modalButtonText}>Start growing</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -109,23 +131,28 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#2f855a',
+    backgroundColor: '#1f6f4a',
   },
   container: {
     flex: 1,
     backgroundColor: '#f2f9f2',
   },
   header: {
-    paddingVertical: 16,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: HEADER_HEIGHT,
+    backgroundColor: '#1f6f4a',
+    justifyContent: 'flex-end',
     paddingHorizontal: 24,
-    backgroundColor: '#2f855a',
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 8,
+    paddingBottom: 14,
+    zIndex: 10,
     elevation: 6,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
   },
   headerText: {
     fontSize: 20,
@@ -137,71 +164,107 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 24,
-    paddingTop: 28,
     paddingBottom: 160,
     gap: 32,
   },
   title: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: '800',
-    color: '#2f855a',
+    color: '#1f6f4a',
     textAlign: 'center',
   },
   lettuceWrapper: {
     alignSelf: 'center',
-    width: 220,
-    height: 220,
+    width: 240,
+    height: 240,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  lettuceButton: {
+  lettuceBackdrop: {
+    position: 'absolute',
     width: '100%',
     height: '100%',
-    borderRadius: 110,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backdropBubble: {
+    position: 'absolute',
+    borderRadius: 999,
+    opacity: 0.6,
+    backgroundColor: '#bbf7d0',
+  },
+  backdropBubbleOne: {
+    width: 220,
+    height: 220,
+    shadowColor: '#34d399',
+    shadowOpacity: 0.45,
+    shadowRadius: 40,
+    shadowOffset: { width: 0, height: 10 },
+  },
+  backdropBubbleTwo: {
+    width: 170,
+    height: 170,
+    backgroundColor: '#c4f1f9',
+    shadowColor: '#38bdf8',
+    shadowOpacity: 0.35,
+    shadowRadius: 32,
+    shadowOffset: { width: 0, height: 14 },
+  },
+  backdropBubbleThree: {
+    width: 120,
+    height: 120,
+    backgroundColor: '#fef3c7',
+    shadowColor: '#fbbf24',
+    shadowOpacity: 0.35,
+    shadowRadius: 26,
+    shadowOffset: { width: 0, height: 18 },
+  },
+  lettuceButton: {
+    width: 200,
+    height: 200,
+    borderRadius: 100,
     backgroundColor: '#f9fff7',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    shadowColor: '#2f855a',
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 10,
+    shadowColor: '#14532d',
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 12,
   },
   lettucePressed: {
-    transform: [{ scale: 0.96 }],
+    transform: [{ scale: 0.95 }],
   },
-  circleOuter: {
+  ring: {
     position: 'absolute',
-    width: 204,
-    height: 204,
-    borderRadius: 102,
-    backgroundColor: '#d8f5dd',
+    borderRadius: 999,
     borderWidth: 2,
-    borderColor: '#b7ebc3',
   },
-  circleInner: {
-    position: 'absolute',
-    width: 156,
-    height: 156,
-    borderRadius: 78,
-    backgroundColor: 'rgba(56, 161, 105, 0.28)',
+  ringOuter: {
+    width: 200,
+    height: 200,
+    borderColor: 'rgba(56, 161, 105, 0.4)',
   },
-  circleHighlight: {
-    position: 'absolute',
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    backgroundColor: 'rgba(240, 255, 244, 0.55)',
+  ringMiddle: {
+    width: 150,
+    height: 150,
+    borderColor: 'rgba(72, 187, 120, 0.6)',
+  },
+  ringInner: {
+    width: 108,
+    height: 108,
+    borderColor: 'rgba(110, 231, 183, 0.8)',
+    backgroundColor: 'rgba(209, 250, 229, 0.6)',
   },
   lettuceEmoji: {
-    fontSize: 72,
+    fontSize: 76,
   },
   statsCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 24,
-    padding: 20,
-    gap: 12,
+    borderRadius: 26,
+    padding: 22,
+    gap: 14,
     shadowColor: '#000',
     shadowOpacity: 0.08,
     shadowOffset: { width: 0, height: 6 },
@@ -227,30 +290,45 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#22543d',
   },
-  callouts: {
-    backgroundColor: '#e6fffa',
-    borderRadius: 20,
-    padding: 18,
-    gap: 6,
-    borderColor: '#81e6d9',
-    borderWidth: 1,
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(17, 24, 39, 0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
   },
-  calloutTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#285e61',
-  },
-  calloutCopy: {
-    fontSize: 15,
-    color: '#234e52',
-    lineHeight: 20,
-  },
-  section: {
+  modalCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    padding: 24,
     gap: 16,
+    maxWidth: 420,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 8,
   },
-  sectionHeading: {
-    fontSize: 18,
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#1f6f4a',
+  },
+  modalCopy: {
+    fontSize: 15,
+    color: '#2d3748',
+    lineHeight: 22,
+  },
+  modalButton: {
+    marginTop: 8,
+    backgroundColor: '#1f6f4a',
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  modalButtonText: {
+    color: '#f0fff4',
     fontWeight: '700',
-    color: '#22543d',
+    fontSize: 16,
   },
 });

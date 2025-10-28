@@ -32,14 +32,14 @@ export default function GardenScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f0fff4',
+    backgroundColor: '#f2f9f2',
   },
   scroll: {
     flex: 1,
   },
   content: {
     padding: 24,
-    paddingBottom: 80,
-    gap: 24,
+    paddingBottom: 120,
+    gap: 28,
   },
 });

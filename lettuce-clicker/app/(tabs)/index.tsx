@@ -1,10 +1,13 @@
+// eslint-disable-next-line import/no-unresolved
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 
 import { OrbitingUpgradeEmojis } from '@/components/OrbitingUpgradeEmojis';
 import { useGame } from '@/context/GameContext';
+import type { HomeEmojiTheme } from '@/context/GameContext';
 
 const HEADER_HEIGHT = 88;
 const MODAL_STORAGE_KEY = 'lettuce-click:grow-your-park-dismissed';
@@ -16,9 +19,12 @@ export default function HomeScreen() {
     autoPerSecond,
     addHarvest,
     orbitingUpgradeEmojis,
+    homeEmojiTheme,
+    setHomeEmojiTheme,
   } = useGame();
   const [showGrowModal, setShowGrowModal] = useState(false);
-  const scrollY = useRef(new Animated.Value(0)).current;
+  const [menuOpen, setMenuOpen] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     AsyncStorage.getItem(MODAL_STORAGE_KEY)
@@ -37,33 +43,42 @@ export default function HomeScreen() {
     setShowGrowModal(false);
     try {
       await AsyncStorage.setItem(MODAL_STORAGE_KEY, 'true');
-    } catch (error) {
+    } catch {
       // Best effort persistence only.
     }
   }, []);
 
-  const headerTranslateY = scrollY.interpolate({
-    inputRange: [0, HEADER_HEIGHT * 1.2],
-    outputRange: [0, -HEADER_HEIGHT - 16],
-    extrapolate: 'clamp',
-  });
+  const handleNavigateProfile = useCallback(() => {
+    setMenuOpen(false);
+    router.push('/profile');
+  }, [router]);
+
+  const handleSelectTheme = useCallback(
+    (theme: HomeEmojiTheme) => {
+      setHomeEmojiTheme(theme);
+      setMenuOpen(false);
+    },
+    [setHomeEmojiTheme]
+  );
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        <Animated.View style={[styles.header, { transform: [{ translateY: headerTranslateY }] }]}>
+        <View style={styles.header}>
           <Text style={styles.headerText}>🥬 Lettuce Park Gardens</Text>
-        </Animated.View>
+          <Pressable
+            accessibilityLabel="Open garden menu"
+            style={styles.menuButton}
+            onPress={() => setMenuOpen((prev) => !prev)}>
+            <Text style={styles.menuIcon}>☰</Text>
+          </Pressable>
+        </View>
 
-        <Animated.ScrollView
+        <ScrollView
           style={styles.scroll}
-          contentContainerStyle={[styles.content, { paddingTop: HEADER_HEIGHT + 32 }]}
+          contentContainerStyle={[styles.content, { paddingTop: 32 }]}
           showsVerticalScrollIndicator
           alwaysBounceVertical
-          scrollEventThrottle={16}
-          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
-            useNativeDriver: true,
-          })}
         >
           <Text style={styles.title}>Lettuce Click</Text>
 
@@ -73,7 +88,7 @@ export default function HomeScreen() {
               <View style={[styles.backdropBubble, styles.backdropBubbleTwo]} />
               <View style={[styles.backdropBubble, styles.backdropBubbleThree]} />
             </View>
-            <OrbitingUpgradeEmojis emojis={orbitingUpgradeEmojis} />
+            <OrbitingUpgradeEmojis emojis={orbitingUpgradeEmojis} theme={homeEmojiTheme} />
             <Pressable
               accessibilityLabel="Harvest lettuce"
               onPress={addHarvest}
@@ -101,7 +116,39 @@ export default function HomeScreen() {
               <Text style={styles.statValue}>{autoPerSecond.toLocaleString()}</Text>
             </View>
           </View>
-        </Animated.ScrollView>
+        </ScrollView>
+
+        {menuOpen && (
+          <View style={styles.menuOverlay}>
+            <Pressable style={styles.menuBackdrop} onPress={() => setMenuOpen(false)} />
+            <View style={styles.menuCard}>
+              <View style={styles.menuContent}>
+                <Pressable style={styles.menuItem} onPress={handleNavigateProfile}>
+                  <Text style={styles.menuItemText}>Profile</Text>
+                </Pressable>
+                <View style={styles.menuDivider} />
+                <Text style={styles.menuSectionTitle}>Emoji Themes</Text>
+                {[
+                  { label: 'Circle', value: 'circle' as HomeEmojiTheme },
+                  { label: 'Spiral', value: 'spiral' as HomeEmojiTheme },
+                  { label: 'Matrix', value: 'matrix' as HomeEmojiTheme },
+                ].map((option) => {
+                  const isActive = homeEmojiTheme === option.value;
+                  return (
+                    <Pressable
+                      key={option.value}
+                      onPress={() => handleSelectTheme(option.value)}
+                      style={[styles.themeOption, isActive && styles.themeOptionActive]}>
+                      <Text style={[styles.themeOptionText, isActive && styles.themeOptionTextActive]}>
+                        {option.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          </View>
+        )}
       </View>
 
       <Modal
@@ -131,33 +178,40 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#1f6f4a',
+    backgroundColor: '#f2f9f2',
   },
   container: {
     flex: 1,
     backgroundColor: '#f2f9f2',
   },
   header: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
     height: HEADER_HEIGHT,
     backgroundColor: '#1f6f4a',
-    justifyContent: 'flex-end',
     paddingHorizontal: 24,
     paddingBottom: 14,
-    zIndex: 10,
-    elevation: 6,
     shadowColor: '#000',
     shadowOpacity: 0.12,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 6 },
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   headerText: {
     fontSize: 20,
     fontWeight: '700',
     color: '#f7fbea',
+  },
+  menuButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  menuIcon: {
+    fontSize: 20,
+    color: '#f7fbea',
+    fontWeight: '700',
   },
   scroll: {
     flex: 1,
@@ -330,5 +384,65 @@ const styles = StyleSheet.create({
     color: '#f0fff4',
     fontWeight: '700',
     fontSize: 16,
+  },
+  menuOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    alignItems: 'flex-end',
+    paddingTop: HEADER_HEIGHT + 12,
+    paddingHorizontal: 16,
+  },
+  menuBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  menuCard: {
+    width: 220,
+  },
+  menuContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 12,
+    elevation: 6,
+    gap: 8,
+  },
+  menuItem: {
+    paddingVertical: 8,
+  },
+  menuItemText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f6f4a',
+  },
+  menuDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#d1fae5',
+    marginVertical: 4,
+  },
+  menuSectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1f6f4a',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  themeOption: {
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  themeOptionActive: {
+    backgroundColor: '#dcfce7',
+  },
+  themeOptionText: {
+    fontSize: 15,
+    color: '#22543d',
+  },
+  themeOptionTextActive: {
+    fontWeight: '700',
   },
 });

@@ -1,4 +1,7 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+
+export type HomeEmojiTheme = 'circle' | 'spiral' | 'matrix';
 
 export type UpgradeDefinition = {
   id: string;
@@ -21,11 +24,13 @@ export type Placement = {
   emojiId: string;
   x: number;
   y: number;
+  scale: number;
 };
 
 type GameContextValue = {
   harvest: number;
   lifetimeHarvest: number;
+  profileLifetimeTotal: number;
   tapValue: number;
   autoPerSecond: number;
   upgrades: UpgradeDefinition[];
@@ -34,12 +39,25 @@ type GameContextValue = {
   emojiCatalog: EmojiDefinition[];
   emojiInventory: Record<string, number>;
   placements: Placement[];
+  profileName: string;
+  profileUsername: string;
+  profileImageUri: string | null;
+  homeEmojiTheme: HomeEmojiTheme;
+  setProfileLifetimeTotal: (value: number) => void;
   addHarvest: () => void;
   purchaseUpgrade: (upgradeId: string) => boolean;
   purchaseEmoji: (emojiId: string) => boolean;
   placeEmoji: (emojiId: string, position: { x: number; y: number }) => boolean;
+  updatePlacement: (placementId: string, updates: Partial<Placement>) => void;
   clearGarden: () => void;
+  setProfileName: (value: string) => void;
+  setProfileUsername: (value: string) => void;
+  setProfileImageUri: (uri: string | null) => void;
+  setHomeEmojiTheme: (theme: HomeEmojiTheme) => void;
 };
+
+const PROFILE_STORAGE_KEY = 'lettuce-click:profile';
+const THEME_STORAGE_KEY = 'lettuce-click:emoji-theme';
 
 const upgradeCatalog: UpgradeDefinition[] = [
   {
@@ -201,12 +219,18 @@ const GameContext = createContext<GameContextValue | undefined>(undefined);
 export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
   const [harvest, setHarvest] = useState(0);
   const [lifetimeHarvest, setLifetimeHarvest] = useState(0);
+  const [profileLifetimeTotal, setProfileLifetimeTotal] = useState(0);
   const [tapValue] = useState(1);
   const [autoPerSecond, setAutoPerSecond] = useState(0);
   const [purchasedUpgrades, setPurchasedUpgrades] = useState<Record<string, number>>({});
   const [orbitingUpgradeEmojis, setOrbitingUpgradeEmojis] = useState<OrbitingEmoji[]>([]);
   const [emojiInventory, setEmojiInventory] = useState<Record<string, number>>({});
   const [placements, setPlacements] = useState<Placement[]>([]);
+  const [profileName, setProfileName] = useState('');
+  const [profileUsername, setProfileUsername] = useState('');
+  const [profileImageUri, setProfileImageUri] = useState<string | null>(null);
+  const [homeEmojiTheme, setHomeEmojiTheme] = useState<HomeEmojiTheme>('circle');
+  const initialisedRef = useRef(false);
 
   useEffect(() => {
     if (autoPerSecond <= 0) {
@@ -216,6 +240,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     const interval = setInterval(() => {
       setHarvest((prev) => prev + autoPerSecond);
       setLifetimeHarvest((prev) => prev + autoPerSecond);
+      setProfileLifetimeTotal((prev) => prev + autoPerSecond);
     }, 1000);
 
     return () => clearInterval(interval);
@@ -233,6 +258,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const addHarvest = () => {
     setHarvest((prev) => prev + tapValue);
     setLifetimeHarvest((prev) => prev + tapValue);
+    setProfileLifetimeTotal((prev) => prev + tapValue);
   };
 
   const purchaseUpgrade = (upgradeId: string) => {
@@ -305,10 +331,24 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         emojiId,
         x: position.x,
         y: position.y,
+        scale: 1,
       },
     ]);
 
     return true;
+  };
+
+  const updatePlacement = (placementId: string, updates: Partial<Placement>) => {
+    setPlacements((prev) =>
+      prev.map((placement) =>
+        placement.id === placementId
+          ? {
+              ...placement,
+              ...updates,
+            }
+          : placement
+      )
+    );
   };
 
   const clearGarden = () => {
@@ -332,6 +372,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const value = useMemo<GameContextValue>(() => ({
     harvest,
     lifetimeHarvest,
+    profileLifetimeTotal,
     tapValue,
     autoPerSecond,
     upgrades: upgradeCatalog,
@@ -340,21 +381,99 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     emojiCatalog: gardenEmojiCatalog,
     emojiInventory,
     placements,
+    profileName,
+    profileUsername,
+    profileImageUri,
+    homeEmojiTheme,
+    setProfileLifetimeTotal,
     addHarvest,
     purchaseUpgrade,
     purchaseEmoji,
     placeEmoji,
+    updatePlacement,
     clearGarden,
+    setProfileName,
+    setProfileUsername,
+    setProfileImageUri,
+    setHomeEmojiTheme,
   }), [
     harvest,
     lifetimeHarvest,
+    profileLifetimeTotal,
     tapValue,
     autoPerSecond,
     purchasedUpgrades,
     orbitingUpgradeEmojis,
     emojiInventory,
     placements,
+    profileName,
+    profileUsername,
+    profileImageUri,
+    homeEmojiTheme,
+    setProfileLifetimeTotal,
   ]);
+
+  useEffect(() => {
+    if (initialisedRef.current) {
+      return;
+    }
+
+    AsyncStorage.multiGet([PROFILE_STORAGE_KEY, THEME_STORAGE_KEY])
+      .then(([profileEntry, themeEntry]) => {
+        if (profileEntry[1]) {
+          try {
+            const parsed = JSON.parse(profileEntry[1]) as {
+              name?: string;
+              username?: string;
+              imageUri?: string | null;
+              lifetimeTotal?: number;
+            };
+            setProfileName(parsed.name ?? '');
+            setProfileUsername(parsed.username ?? '');
+            setProfileImageUri(parsed.imageUri ?? null);
+            setProfileLifetimeTotal(parsed.lifetimeTotal ?? 0);
+          } catch (error) {
+            // ignore malformed stored data
+          }
+        }
+
+        if (themeEntry[1]) {
+          if (themeEntry[1] === 'circle' || themeEntry[1] === 'spiral' || themeEntry[1] === 'matrix') {
+            setHomeEmojiTheme(themeEntry[1]);
+          }
+        }
+      })
+      .finally(() => {
+        initialisedRef.current = true;
+      });
+  }, []);
+
+  useEffect(() => {
+    if (!initialisedRef.current) {
+      return;
+    }
+
+    const payload = JSON.stringify({
+      name: profileName,
+      username: profileUsername,
+      imageUri: profileImageUri,
+      lifetimeTotal: profileLifetimeTotal,
+    });
+
+    AsyncStorage.setItem(PROFILE_STORAGE_KEY, payload).catch(() => {
+      // persistence best effort only
+    });
+  }, [profileImageUri, profileLifetimeTotal, profileName, profileUsername]);
+
+  useEffect(() => {
+    if (!initialisedRef.current) {
+      return;
+    }
+
+    AsyncStorage.setItem(THEME_STORAGE_KEY, homeEmojiTheme).catch(() => {
+      // persistence best effort only
+    });
+  }, [homeEmojiTheme]);
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
 };

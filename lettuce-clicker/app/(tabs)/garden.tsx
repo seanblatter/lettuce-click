@@ -5,7 +5,16 @@ import { GardenSection } from '@/components/GardenSection';
 import { useGame } from '@/context/GameContext';
 
 export default function GardenScreen() {
-  const { harvest, emojiCatalog, emojiInventory, placements, purchaseEmoji, placeEmoji, clearGarden } = useGame();
+  const {
+    harvest,
+    emojiCatalog,
+    emojiInventory,
+    placements,
+    purchaseEmoji,
+    placeEmoji,
+    updatePlacement,
+    clearGarden,
+  } = useGame();
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -22,6 +31,7 @@ export default function GardenScreen() {
           placements={placements}
           purchaseEmoji={purchaseEmoji}
           placeEmoji={placeEmoji}
+          updatePlacement={updatePlacement}
           clearGarden={clearGarden}
         />
       </ScrollView>

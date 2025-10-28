@@ -1,5 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, GestureResponderEvent, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 
 import { EmojiDefinition, Placement } from '@/context/GameContext';
 
@@ -10,6 +12,7 @@ type Props = {
   placements: Placement[];
   purchaseEmoji: (emojiId: string) => boolean;
   placeEmoji: (emojiId: string, position: { x: number; y: number }) => boolean;
+  updatePlacement: (placementId: string, updates: Partial<Placement>) => void;
   clearGarden: () => void;
   title?: string;
 };
@@ -21,6 +24,7 @@ export function GardenSection({
   placements,
   purchaseEmoji,
   placeEmoji,
+  updatePlacement,
   clearGarden,
   title = 'Garden Atelier',
 }: Props) {
@@ -74,7 +78,6 @@ export function GardenSection({
     }
 
     setSelectedEmoji(emojiId);
-    setActivePanel('inventory');
   };
 
   const handlePurchase = (emojiId: string) => {
@@ -86,7 +89,6 @@ export function GardenSection({
     }
 
     setSelectedEmoji(emojiId);
-    setActivePanel('inventory');
   };
 
   const handleClearGarden = () => {
@@ -107,7 +109,8 @@ export function GardenSection({
         <Text style={styles.harvestTitle}>{title}</Text>
         <Text style={styles.harvestAmount}>{harvest.toLocaleString()} harvest ready</Text>
         <Text style={styles.harvestHint}>
-          Purchase decorations with harvest, select one, then tap the canvas to place it.
+          Purchase decorations in the shop, then switch to your inventory to tap the canvas and place
+          them.
         </Text>
       </View>
 
@@ -145,7 +148,9 @@ export function GardenSection({
                   {isSelected && <Text style={styles.selectedBadge}>Selected</Text>}
                 </Pressable>
                 <View style={styles.cardCopy}>
-                  <Text style={styles.emojiName}>{item.name}</Text>
+                  <Text style={styles.emojiName} numberOfLines={2}>
+                    {item.name}
+                  </Text>
                   <Text style={styles.emojiCost}>{item.cost.toLocaleString()} harvest</Text>
                 </View>
                 <Pressable
@@ -162,76 +167,151 @@ export function GardenSection({
           })}
         </View>
       ) : (
-        <View style={styles.grid}>
-          {ownedInventory.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateTitle}>No decorations yet</Text>
-              <Text style={styles.emptyStateCopy}>Visit the shop to purchase new friends for your garden.</Text>
-            </View>
-          ) : (
-            ownedInventory.map((item) => {
-              const isSelected = selectedEmoji === item.id;
-              return (
-                <View key={item.id} style={styles.card}>
-                  <Pressable
-                    style={[styles.emojiSlot, isSelected && styles.emojiSlotSelected]}
-                    onPress={() => handleSelect(item.id, item.owned)}>
-                    <Text style={styles.emojiGlyph}>{item.emoji}</Text>
-                    <View style={styles.ownedBadge}>
-                      <Text style={styles.ownedBadgeText}>x{item.owned}</Text>
+        <>
+          <View style={styles.grid}>
+            {ownedInventory.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateTitle}>No decorations yet</Text>
+                <Text style={styles.emptyStateCopy}>
+                  Visit the shop to purchase new friends for your garden.
+                </Text>
+              </View>
+            ) : (
+              ownedInventory.map((item) => {
+                const isSelected = selectedEmoji === item.id;
+                return (
+                  <View key={item.id} style={styles.card}>
+                    <Pressable
+                      style={[styles.emojiSlot, isSelected && styles.emojiSlotSelected]}
+                      onPress={() => handleSelect(item.id, item.owned)}>
+                      <Text style={styles.emojiGlyph}>{item.emoji}</Text>
+                      <View style={styles.ownedBadge}>
+                        <Text style={styles.ownedBadgeText}>x{item.owned}</Text>
+                      </View>
+                      {isSelected && <Text style={styles.selectedBadge}>Selected</Text>}
+                    </Pressable>
+                    <View style={styles.cardCopy}>
+                      <Text style={styles.emojiName}>{item.name}</Text>
+                      <Text style={styles.emojiCost}>Owned • {item.owned}</Text>
                     </View>
-                    {isSelected && <Text style={styles.selectedBadge}>Selected</Text>}
-                  </Pressable>
-                  <View style={styles.cardCopy}>
-                    <Text style={styles.emojiName}>{item.name}</Text>
-                    <Text style={styles.emojiCost}>Owned • {item.owned}</Text>
+                    <Pressable style={styles.secondaryButton} onPress={() => handleSelect(item.id, item.owned)}>
+                      <Text style={styles.secondaryText}>Choose</Text>
+                    </Pressable>
                   </View>
-                  <Pressable style={styles.secondaryButton} onPress={() => handleSelect(item.id, item.owned)}>
-                    <Text style={styles.secondaryText}>Choose</Text>
-                  </Pressable>
-                </View>
+                );
+              })
+            )}
+          </View>
+
+          <Pressable style={styles.canvas} onPress={handleCanvasPress}>
+            {placements.map((placement) => {
+              const emoji = emojiCatalog.find((item) => item.id === placement.emojiId);
+
+              if (!emoji) {
+                return null;
+              }
+
+              return (
+                <DraggablePlacement
+                  key={placement.id}
+                  placement={placement}
+                  emoji={emoji.emoji}
+                  onUpdate={(updates) => updatePlacement(placement.id, updates)}
+                />
               );
-            })
-          )}
-        </View>
+            })}
+          </Pressable>
+
+          <View style={styles.canvasActions}>
+            <Pressable
+              style={[styles.ghostButton, placements.length === 0 && styles.disabledSecondary]}
+              disabled={placements.length === 0}
+              onPress={handleClearGarden}>
+              <Text style={[styles.ghostButtonText, placements.length === 0 && styles.disabledText]}>
+                Clear Garden
+              </Text>
+            </Pressable>
+            <Pressable style={styles.primaryButton} onPress={handleSaveSnapshot}>
+              <Text style={styles.primaryText}>Save</Text>
+            </Pressable>
+          </View>
+        </>
       )}
-
-      <Pressable style={styles.canvas} onPress={handleCanvasPress}>
-        {placements.map((placement) => {
-          const emoji = emojiCatalog.find((item) => item.id === placement.emojiId);
-
-          if (!emoji) {
-            return null;
-          }
-
-          return (
-            <Text
-              key={placement.id}
-              style={[
-                styles.canvasEmoji,
-                {
-                  left: placement.x - 16,
-                  top: placement.y - 16,
-                },
-              ]}>
-              {emoji.emoji}
-            </Text>
-          );
-        })}
-      </Pressable>
-
-      <View style={styles.canvasActions}>
-        <Pressable
-          style={[styles.ghostButton, placements.length === 0 && styles.disabledSecondary]}
-          disabled={placements.length === 0}
-          onPress={handleClearGarden}>
-          <Text style={[styles.ghostButtonText, placements.length === 0 && styles.disabledText]}>Clear Garden</Text>
-        </Pressable>
-        <Pressable style={styles.primaryButton} onPress={handleSaveSnapshot}>
-          <Text style={styles.primaryText}>Save</Text>
-        </Pressable>
-      </View>
     </View>
+  );
+}
+
+const EMOJI_SIZE = 38;
+const MIN_SCALE = 0.6;
+const MAX_SCALE = 2.4;
+
+type DraggablePlacementProps = {
+  emoji: string;
+  placement: Placement;
+  onUpdate: (updates: Partial<Placement>) => void;
+};
+
+function DraggablePlacement({ emoji, placement, onUpdate }: DraggablePlacementProps) {
+  const x = useSharedValue(placement.x);
+  const y = useSharedValue(placement.y);
+  const scale = useSharedValue(placement.scale ?? 1);
+  const panStartX = useSharedValue(placement.x);
+  const panStartY = useSharedValue(placement.y);
+  const pinchStart = useSharedValue(placement.scale ?? 1);
+
+  useEffect(() => {
+    x.value = placement.x;
+    y.value = placement.y;
+    scale.value = placement.scale ?? 1;
+  }, [placement.x, placement.y, placement.scale, scale, x, y]);
+
+  const reportUpdate = () => {
+    'worklet';
+    const nextScale = Math.min(Math.max(scale.value, MIN_SCALE), MAX_SCALE);
+    runOnJS(onUpdate)({ x: x.value, y: y.value, scale: nextScale });
+  };
+
+  const panGesture = Gesture.Pan()
+    .onStart(() => {
+      panStartX.value = x.value;
+      panStartY.value = y.value;
+    })
+    .onChange((event) => {
+      x.value = panStartX.value + event.translationX;
+      y.value = panStartY.value + event.translationY;
+    })
+    .onEnd(reportUpdate)
+    .onFinalize(reportUpdate);
+
+  const pinchGesture = Gesture.Pinch()
+    .onStart(() => {
+      pinchStart.value = scale.value;
+    })
+    .onChange((event) => {
+      const next = pinchStart.value * event.scale;
+      scale.value = Math.min(Math.max(next, MIN_SCALE), MAX_SCALE);
+    })
+    .onEnd(reportUpdate)
+    .onFinalize(reportUpdate);
+
+  const composedGesture = Gesture.Simultaneous(panGesture, pinchGesture);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    const clampedScale = Math.min(Math.max(scale.value, MIN_SCALE), MAX_SCALE);
+    const halfSize = (EMOJI_SIZE * clampedScale) / 2;
+    return {
+      left: x.value - halfSize,
+      top: y.value - halfSize,
+      transform: [{ scale: clampedScale }],
+    };
+  });
+
+  return (
+    <GestureDetector gesture={composedGesture}>
+      <Animated.View style={[styles.canvasEmoji, animatedStyle]}>
+        <Text style={styles.canvasEmojiGlyph}>{emoji}</Text>
+      </Animated.View>
+    </GestureDetector>
   );
 }
 
@@ -363,6 +443,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#22543d',
     textAlign: 'center',
+    minHeight: 36,
   },
   emojiCost: {
     fontSize: 12,
@@ -430,6 +511,12 @@ const styles = StyleSheet.create({
   },
   canvasEmoji: {
     position: 'absolute',
+    width: EMOJI_SIZE,
+    height: EMOJI_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  canvasEmojiGlyph: {
     fontSize: 34,
   },
   canvasActions: {

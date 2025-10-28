@@ -1,15 +1,25 @@
 // eslint-disable-next-line import/no-unresolved
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  Alert,
+  BackHandler,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
 import { OrbitingUpgradeEmojis } from '@/components/OrbitingUpgradeEmojis';
 import { useGame } from '@/context/GameContext';
 import type { HomeEmojiTheme } from '@/context/GameContext';
 
-const HEADER_HEIGHT = 88;
+const HEADER_HEIGHT = 56;
 const MODAL_STORAGE_KEY = 'lettuce-click:grow-your-park-dismissed';
 
 export default function HomeScreen() {
@@ -24,7 +34,9 @@ export default function HomeScreen() {
   } = useGame();
   const [showGrowModal, setShowGrowModal] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const insets = useSafeAreaInsets();
   const router = useRouter();
+  const headerHeight = HEADER_HEIGHT + insets.top;
 
   useEffect(() => {
     AsyncStorage.getItem(MODAL_STORAGE_KEY)
@@ -61,16 +73,31 @@ export default function HomeScreen() {
     [setHomeEmojiTheme]
   );
 
+  const handleCloseApp = useCallback(() => {
+    setMenuOpen(false);
+    if (Platform.OS === 'android') {
+      BackHandler.exitApp();
+      return;
+    }
+
+    Alert.alert(
+      'Close App',
+      'Use the home indicator or press Command+Shift+H in the simulator to send the app to the background for testing.'
+    );
+  }, []);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: insets.top, height: headerHeight }]}>
           <Text style={styles.headerText}>🥬 Lettuce Park Gardens</Text>
           <Pressable
-            accessibilityLabel="Open garden menu"
+            accessibilityLabel={menuOpen ? 'Close garden menu' : 'Open garden menu'}
+            accessibilityHint={menuOpen ? undefined : 'Opens actions and emoji theme options'}
             style={styles.menuButton}
-            onPress={() => setMenuOpen((prev) => !prev)}>
-            <Text style={styles.menuIcon}>☰</Text>
+            onPress={() => setMenuOpen((prev) => !prev)}
+            hitSlop={8}>
+            <Text style={[styles.menuIcon, menuOpen && styles.menuIconActive]}>{menuOpen ? '✕' : '☰'}</Text>
           </Pressable>
         </View>
 
@@ -119,7 +146,7 @@ export default function HomeScreen() {
         </ScrollView>
 
         {menuOpen && (
-          <View style={styles.menuOverlay}>
+          <View style={[styles.menuOverlay, { paddingTop: headerHeight + 12 }]}>
             <Pressable style={styles.menuBackdrop} onPress={() => setMenuOpen(false)} />
             <View style={styles.menuCard}>
               <View style={styles.menuContent}>
@@ -145,6 +172,11 @@ export default function HomeScreen() {
                     </Pressable>
                   );
                 })}
+                <View style={styles.menuDivider} />
+                <Text style={styles.menuSectionTitle}>Testing</Text>
+                <Pressable style={styles.menuItem} onPress={handleCloseApp}>
+                  <Text style={styles.menuItemText}>Close app (testing)</Text>
+                </Pressable>
               </View>
             </View>
           </View>
@@ -178,17 +210,16 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f2f9f2',
+    backgroundColor: '#1f6f4a',
   },
   container: {
     flex: 1,
     backgroundColor: '#f2f9f2',
   },
   header: {
-    height: HEADER_HEIGHT,
     backgroundColor: '#1f6f4a',
     paddingHorizontal: 24,
-    paddingBottom: 14,
+    paddingBottom: 12,
     shadowColor: '#000',
     shadowOpacity: 0.12,
     shadowRadius: 10,
@@ -203,15 +234,16 @@ const styles = StyleSheet.create({
     color: '#f7fbea',
   },
   menuButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    paddingHorizontal: 6,
+    paddingVertical: 6,
   },
   menuIcon: {
-    fontSize: 20,
+    fontSize: 28,
     color: '#f7fbea',
     fontWeight: '700',
+  },
+  menuIconActive: {
+    color: '#fefce8',
   },
   scroll: {
     flex: 1,
@@ -389,7 +421,6 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0, 0, 0, 0.2)',
     alignItems: 'flex-end',
-    paddingTop: HEADER_HEIGHT + 12,
     paddingHorizontal: 16,
   },
   menuBackdrop: {

@@ -113,16 +113,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 12,
   },
   upgradeTitleGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flex: 1,
   },
   upgradeTitle: {
     fontSize: 17,
     fontWeight: '700',
     color: '#1a4731',
+    flexShrink: 1,
+    flexWrap: 'wrap',
   },
   upgradeEmoji: {
     fontSize: 20,
@@ -131,6 +135,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#276749',
+    maxWidth: '40%',
+    textAlign: 'right',
   },
   upgradeDescription: {
     fontSize: 14,

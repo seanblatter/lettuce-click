@@ -16,7 +16,7 @@ export type EmojiDefinition = {
   cost: number;
 };
 
-type Placement = {
+export type Placement = {
   id: string;
   emojiId: string;
   x: number;
@@ -182,7 +182,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
 
     setEmojiInventory((prev) => ({
       ...prev,
-      [emojiId]: prev[emojiId] - 1,
+      [emojiId]: Math.max((prev[emojiId] ?? 0) - 1, 0),
     }));
 
     setPlacements((prev) => [
@@ -199,7 +199,21 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   };
 
   const clearGarden = () => {
-    setPlacements([]);
+    setPlacements((prevPlacements) => {
+      if (prevPlacements.length === 0) {
+        return prevPlacements;
+      }
+
+      setEmojiInventory((prevInventory) => {
+        const restored = { ...prevInventory };
+        prevPlacements.forEach(({ emojiId }) => {
+          restored[emojiId] = (restored[emojiId] ?? 0) + 1;
+        });
+        return restored;
+      });
+
+      return [];
+    });
   };
 
   const value = useMemo<GameContextValue>(() => ({

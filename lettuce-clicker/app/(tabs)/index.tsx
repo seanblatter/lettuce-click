@@ -1,10 +1,27 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { GardenSection } from '@/components/GardenSection';
+import { UpgradeSection } from '@/components/UpgradeSection';
 import { useGame } from '@/context/GameContext';
 
 export default function HomeScreen() {
-  const { harvest, lifetimeHarvest, autoPerSecond, tapValue, addHarvest } = useGame();
+  const {
+    harvest,
+    lifetimeHarvest,
+    autoPerSecond,
+    tapValue,
+    addHarvest,
+    upgrades,
+    purchasedUpgrades,
+    purchaseUpgrade,
+    emojiCatalog,
+    emojiInventory,
+    placements,
+    purchaseEmoji,
+    placeEmoji,
+    clearGarden,
+  } = useGame();
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -47,9 +64,37 @@ export default function HomeScreen() {
           <View style={styles.callouts}>
             <Text style={styles.calloutTitle}>Grow your park</Text>
             <Text style={styles.calloutCopy}>
-              Spend harvest on upgrades to unlock faster auto clicks and stronger tap values. Visit the
-              Garden tab to plant emoji friends and capture your masterpiece once it is ready.
+              Spend harvest on upgrades to unlock faster auto clicks and stronger tap values. Scroll
+              down to plant emoji friends in the garden studio and capture your masterpiece once it is
+              ready.
             </Text>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionHeading}>Upgrade Market</Text>
+            <UpgradeSection
+              harvest={harvest}
+              autoPerSecond={autoPerSecond}
+              tapValue={tapValue}
+              upgrades={upgrades}
+              purchasedUpgrades={purchasedUpgrades}
+              purchaseUpgrade={purchaseUpgrade}
+              title="Conservatory Upgrades"
+            />
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionHeading}>Garden Studio</Text>
+            <GardenSection
+              harvest={harvest}
+              emojiCatalog={emojiCatalog}
+              emojiInventory={emojiInventory}
+              placements={placements}
+              purchaseEmoji={purchaseEmoji}
+              placeEmoji={placeEmoji}
+              clearGarden={clearGarden}
+              title="Garden Atelier"
+            />
           </View>
         </ScrollView>
       </View>
@@ -84,8 +129,8 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 24,
-    paddingBottom: 64,
-    gap: 24,
+    paddingBottom: 120,
+    gap: 32,
   },
   title: {
     fontSize: 32,
@@ -181,5 +226,13 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#234e52',
     lineHeight: 20,
+  },
+  section: {
+    gap: 16,
+  },
+  sectionHeading: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#22543d',
   },
 });

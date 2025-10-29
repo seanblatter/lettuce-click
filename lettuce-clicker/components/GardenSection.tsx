@@ -1,9 +1,20 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Alert, GestureResponderEvent, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Alert,
+  GestureResponderEvent,
+  PanResponder,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import Svg, { Path } from 'react-native-svg';
 
-import { EmojiDefinition, Placement } from '@/context/GameContext';
+import { DrawingStroke, EmojiDefinition, Placement } from '@/context/GameContext';
+import type { EmojiSkinOption } from '@/types/emoji';
 
 type Props = {
   harvest: number;
@@ -11,9 +22,16 @@ type Props = {
   emojiInventory: Record<string, number>;
   placements: Placement[];
   purchaseEmoji: (emojiId: string) => boolean;
-  placeEmoji: (emojiId: string, position: { x: number; y: number }) => boolean;
+  placeEmoji: (
+    emojiId: string,
+    position: { x: number; y: number },
+    variant?: { id: string | null; emoji: string | null }
+  ) => boolean;
   updatePlacement: (placementId: string, updates: Partial<Placement>) => void;
   clearGarden: () => void;
+  drawings: DrawingStroke[];
+  addDrawingStroke: (stroke: DrawingStroke) => void;
+  clearDrawings: () => void;
   title?: string;
 };
 
@@ -26,11 +44,24 @@ export function GardenSection({
   placeEmoji,
   updatePlacement,
   clearGarden,
+  drawings,
+  addDrawingStroke,
+  clearDrawings,
   title = 'Garden Atelier',
 }: Props) {
   const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null);
   const [activePanel, setActivePanel] = useState<'shop' | 'inventory'>('shop');
   const [shopFilter, setShopFilter] = useState('');
+  const [selectedVariant, setSelectedVariant] = useState<{ id: string | null; emoji: string | null } | null>(
+    null
+  );
+  const [drawingActive, setDrawingActive] = useState(false);
+  const [currentStroke, setCurrentStroke] = useState<DrawingStroke | null>(null);
+  const [penColor, setPenColor] = useState('#166534');
+  const [penSize, setPenSize] = useState(6);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [hideFloatingAction, setHideFloatingAction] = useState(false);
+  const previousSelectionRef = useRef<string | null>(null);
 
   const inventoryList = useMemo(
     () =>
@@ -56,6 +87,10 @@ export function GardenSection({
         : inventoryList,
     [inventoryList, normalizedFilter]
   );
+  const limitedShopInventory = useMemo(
+    () => (normalizedFilter ? filteredShopInventory : filteredShopInventory.slice(0, 120)),
+    [filteredShopInventory, normalizedFilter]
+  );
   const filteredOwnedInventory = useMemo(
     () =>
       normalizedFilter
@@ -67,10 +102,24 @@ export function GardenSection({
         : ownedInventory,
     [normalizedFilter, ownedInventory]
   );
-  const selectedDetails = useMemo(
-    () => inventoryList.find((item) => item.id === selectedEmoji) ?? null,
-    [inventoryList, selectedEmoji]
-  );
+  const selectedDetails = useMemo(() => {
+    if (!selectedEmoji) {
+      return null;
+    }
+    return emojiCatalog.find((item) => item.id === selectedEmoji) ?? null;
+  }, [emojiCatalog, selectedEmoji]);
+
+  useEffect(() => {
+    if (!selectedDetails) {
+      previousSelectionRef.current = null;
+      setSelectedVariant(null);
+      return;
+    }
+    if (previousSelectionRef.current !== selectedDetails.id) {
+      setSelectedVariant({ id: null, emoji: selectedDetails.emoji });
+      previousSelectionRef.current = selectedDetails.id;
+    }
+  }, [selectedDetails]);
 
   const handleCanvasPress = (event: GestureResponderEvent) => {
     if (!selectedEmoji) {
@@ -86,7 +135,7 @@ export function GardenSection({
     }
 
     const { locationX, locationY } = event.nativeEvent;
-    const placed = placeEmoji(selectedEmoji, { x: locationX, y: locationY });
+    const placed = placeEmoji(selectedEmoji, { x: locationX, y: locationY }, selectedVariant ?? undefined);
 
     if (!placed) {
       Alert.alert('Out of stock', 'Purchase more of this emoji to keep decorating!');
@@ -106,6 +155,7 @@ export function GardenSection({
     }
 
     setSelectedEmoji(emojiId);
+    setActivePanel('inventory');
   };
 
   const handlePurchase = (emojiId: string) => {
@@ -117,19 +167,113 @@ export function GardenSection({
     }
 
     setSelectedEmoji(emojiId);
+    setActivePanel('inventory');
   };
 
   const handleClearGarden = () => {
     clearGarden();
     setSelectedEmoji(null);
+    setSelectedVariant(null);
+    setDrawingActive(false);
+    setPaletteOpen(false);
   };
 
   const handleSaveSnapshot = () => {
+    setHideFloatingAction(true);
     Alert.alert(
       'Save your garden',
       "Use your device's screenshot tools to capture the garden canvas once you finish decorating."
     );
+    setTimeout(() => setHideFloatingAction(false), 800);
   };
+
+  const startStroke = (x: number, y: number) => {
+    const newStroke: DrawingStroke = {
+      id: `stroke-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      color: penColor,
+      width: penSize,
+      points: [{ x, y }],
+    };
+    setCurrentStroke(newStroke);
+  };
+
+  const extendStroke = (x: number, y: number) => {
+    setCurrentStroke((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      return {
+        ...prev,
+        points: [...prev.points, { x, y }],
+      };
+    });
+  };
+
+  const commitStroke = () => {
+    setCurrentStroke((prev) => {
+      if (!prev || prev.points.length < 2) {
+        return null;
+      }
+      addDrawingStroke(prev);
+      return null;
+    });
+  };
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => drawingActive,
+        onMoveShouldSetPanResponder: () => drawingActive,
+        onPanResponderGrant: (evt) => {
+          startStroke(evt.nativeEvent.locationX, evt.nativeEvent.locationY);
+        },
+        onPanResponderMove: (evt) => {
+          extendStroke(evt.nativeEvent.locationX, evt.nativeEvent.locationY);
+        },
+        onPanResponderRelease: () => {
+          commitStroke();
+        },
+        onPanResponderTerminate: () => {
+          commitStroke();
+        },
+      }),
+    [drawingActive, penColor, penSize, addDrawingStroke]
+  );
+
+  useEffect(() => {
+    if (!drawingActive) {
+      setCurrentStroke(null);
+    }
+  }, [drawingActive]);
+
+  const renderStrokePath = (stroke: DrawingStroke) => {
+    if (stroke.points.length < 2) {
+      return null;
+    }
+
+    const d = stroke.points
+      .map((point, index) => `${index === 0 ? 'M' : 'L'}${point.x.toFixed(1)} ${point.y.toFixed(1)}`)
+      .join(' ');
+
+    return (
+      <Path
+        key={stroke.id}
+        d={d}
+        stroke={stroke.color}
+        strokeWidth={stroke.width}
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    );
+  };
+
+  const variantOptions: EmojiSkinOption[] | null = selectedDetails?.skins ?? null;
+
+  const handleVariantSelect = (variant: { id: string | null; emoji: string | null }) => {
+    setSelectedVariant(variant);
+  };
+
 
   return (
     <View style={styles.section}>
@@ -138,7 +282,7 @@ export function GardenSection({
         <Text style={styles.harvestAmount}>{harvest.toLocaleString()} harvest ready</Text>
         <Text style={styles.harvestHint}>
           Purchase decorations in the shop, then switch to your inventory to tap the canvas and place
-          them.
+          them. Activate the pen to sketch extra flourishes.
         </Text>
       </View>
 
@@ -180,14 +324,14 @@ export function GardenSection({
         </View>
         <Text style={styles.toolbarHint}>
           {activePanel === 'shop'
-            ? 'Tap to buy or select. Long press to quickly stock up.'
-            : 'Tap a tile to ready it for placement.'}
+            ? 'Tap to buy or select. Purchases add items to your inventory instantly.'
+            : 'Tap a tile to ready it for placement and choose skin tones if available.'}
         </Text>
       </View>
 
       {activePanel === 'shop' ? (
         <View style={styles.compactGrid}>
-          {filteredShopInventory.length === 0 ? (
+          {limitedShopInventory.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyStateTitle}>No emoji match your search</Text>
               <Text style={styles.emptyStateCopy}>
@@ -195,36 +339,28 @@ export function GardenSection({
               </Text>
             </View>
           ) : (
-            filteredShopInventory.map((item) => {
+            limitedShopInventory.map((item) => {
               const owned = item.owned;
               const isSelected = selectedEmoji === item.id;
               const canAfford = harvest >= item.cost;
 
               const handleTilePress = () => {
-                if (owned > 0) {
-                  handleSelect(item.id, owned);
-                  return;
-                }
                 handlePurchase(item.id);
               };
 
               return (
-                <Pressable
-                  key={item.id}
-                  style={[
-                    styles.emojiTile,
-                    isSelected && styles.emojiTileSelected,
-                    !canAfford && owned === 0 && styles.emojiTileDisabled,
-                  ]}
-                  onPress={handleTilePress}
-                  onLongPress={() => handlePurchase(item.id)}
-                  delayLongPress={180}
-                  accessibilityLabel={`${item.name} emoji`}
+                  <Pressable
+                    key={item.id}
+                    style={[
+                      styles.emojiTile,
+                      isSelected && styles.emojiTileSelected,
+                      !canAfford && owned === 0 && styles.emojiTileDisabled,
+                    ]}
+                    onPress={handleTilePress}
+                    accessibilityLabel={`${item.name} emoji`}
                   accessibilityHint={
-                    owned > 0
-                      ? 'Select to ready this decoration.'
-                      : canAfford
-                      ? 'Purchase and ready this decoration.'
+                    canAfford
+                      ? 'Purchase this decoration. Owned copies appear in your inventory.'
                       : 'Not enough harvest to purchase.'
                   }>
                   <Text style={styles.emojiGlyphLarge}>{item.emoji}</Text>
@@ -297,6 +433,39 @@ export function GardenSection({
                   Tap anywhere on the canvas to drop it. Drag to move, double tap to enlarge, and
                   long press to shrink.
                 </Text>
+                {variantOptions && variantOptions.length > 0 ? (
+                  <View style={styles.variantSelector}>
+                    {[{ id: null, emoji: selectedDetails.emoji, name: 'Default' }, ...variantOptions].map(
+                      (variant) => {
+                        const isActive =
+                          (variant.id ?? null) === selectedVariant?.id ||
+                          (variant.id === null && selectedVariant?.id == null && selectedVariant?.emoji === variant.emoji);
+                        const label =
+                          variant.id === null
+                            ? 'Default'
+                            : variant.name
+                                .replace(selectedDetails.name, '')
+                                .replace(/[:]/g, '')
+                                .trim() || variant.name;
+                        return (
+                          <Pressable
+                            key={variant.id ?? 'default'}
+                            style={[styles.variantChip, isActive && styles.variantChipActive]}
+                            onPress={() => handleVariantSelect({ id: variant.id ?? null, emoji: variant.emoji })}
+                          >
+                            <Text style={styles.variantChipEmoji}>{variant.emoji}</Text>
+                            <Text
+                              style={[styles.variantChipLabel, isActive && styles.variantChipLabelActive]}
+                              numberOfLines={1}
+                            >
+                              {label}
+                            </Text>
+                          </Pressable>
+                        );
+                      }
+                    )}
+                  </View>
+                ) : null}
               </>
             ) : (
               <>
@@ -308,7 +477,11 @@ export function GardenSection({
             )}
           </View>
 
-          <Pressable style={styles.canvas} onPress={handleCanvasPress}>
+          <Pressable
+            style={styles.canvas}
+            onPress={drawingActive ? undefined : handleCanvasPress}
+            disabled={drawingActive}
+          >
             {placements.length === 0 ? (
               <View pointerEvents="none" style={styles.canvasEmptyState}>
                 <Text style={styles.canvasEmptyTitle}>Tap the canvas to begin</Text>
@@ -325,15 +498,95 @@ export function GardenSection({
                 return null;
               }
 
+              const displayEmoji = placement.variantEmoji ?? emoji.emoji;
+
               return (
                 <DraggablePlacement
                   key={placement.id}
                   placement={placement}
-                  emoji={emoji.emoji}
+                  emoji={displayEmoji}
                   onUpdate={(updates) => updatePlacement(placement.id, updates)}
                 />
               );
             })}
+            <View
+              pointerEvents={drawingActive ? 'auto' : 'none'}
+              style={StyleSheet.absoluteFill}
+              {...(drawingActive ? panResponder.panHandlers : {})}
+            >
+              <Svg width="100%" height="100%">
+                {drawings.map((stroke) => renderStrokePath(stroke))}
+                {currentStroke ? renderStrokePath(currentStroke) : null}
+              </Svg>
+            </View>
+            {!hideFloatingAction && (
+              <View style={styles.canvasFabWrapper} pointerEvents="box-none">
+                <Pressable
+                  style={[styles.canvasFab, drawingActive && styles.canvasFabActive]}
+                  onPress={() => {
+                    setDrawingActive((prev) => {
+                      const next = !prev;
+                      setPaletteOpen(next);
+                      return next;
+                    });
+                  }}
+                  accessibilityLabel="Toggle drawing palette"
+                >
+                  <Text style={styles.canvasFabIcon}>🖊️</Text>
+                </Pressable>
+              </View>
+            )}
+            {paletteOpen && drawingActive ? (
+              <View style={styles.paletteCard} pointerEvents="box-none">
+                <View style={styles.paletteContent}>
+                  <Text style={styles.paletteTitle}>Drawing Palette</Text>
+                  <Text style={styles.paletteHint}>Pick a color and pen size, then drag across the canvas.</Text>
+                  <View style={styles.paletteRow}>
+                    {['#166534', '#dc2626', '#1d4ed8', '#f59e0b', '#9333ea', '#0f766e'].map((color) => (
+                      <Pressable
+                        key={color}
+                        style={[styles.colorSwatch, { backgroundColor: color }, penColor === color && styles.colorSwatchActive]}
+                        onPress={() => setPenColor(color)}
+                        accessibilityLabel={`Select ${color} ink`}
+                      />
+                    ))}
+                  </View>
+                  <View style={styles.paletteRow}>
+                    {[4, 6, 8, 12, 16].map((size) => (
+                      <Pressable
+                        key={size}
+                        style={[styles.sizeChip, penSize === size && styles.sizeChipActive]}
+                        onPress={() => setPenSize(size)}
+                      >
+                        <Text style={[styles.sizeChipLabel, penSize === size && styles.sizeChipLabelActive]}>
+                          {size}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <View style={styles.paletteActions}>
+                    <Pressable
+                      style={styles.paletteButton}
+                      onPress={() => {
+                        clearDrawings();
+                        setCurrentStroke(null);
+                      }}
+                    >
+                      <Text style={styles.paletteButtonText}>Clear Sketch</Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.paletteButton}
+                      onPress={() => {
+                        setDrawingActive(false);
+                        setPaletteOpen(false);
+                      }}
+                    >
+                      <Text style={styles.paletteButtonText}>Done</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              </View>
+            ) : null}
           </Pressable>
 
           <View style={styles.canvasActions}>
@@ -671,6 +924,39 @@ const styles = StyleSheet.create({
     color: '#2d3748',
     lineHeight: 19,
   },
+  variantSelector: {
+    marginTop: 12,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  variantChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#134e32',
+    backgroundColor: '#f0fff4',
+  },
+  variantChipActive: {
+    backgroundColor: '#166534',
+    borderColor: '#14532d',
+  },
+  variantChipEmoji: {
+    fontSize: 20,
+  },
+  variantChipLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#134e32',
+    maxWidth: 96,
+  },
+  variantChipLabelActive: {
+    color: '#f0fff4',
+  },
   canvas: {
     backgroundColor: '#ffffff',
     borderRadius: 24,
@@ -712,6 +998,107 @@ const styles = StyleSheet.create({
   },
   canvasEmojiGlyph: {
     fontSize: 34,
+  },
+  canvasFabWrapper: {
+    position: 'absolute',
+    right: 16,
+    bottom: 16,
+  },
+  canvasFab: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(34, 84, 61, 0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0f2e20',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  canvasFabActive: {
+    backgroundColor: '#166534',
+  },
+  canvasFabIcon: {
+    fontSize: 24,
+  },
+  paletteCard: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 88,
+  },
+  paletteContent: {
+    backgroundColor: 'rgba(240, 255, 244, 0.98)',
+    borderRadius: 18,
+    padding: 16,
+    gap: 12,
+    shadowColor: '#0f766e',
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  paletteTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#134e32',
+  },
+  paletteHint: {
+    fontSize: 12,
+    color: '#2d3748',
+    lineHeight: 18,
+  },
+  paletteRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  colorSwatch: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  colorSwatchActive: {
+    borderColor: '#0f172a',
+  },
+  sizeChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#134e32',
+    backgroundColor: '#ffffff',
+  },
+  sizeChipActive: {
+    backgroundColor: '#166534',
+    borderColor: '#14532d',
+  },
+  sizeChipLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#134e32',
+  },
+  sizeChipLabelActive: {
+    color: '#f0fff4',
+  },
+  paletteActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  paletteButton: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 10,
+    backgroundColor: '#22543d',
+  },
+  paletteButtonText: {
+    textAlign: 'center',
+    fontWeight: '700',
+    color: '#f0fff4',
   },
   canvasActions: {
     flexDirection: 'row',

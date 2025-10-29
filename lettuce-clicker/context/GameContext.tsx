@@ -1,5 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppState } from 'react-native';
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+
+import { fullEmojiCatalog } from '@/constants/emojiCatalog';
+import type { EmojiDefinition } from '@/types/emoji';
+export type { EmojiDefinition } from '@/types/emoji';
 
 export type HomeEmojiTheme = 'circle' | 'spiral' | 'matrix' | 'clear';
 
@@ -12,11 +17,16 @@ export type UpgradeDefinition = {
   emoji: string;
 };
 
-export type EmojiDefinition = {
+export type DrawingPoint = {
+  x: number;
+  y: number;
+};
+
+export type DrawingStroke = {
   id: string;
-  emoji: string;
-  name: string;
-  cost: number;
+  color: string;
+  width: number;
+  points: DrawingPoint[];
 };
 
 export type Placement = {
@@ -25,6 +35,8 @@ export type Placement = {
   x: number;
   y: number;
   scale: number;
+  variantId?: string | null;
+  variantEmoji?: string;
 };
 
 type GameContextValue = {
@@ -39,6 +51,7 @@ type GameContextValue = {
   emojiCatalog: EmojiDefinition[];
   emojiInventory: Record<string, number>;
   placements: Placement[];
+  drawings: DrawingStroke[];
   profileName: string;
   profileUsername: string;
   profileImageUri: string | null;
@@ -47,17 +60,30 @@ type GameContextValue = {
   addHarvest: () => void;
   purchaseUpgrade: (upgradeId: string) => boolean;
   purchaseEmoji: (emojiId: string) => boolean;
-  placeEmoji: (emojiId: string, position: { x: number; y: number }) => boolean;
+  placeEmoji: (
+    emojiId: string,
+    position: { x: number; y: number },
+    variant?: { id: string | null; emoji: string | null }
+  ) => boolean;
   updatePlacement: (placementId: string, updates: Partial<Placement>) => void;
   clearGarden: () => void;
+  addDrawingStroke: (stroke: DrawingStroke) => void;
+  clearDrawings: () => void;
   setProfileName: (value: string) => void;
   setProfileUsername: (value: string) => void;
   setProfileImageUri: (uri: string | null) => void;
   setHomeEmojiTheme: (theme: HomeEmojiTheme) => void;
+  isReady: boolean;
+  pendingWelcomeBack: { name: string; lifetime: number } | null;
+  pendingPassiveReturn: { name: string; passiveHarvest: number; greeting: string } | null;
+  acknowledgeWelcomeBack: () => void;
+  acknowledgePassiveReturn: () => void;
 };
 
 const PROFILE_STORAGE_KEY = 'lettuce-click:profile';
 const THEME_STORAGE_KEY = 'lettuce-click:emoji-theme';
+const GAME_STATE_STORAGE_KEY = 'lettuce-click:game-state';
+const LAST_ACTIVE_KEY = 'lettuce-click:last-active';
 
 const upgradeCatalog: UpgradeDefinition[] = [
   {
@@ -182,33 +208,6 @@ const upgradeCatalog: UpgradeDefinition[] = [
   },
 ];
 
-const gardenEmojiCatalog: EmojiDefinition[] = [
-  { id: 'sprout', emoji: '🌱', name: 'Sprout', cost: 25 },
-  { id: 'seedling', emoji: '🪴', name: 'Potted Seedling', cost: 60 },
-  { id: 'butterfly', emoji: '🦋', name: 'Butterfly', cost: 90 },
-  { id: 'ladybug', emoji: '🐞', name: 'Ladybug', cost: 120 },
-  { id: 'honeybee', emoji: '🐝', name: 'Honeybee', cost: 150 },
-  { id: 'snail', emoji: '🐌', name: 'Helpful Snail', cost: 200 },
-  { id: 'frog', emoji: '🐸', name: 'Lily Pad Frog', cost: 260 },
-  { id: 'hedgehog', emoji: '🦔', name: 'Hedgehog Friend', cost: 320 },
-  { id: 'fox', emoji: '🦊', name: 'Fox Visitor', cost: 380 },
-  { id: 'owl', emoji: '🦉', name: 'Wise Owl', cost: 420 },
-  { id: 'cat', emoji: '🐱', name: 'Garden Cat', cost: 460 },
-  { id: 'dog', emoji: '🐶', name: 'Puppy Pal', cost: 500 },
-  { id: 'flamingo', emoji: '🦩', name: 'Flamingo Flair', cost: 560 },
-  { id: 'peacock', emoji: '🦚', name: 'Peacock Parade', cost: 600 },
-  { id: 'koala', emoji: '🐨', name: 'Koala Companion', cost: 640 },
-  { id: 'unicorn', emoji: '🦄', name: 'Mythic Unicorn', cost: 650 },
-  { id: 'rainbow', emoji: '🌈', name: 'Prismatic Rainbow', cost: 700 },
-  { id: 'sparkles', emoji: '✨', name: 'Sparkle Dust', cost: 750 },
-  { id: 'star', emoji: '⭐️', name: 'Shooting Star', cost: 800 },
-  { id: 'moon', emoji: '🌙', name: 'Moonbeam', cost: 840 },
-  { id: 'meteor', emoji: '☄️', name: 'Meteor Trail', cost: 900 },
-  { id: 'crystal', emoji: '🔮', name: 'Crystal Glow', cost: 940 },
-  { id: 'lantern', emoji: '🏮', name: 'Lantern Light', cost: 980 },
-  { id: 'bonsai', emoji: '🌳', name: 'Bonsai Tree', cost: 1040 },
-];
-
 export type OrbitingEmoji = {
   id: string;
   emoji: string;
@@ -226,11 +225,24 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [orbitingUpgradeEmojis, setOrbitingUpgradeEmojis] = useState<OrbitingEmoji[]>([]);
   const [emojiInventory, setEmojiInventory] = useState<Record<string, number>>({});
   const [placements, setPlacements] = useState<Placement[]>([]);
+  const [drawings, setDrawings] = useState<DrawingStroke[]>([]);
   const [profileName, setProfileName] = useState('');
   const [profileUsername, setProfileUsername] = useState('');
   const [profileImageUri, setProfileImageUri] = useState<string | null>(null);
   const [homeEmojiTheme, setHomeEmojiTheme] = useState<HomeEmojiTheme>('circle');
   const initialisedRef = useRef(false);
+  const [isReady, setIsReady] = useState(false);
+  const [pendingWelcomeBack, setPendingWelcomeBack] = useState<{
+    name: string;
+    lifetime: number;
+  } | null>(null);
+  const [pendingPassiveReturn, setPendingPassiveReturn] = useState<{
+    name: string;
+    passiveHarvest: number;
+    greeting: string;
+  } | null>(null);
+  const lastBackgroundRef = useRef<number | null>(null);
+  const appStateRef = useRef(AppState.currentState);
 
   useEffect(() => {
     if (autoPerSecond <= 0) {
@@ -294,7 +306,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   };
 
   const purchaseEmoji = (emojiId: string) => {
-    const emoji = gardenEmojiCatalog.find((item) => item.id === emojiId);
+    const emoji = fullEmojiCatalog.find((item) => item.id === emojiId);
 
     if (!emoji) {
       return false;
@@ -312,7 +324,11 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     return true;
   };
 
-  const placeEmoji = (emojiId: string, position: { x: number; y: number }) => {
+  const placeEmoji = (
+    emojiId: string,
+    position: { x: number; y: number },
+    variant?: { id: string | null; emoji: string | null }
+  ) => {
     const available = emojiInventory[emojiId] ?? 0;
 
     if (available <= 0) {
@@ -332,6 +348,8 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         x: position.x,
         y: position.y,
         scale: 1,
+        variantId: variant?.id ?? null,
+        variantEmoji: variant?.emoji ?? null,
       },
     ]);
 
@@ -367,6 +385,18 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
 
       return [];
     });
+    setDrawings([]);
+  };
+
+  const acknowledgeWelcomeBack = () => setPendingWelcomeBack(null);
+  const acknowledgePassiveReturn = () => setPendingPassiveReturn(null);
+
+  const addDrawingStroke = (stroke: DrawingStroke) => {
+    setDrawings((prev) => [...prev, stroke]);
+  };
+
+  const clearDrawings = () => {
+    setDrawings([]);
   };
 
   const value = useMemo<GameContextValue>(() => ({
@@ -378,9 +408,10 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     upgrades: upgradeCatalog,
     purchasedUpgrades,
     orbitingUpgradeEmojis,
-    emojiCatalog: gardenEmojiCatalog,
+    emojiCatalog: fullEmojiCatalog,
     emojiInventory,
     placements,
+    drawings,
     profileName,
     profileUsername,
     profileImageUri,
@@ -392,10 +423,17 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     placeEmoji,
     updatePlacement,
     clearGarden,
+    addDrawingStroke,
+    clearDrawings,
     setProfileName,
     setProfileUsername,
     setProfileImageUri,
     setHomeEmojiTheme,
+    isReady,
+    pendingWelcomeBack,
+    pendingPassiveReturn,
+    acknowledgeWelcomeBack,
+    acknowledgePassiveReturn,
   }), [
     harvest,
     lifetimeHarvest,
@@ -406,11 +444,29 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     orbitingUpgradeEmojis,
     emojiInventory,
     placements,
+    drawings,
     profileName,
     profileUsername,
     profileImageUri,
     homeEmojiTheme,
     setProfileLifetimeTotal,
+    addHarvest,
+    purchaseUpgrade,
+    purchaseEmoji,
+    placeEmoji,
+    updatePlacement,
+    clearGarden,
+    addDrawingStroke,
+    clearDrawings,
+    setProfileName,
+    setProfileUsername,
+    setProfileImageUri,
+    setHomeEmojiTheme,
+    isReady,
+    pendingWelcomeBack,
+    pendingPassiveReturn,
+    acknowledgeWelcomeBack,
+    acknowledgePassiveReturn,
   ]);
 
   useEffect(() => {
@@ -418,8 +474,8 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       return;
     }
 
-    AsyncStorage.multiGet([PROFILE_STORAGE_KEY, THEME_STORAGE_KEY])
-      .then(([profileEntry, themeEntry]) => {
+    AsyncStorage.multiGet([PROFILE_STORAGE_KEY, THEME_STORAGE_KEY, GAME_STATE_STORAGE_KEY, LAST_ACTIVE_KEY])
+      .then(([profileEntry, themeEntry, gameEntry, lastActiveEntry]) => {
         if (profileEntry[1]) {
           try {
             const parsed = JSON.parse(profileEntry[1]) as {
@@ -447,9 +503,81 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
             setHomeEmojiTheme(themeEntry[1]);
           }
         }
+
+        if (gameEntry[1]) {
+          try {
+            const parsed = JSON.parse(gameEntry[1]) as {
+              harvest?: number;
+              lifetimeHarvest?: number;
+              autoPerSecond?: number;
+              purchasedUpgrades?: Record<string, number>;
+              orbitingUpgradeEmojis?: OrbitingEmoji[];
+              emojiInventory?: Record<string, number>;
+              placements?: Placement[];
+              drawings?: DrawingStroke[];
+            };
+
+            if (typeof parsed.harvest === 'number') {
+              setHarvest(parsed.harvest);
+            }
+            if (typeof parsed.lifetimeHarvest === 'number') {
+              setLifetimeHarvest(parsed.lifetimeHarvest);
+            }
+            if (typeof parsed.autoPerSecond === 'number') {
+              setAutoPerSecond(parsed.autoPerSecond);
+            }
+            if (parsed.purchasedUpgrades) {
+              setPurchasedUpgrades(parsed.purchasedUpgrades);
+            }
+            if (parsed.orbitingUpgradeEmojis) {
+              setOrbitingUpgradeEmojis(parsed.orbitingUpgradeEmojis);
+            }
+            if (parsed.emojiInventory) {
+              setEmojiInventory(parsed.emojiInventory);
+            }
+            if (parsed.placements) {
+              setPlacements(parsed.placements);
+            }
+            if (parsed.drawings) {
+              setDrawings(parsed.drawings);
+            }
+
+            setPendingWelcomeBack((prev) =>
+              prev ?? {
+                name: profileEntry[1]
+                  ? (() => {
+                      try {
+                        const profileParsed = JSON.parse(profileEntry[1]!);
+                        return typeof profileParsed.name === 'string' && profileParsed.name.length > 0
+                          ? profileParsed.name
+                          : 'Gardener';
+                      } catch (error) {
+                        return 'Gardener';
+                      }
+                    })()
+                  : 'Gardener',
+                lifetime: parsed.lifetimeHarvest ?? 0,
+              }
+            );
+          } catch (error) {
+            // ignore malformed game state
+          }
+        }
+
+        if (lastActiveEntry[1]) {
+          try {
+            const parsedLastActive = JSON.parse(lastActiveEntry[1]) as { timestamp?: number };
+            if (parsedLastActive.timestamp) {
+              lastBackgroundRef.current = parsedLastActive.timestamp;
+            }
+          } catch (error) {
+            lastBackgroundRef.current = null;
+          }
+        }
       })
       .finally(() => {
         initialisedRef.current = true;
+        setIsReady(true);
       });
   }, []);
 
@@ -479,6 +607,103 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       // persistence best effort only
     });
   }, [homeEmojiTheme]);
+
+  useEffect(() => {
+    if (!initialisedRef.current) {
+      return;
+    }
+
+    const payload = JSON.stringify({
+      harvest,
+      lifetimeHarvest,
+      autoPerSecond,
+      purchasedUpgrades,
+      orbitingUpgradeEmojis,
+      emojiInventory,
+      placements,
+      drawings,
+    });
+
+    AsyncStorage.setItem(GAME_STATE_STORAGE_KEY, payload).catch(() => {
+      // persistence best effort only
+    });
+  }, [
+    harvest,
+    lifetimeHarvest,
+    autoPerSecond,
+    purchasedUpgrades,
+    orbitingUpgradeEmojis,
+    emojiInventory,
+    placements,
+    drawings,
+  ]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const prevState = appStateRef.current;
+      appStateRef.current = nextState;
+
+      if (nextState === 'background' || nextState === 'inactive') {
+        const timestamp = Date.now();
+        lastBackgroundRef.current = timestamp;
+        AsyncStorage.setItem(LAST_ACTIVE_KEY, JSON.stringify({ timestamp })).catch(() => {
+          // best effort only
+        });
+        AsyncStorage.setItem(
+          GAME_STATE_STORAGE_KEY,
+          JSON.stringify({
+            harvest,
+            lifetimeHarvest,
+            autoPerSecond,
+            purchasedUpgrades,
+            orbitingUpgradeEmojis,
+            emojiInventory,
+            placements,
+            drawings,
+          })
+        ).catch(() => {
+          // ignore
+        });
+        return;
+      }
+
+      const wasBackground = prevState === 'background' || prevState === 'inactive';
+      if (wasBackground && nextState === 'active') {
+        const now = Date.now();
+        const lastBackground = lastBackgroundRef.current;
+        if (lastBackground && now > lastBackground) {
+          const elapsedSeconds = Math.floor((now - lastBackground) / 1000);
+          if (elapsedSeconds > 0 && autoPerSecond > 0) {
+            const passiveHarvest = autoPerSecond * elapsedSeconds;
+            setHarvest((prev) => prev + passiveHarvest);
+            setLifetimeHarvest((prev) => prev + passiveHarvest);
+            setProfileLifetimeTotal((prev) => prev + passiveHarvest);
+            setPendingPassiveReturn({
+              name: profileName && profileName.length > 0 ? profileName : 'Gardener',
+              passiveHarvest,
+              greeting: ['Hi', 'Howdy', "What's Up", 'Hello'][Math.floor(Math.random() * 4)],
+            });
+          }
+        }
+        lastBackgroundRef.current = null;
+        AsyncStorage.removeItem(LAST_ACTIVE_KEY).catch(() => {
+          // ignore cleanup error
+        });
+      }
+    });
+
+    return () => subscription.remove();
+  }, [
+    autoPerSecond,
+    harvest,
+    lifetimeHarvest,
+    purchasedUpgrades,
+    orbitingUpgradeEmojis,
+    emojiInventory,
+    placements,
+    drawings,
+    profileName,
+  ]);
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
 };

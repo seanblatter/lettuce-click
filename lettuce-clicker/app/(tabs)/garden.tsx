@@ -14,6 +14,9 @@ export default function GardenScreen() {
     placeEmoji,
     updatePlacement,
     clearGarden,
+    drawings,
+    addDrawingStroke,
+    clearDrawings,
   } = useGame();
 
   return (
@@ -33,6 +36,9 @@ export default function GardenScreen() {
           placeEmoji={placeEmoji}
           updatePlacement={updatePlacement}
           clearGarden={clearGarden}
+          drawings={drawings}
+          addDrawingStroke={addDrawingStroke}
+          clearDrawings={clearDrawings}
         />
       </ScrollView>
     </SafeAreaView>

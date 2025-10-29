@@ -26,28 +26,6 @@ const createEmoji = (
   };
 };
 
-export const getEmojiRarityMultiplier = (popularity: number) => {
-  if (popularity <= 10) {
-    return 1;
-  }
-
-  if (popularity <= 20) {
-    return 1.25;
-  }
-
-  if (popularity <= 30) {
-    return 1.45;
-  }
-
-  return 1.75;
-};
-
-export const getAdjustedEmojiCost = (definition: EmojiDefinition) => {
-  const multiplier = getEmojiRarityMultiplier(definition.popularity);
-  const adjusted = Math.round(definition.cost * multiplier);
-  return Math.max(10, adjusted);
-};
-
 const gardenEmojiEntries: EmojiDefinition[] = [
   createEmoji({
     id: 'sunflower-bloom',

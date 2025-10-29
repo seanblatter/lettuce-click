@@ -14,8 +14,6 @@ export default function GardenScreen() {
     placeEmoji,
     updatePlacement,
     clearGarden,
-    registerCustomEmoji,
-    getEmojiCost,
   } = useGame();
 
   return (
@@ -29,8 +27,6 @@ export default function GardenScreen() {
         placeEmoji={placeEmoji}
         updatePlacement={updatePlacement}
         clearGarden={clearGarden}
-        registerCustomEmoji={registerCustomEmoji}
-        getEmojiCost={getEmojiCost}
       />
     </SafeAreaView>
   );

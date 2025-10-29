@@ -175,14 +175,19 @@ export default function HomeScreen() {
 
         <Modal
           visible={menuOpen}
-          animationType="fade"
+          animationType="slide"
           transparent
           onRequestClose={() => setMenuOpen(false)}
         >
-          <View style={styles.menuModalOverlay}>
-            <Pressable style={styles.menuBackdrop} onPress={() => setMenuOpen(false)} />
-            <View style={styles.menuModalCard}>
-              <View style={styles.menuModalContent}>
+          <View style={styles.menuSheetOverlay}>
+            <Pressable style={styles.menuSheetBackdrop} onPress={() => setMenuOpen(false)} />
+            <View style={styles.menuSheetCard}>
+              <View style={styles.menuSheetHandle} />
+              <Text style={styles.menuSheetTitle}>Garden menu</Text>
+              <Text style={styles.menuSheetSubtitle}>
+                Update your profile or refresh your home’s emoji theme.
+              </Text>
+              <View style={styles.menuSheetContent}>
                 <Pressable style={styles.menuItem} onPress={handleNavigateProfile}>
                   <Text style={styles.menuItemText}>Profile</Text>
                 </Pressable>
@@ -200,6 +205,12 @@ export default function HomeScreen() {
                   );
                 })}
               </View>
+              <Pressable
+                style={styles.menuSheetCloseButton}
+                onPress={() => setMenuOpen(false)}
+                accessibilityLabel="Close menu">
+                <Text style={styles.menuSheetCloseText}>Done</Text>
+              </Pressable>
             </View>
           </View>
         </Modal>
@@ -462,31 +473,47 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 16,
   },
-  menuBackdrop: {
+  menuSheetOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(15, 31, 23, 0.58)',
+  },
+  menuSheetBackdrop: {
     ...StyleSheet.absoluteFillObject,
   },
-  menuModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 31, 23, 0.58)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  menuModalCard: {
-    width: '100%',
-    maxWidth: 360,
-    borderRadius: 24,
+  menuSheetCard: {
     backgroundColor: '#f0fff4',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 28,
+    gap: 16,
     shadowColor: '#0f2e20',
     shadowOpacity: 0.18,
     shadowRadius: 16,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 8,
-    overflow: 'hidden',
+    shadowOffset: { width: 0, height: -2 },
   },
-  menuModalContent: {
-    paddingVertical: 20,
-    paddingHorizontal: 20,
+  menuSheetHandle: {
+    alignSelf: 'center',
+    width: 48,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: '#bbf7d0',
+  },
+  menuSheetTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#134e32',
+    textAlign: 'center',
+  },
+  menuSheetSubtitle: {
+    fontSize: 13,
+    color: '#2d3748',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  menuSheetContent: {
     gap: 14,
   },
   menuItem: {
@@ -524,6 +551,19 @@ const styles = StyleSheet.create({
   },
   themeOptionTextActive: {
     color: '#ecfdf3',
+  },
+  menuSheetCloseButton: {
+    marginTop: 12,
+    alignSelf: 'center',
+    borderRadius: 16,
+    paddingHorizontal: 28,
+    paddingVertical: 12,
+    backgroundColor: '#1f6f4a',
+  },
+  menuSheetCloseText: {
+    color: '#f0fff4',
+    fontWeight: '700',
+    fontSize: 16,
   },
   noticeOverlay: {
     flex: 1,

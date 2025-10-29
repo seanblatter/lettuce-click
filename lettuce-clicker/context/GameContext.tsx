@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+
+import { gardenEmojiCatalog } from '@/constants/emojiCatalog';
 import { AppState, AppStateStatus } from 'react-native';
 
 export type HomeEmojiTheme = 'circle' | 'spiral' | 'matrix' | 'clear';
@@ -198,33 +200,6 @@ const upgradeCatalog: UpgradeDefinition[] = [
     increment: 5500000,
     emoji: '🪐',
   },
-];
-
-const gardenEmojiCatalog: EmojiDefinition[] = [
-  { id: 'sprout', emoji: '🌱', name: 'Sprout', cost: 25 },
-  { id: 'seedling', emoji: '🪴', name: 'Potted Seedling', cost: 60 },
-  { id: 'butterfly', emoji: '🦋', name: 'Butterfly', cost: 90 },
-  { id: 'ladybug', emoji: '🐞', name: 'Ladybug', cost: 120 },
-  { id: 'honeybee', emoji: '🐝', name: 'Honeybee', cost: 150 },
-  { id: 'snail', emoji: '🐌', name: 'Helpful Snail', cost: 200 },
-  { id: 'frog', emoji: '🐸', name: 'Lily Pad Frog', cost: 260 },
-  { id: 'hedgehog', emoji: '🦔', name: 'Hedgehog Friend', cost: 320 },
-  { id: 'fox', emoji: '🦊', name: 'Fox Visitor', cost: 380 },
-  { id: 'owl', emoji: '🦉', name: 'Wise Owl', cost: 420 },
-  { id: 'cat', emoji: '🐱', name: 'Garden Cat', cost: 460 },
-  { id: 'dog', emoji: '🐶', name: 'Puppy Pal', cost: 500 },
-  { id: 'flamingo', emoji: '🦩', name: 'Flamingo Flair', cost: 560 },
-  { id: 'peacock', emoji: '🦚', name: 'Peacock Parade', cost: 600 },
-  { id: 'koala', emoji: '🐨', name: 'Koala Companion', cost: 640 },
-  { id: 'unicorn', emoji: '🦄', name: 'Mythic Unicorn', cost: 650 },
-  { id: 'rainbow', emoji: '🌈', name: 'Prismatic Rainbow', cost: 700 },
-  { id: 'sparkles', emoji: '✨', name: 'Sparkle Dust', cost: 750 },
-  { id: 'star', emoji: '⭐️', name: 'Shooting Star', cost: 800 },
-  { id: 'moon', emoji: '🌙', name: 'Moonbeam', cost: 840 },
-  { id: 'meteor', emoji: '☄️', name: 'Meteor Trail', cost: 900 },
-  { id: 'crystal', emoji: '🔮', name: 'Crystal Glow', cost: 940 },
-  { id: 'lantern', emoji: '🏮', name: 'Lantern Light', cost: 980 },
-  { id: 'bonsai', emoji: '🌳', name: 'Bonsai Tree', cost: 1040 },
 ];
 
 export type OrbitingEmoji = {

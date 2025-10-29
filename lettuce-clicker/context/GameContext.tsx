@@ -33,6 +33,7 @@ export type Placement = {
   x: number;
   y: number;
   scale: number;
+  rotation: number;
 };
 
 type PassiveResumeNotice =
@@ -439,6 +440,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         x: position.x,
         y: position.y,
         scale: 1,
+        rotation: 0,
       },
     ]);
 
@@ -585,7 +587,12 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
               setEmojiInventory(parsed.emojiInventory);
             }
             if (Array.isArray(parsed.placements)) {
-              setPlacements(parsed.placements);
+              setPlacements(
+                parsed.placements.map((entry) => ({
+                  ...entry,
+                  rotation: typeof entry.rotation === 'number' ? entry.rotation : 0,
+                }))
+              );
             }
             if (Array.isArray(parsed.orbitingUpgradeEmojis)) {
               setOrbitingUpgradeEmojis(parsed.orbitingUpgradeEmojis);

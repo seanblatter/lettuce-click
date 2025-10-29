@@ -14,7 +14,9 @@ import {
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { emojiCategoryOrder } from '@/constants/emojiCatalog';
 import { EmojiDefinition, Placement } from '@/context/GameContext';
 
 type Props = {
@@ -44,6 +46,30 @@ type Stroke = {
 const DRAW_COLORS = ['#1f6f4a', '#15803d', '#0ea5e9', '#ec4899', '#f59e0b', '#7c3aed', '#0f172a', '#f97316'];
 const PEN_SIZES = [3, 5, 8, 12];
 
+const CATEGORY_LABELS: Record<EmojiDefinition['category'], string> = {
+  plants: 'Plants & Foliage',
+  scenery: 'Scenery & Sky',
+  creatures: 'Garden Creatures',
+  features: 'Garden Features',
+  accents: 'Atmosphere & Accents',
+};
+
+type CategoryFilter = 'all' | EmojiDefinition['category'];
+
+const CATEGORY_OPTIONS: { id: CategoryFilter; label: string; icon: string }[] = [
+  { id: 'all', label: 'All favorites', icon: '🌼' },
+  { id: 'plants', label: 'Plants', icon: '🪴' },
+  { id: 'scenery', label: 'Scenery', icon: '🌅' },
+  { id: 'creatures', label: 'Creatures', icon: '🦋' },
+  { id: 'features', label: 'Features', icon: '🏡' },
+  { id: 'accents', label: 'Accents', icon: '✨' },
+];
+
+type InventoryEntry = EmojiDefinition & {
+  owned: number;
+  searchBlob: string;
+};
+
 export function GardenSection({
   harvest,
   emojiCatalog,
@@ -55,6 +81,7 @@ export function GardenSection({
   clearGarden,
   title = 'Garden Atelier',
 }: Props) {
+  const insets = useSafeAreaInsets();
   const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null);
   const [activeSheet, setActiveSheet] = useState<'shop' | 'inventory' | null>(null);
   const [shopFilter, setShopFilter] = useState('');
@@ -65,15 +92,48 @@ export function GardenSection({
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [currentStroke, setCurrentStroke] = useState<Stroke | null>(null);
   const [penHiddenForSave, setPenHiddenForSave] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<CategoryFilter>('all');
 
   const inventoryList = useMemo(
     () =>
       emojiCatalog
-        .map((item) => ({
-          ...item,
-          owned: emojiInventory[item.id] ?? 0,
-        }))
-        .sort((a, b) => a.cost - b.cost),
+        .map<InventoryEntry>((item) => {
+          const normalizedTags = item.tags.map((tag) => tag.toLowerCase());
+          const normalizedName = item.name.toLowerCase();
+          const condensedName = normalizedName.replace(/\s+/g, '');
+          const categoryLabel = CATEGORY_LABELS[item.category].toLowerCase();
+          const searchBlob = Array.from(
+            new Set([
+              normalizedName,
+              condensedName,
+              item.emoji.toLowerCase(),
+              categoryLabel,
+              ...normalizedTags,
+            ])
+          ).join(' ');
+
+          return {
+            ...item,
+            owned: emojiInventory[item.id] ?? 0,
+            searchBlob,
+          };
+        })
+        .sort((a, b) => {
+          const categoryDiff = emojiCategoryOrder[a.category] - emojiCategoryOrder[b.category];
+          if (categoryDiff !== 0) {
+            return categoryDiff;
+          }
+
+          if (a.popularity !== b.popularity) {
+            return a.popularity - b.popularity;
+          }
+
+          if (a.cost !== b.cost) {
+            return a.cost - b.cost;
+          }
+
+          return a.name.localeCompare(b.name);
+        }),
     [emojiCatalog, emojiInventory]
   );
 
@@ -83,14 +143,21 @@ export function GardenSection({
     () => (normalizedFilter ? Array.from(normalizedFilter).filter((glyph) => glyph.trim().length > 0) : []),
     [normalizedFilter]
   );
+  const normalizedFilterWords = useMemo(
+    () => (normalizedFilter ? normalizedFilter.split(/\s+/).filter(Boolean) : []),
+    [normalizedFilter]
+  );
   const matchesFilter = useCallback(
-    (item: (typeof inventoryList)[number]) => {
+    (item: InventoryEntry) => {
       if (!normalizedFilter) {
         return true;
       }
 
-      const normalizedName = item.name.toLowerCase();
-      if (normalizedName.includes(normalizedFilter)) {
+      if (item.searchBlob.includes(normalizedFilter)) {
+        return true;
+      }
+
+      if (normalizedFilterWords.length > 1 && normalizedFilterWords.every((word) => item.searchBlob.includes(word))) {
         return true;
       }
 
@@ -100,17 +167,21 @@ export function GardenSection({
 
       return emojiFilterTokens.some((glyph) => item.emoji.includes(glyph));
     },
-    [emojiFilterTokens, normalizedFilter]
+    [emojiFilterTokens, normalizedFilter, normalizedFilterWords]
+  );
+  const matchesCategory = useCallback(
+    (item: InventoryEntry) => (activeCategory === 'all' ? true : item.category === activeCategory),
+    [activeCategory]
   );
   const filteredShopInventory = useMemo(
     () =>
-      normalizedFilter ? inventoryList.filter((item) => matchesFilter(item)) : inventoryList,
-    [inventoryList, matchesFilter, normalizedFilter]
+      inventoryList.filter((item) => matchesCategory(item) && matchesFilter(item)),
+    [inventoryList, matchesCategory, matchesFilter]
   );
   const filteredOwnedInventory = useMemo(
     () =>
-      normalizedFilter ? ownedInventory.filter((item) => matchesFilter(item)) : ownedInventory,
-    [matchesFilter, normalizedFilter, ownedInventory]
+      ownedInventory.filter((item) => matchesCategory(item) && matchesFilter(item)),
+    [matchesCategory, matchesFilter, ownedInventory]
   );
   const selectedDetails = useMemo(
     () => inventoryList.find((item) => item.id === selectedEmoji) ?? null,
@@ -351,7 +422,6 @@ export function GardenSection({
   );
   const handleCloseSheet = useCallback(() => setActiveSheet(null), []);
   const handleOpenSheet = useCallback((sheet: 'shop' | 'inventory') => setActiveSheet(sheet), []);
-  type InventoryEntry = (typeof inventoryList)[number];
 
   const keyExtractor = useCallback((item: InventoryEntry) => item.id, []);
 
@@ -359,6 +429,7 @@ export function GardenSection({
     const owned = item.owned;
     const isSelected = selectedEmoji === item.id;
     const canAfford = harvest >= item.cost;
+    const categoryLabel = CATEGORY_LABELS[item.category];
 
     const handleTilePress = () => {
       if (owned > 0) {
@@ -390,6 +461,9 @@ export function GardenSection({
             {item.name}
           </Text>
           <View style={styles.emojiTileFooter}>
+            <Text style={[styles.emojiTileMeta, styles.emojiTileCategory]} numberOfLines={1}>
+              {categoryLabel}
+            </Text>
             <Text style={[styles.emojiTileMeta, styles.emojiTileCostText]} numberOfLines={1}>
               {item.cost.toLocaleString()} harvest
             </Text>
@@ -423,7 +497,7 @@ export function GardenSection({
 
   const renderInventoryItem: ListRenderItem<InventoryEntry> = ({ item }) => {
     const isSelected = selectedEmoji === item.id;
-    const canAfford = harvest >= item.cost;
+    const categoryLabel = CATEGORY_LABELS[item.category];
 
     return (
       <View style={styles.sheetTileWrapper}>
@@ -437,26 +511,14 @@ export function GardenSection({
             {item.name}
           </Text>
           <View style={styles.emojiTileFooter}>
+            <Text style={[styles.emojiTileMeta, styles.emojiTileCategory]} numberOfLines={1}>
+              {categoryLabel}
+            </Text>
             <Text style={[styles.emojiTileMeta, styles.inventoryMeta]} numberOfLines={1}>
               Owned ×{item.owned}
             </Text>
           </View>
         </Pressable>
-        <View style={styles.tileActionRow}>
-          <Pressable
-            style={[styles.tileActionButton, styles.tileActionGhost]}
-            onPress={() => handleSelect(item.id, item.owned)}
-            accessibilityLabel={`Ready ${item.name} for placement`}>
-            <Text style={styles.tileActionGhostText}>Select</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.tileActionButton, !canAfford && styles.disabledSecondary]}
-            onPress={() => handlePurchase(item.id)}
-            disabled={!canAfford}
-            accessibilityLabel={`Buy more ${item.name}`}>
-            <Text style={[styles.tileActionButtonText, !canAfford && styles.disabledText]}>Buy</Text>
-          </Pressable>
-        </View>
       </View>
     );
   };
@@ -464,15 +526,20 @@ export function GardenSection({
   return (
     <View style={styles.container}>
       <ScrollView
-        style={styles.detailScroll}
-        contentContainerStyle={styles.detailContent}
+        style={styles.contentScroll}
+        contentContainerStyle={[
+          styles.contentScrollContent,
+          {
+            paddingTop: Math.max(insets.top, 12),
+            paddingBottom: insets.bottom + 48,
+          },
+        ]}
         showsVerticalScrollIndicator={false}>
         <View style={styles.harvestBanner}>
           <Text style={styles.harvestTitle}>{title}</Text>
           <Text style={styles.harvestAmount}>{harvest.toLocaleString()} harvest ready</Text>
           <Text style={styles.harvestHint}>
-            Open the Garden shop to purchase decorations, then visit your inventory to ready them for
-            placement.
+            Your harvest bankroll is ready—shop curated emoji sets and paint the garden to life.
           </Text>
         </View>
 
@@ -482,7 +549,9 @@ export function GardenSection({
             onPress={() => handleOpenSheet('shop')}
             accessibilityLabel="Open the Garden shop">
             <Text style={styles.launcherTitle}>Garden shop</Text>
-            <Text style={styles.launcherCopy}>Browse every Unicode emoji and add new favorites.</Text>
+            <Text style={styles.launcherCopy}>
+              Discover popular plants, scenery, and accents tailored for storytelling scenes.
+            </Text>
           </Pressable>
           <Pressable
             style={[styles.launcherCard, styles.launcherCardSecondary]}
@@ -515,80 +584,80 @@ export function GardenSection({
             </>
           )}
         </View>
-      </ScrollView>
 
-      <View style={styles.canvasContainer}>
-        <Pressable
-          style={styles.canvas}
-          onPress={handleCanvasPress}
-          onTouchStart={handleCanvasTouchStart}
-          onTouchMove={handleCanvasTouchMove}
-          onTouchEnd={handleCanvasTouchEnd}
-          onTouchCancel={handleCanvasTouchEnd}>
-          <View pointerEvents="none" style={styles.drawingSurface}>
-            {strokes.reduce<JSX.Element[]>((acc, stroke) => {
-              acc.push(...renderStrokeSegments(stroke, stroke.id));
-              return acc;
-            }, [])}
-            {currentStroke ? renderStrokeSegments(currentStroke, `${currentStroke.id}-live`) : null}
-          </View>
-          {isDrawingMode ? (
-            <View pointerEvents="none" style={styles.drawingModeBadge}>
-              <Text style={styles.drawingModeBadgeText}>Drawing mode</Text>
-            </View>
-          ) : null}
-          {shouldShowCanvasEmptyState ? (
-            <View pointerEvents="none" style={styles.canvasEmptyState}>
-              <Text style={styles.canvasEmptyTitle}>Tap the canvas to begin</Text>
-              <Text style={styles.canvasEmptyCopy}>
-                Selected emojis will appear where you tap. Adjust them later by dragging, double
-                tapping, or long pressing.
-              </Text>
-            </View>
-          ) : null}
-          {placements.map((placement) => {
-            const emoji = emojiCatalog.find((item) => item.id === placement.emojiId);
-
-            if (!emoji) {
-              return null;
-            }
-
-            return (
-              <DraggablePlacement
-                key={placement.id}
-                placement={placement}
-                emoji={emoji.emoji}
-                onUpdate={(updates) => updatePlacement(placement.id, updates)}
-              />
-            );
-          })}
-          {!penHiddenForSave ? (
-            <Pressable
-              style={styles.penButton}
-              accessibilityLabel="Open drawing palette"
-              accessibilityHint="Opens options to pick colors and stroke sizes"
-              onPress={() => setShowPalette(true)}>
-              <View style={[styles.penButtonCircle, isDrawingMode && styles.penButtonCircleActive]}>
-                <Text style={[styles.penButtonIcon, isDrawingMode && styles.penButtonIconActive]}>✏️</Text>
-              </View>
-            </Pressable>
-          ) : null}
-        </Pressable>
-
-        <View style={styles.canvasActions}>
+        <View style={styles.canvasContainer}>
           <Pressable
-            style={[styles.ghostButton, placements.length === 0 && styles.disabledSecondary]}
-            disabled={placements.length === 0}
-            onPress={handleClearGarden}>
-            <Text style={[styles.ghostButtonText, placements.length === 0 && styles.disabledText]}>
-              Clear Garden
-            </Text>
+            style={styles.canvas}
+            onPress={handleCanvasPress}
+            onTouchStart={handleCanvasTouchStart}
+            onTouchMove={handleCanvasTouchMove}
+            onTouchEnd={handleCanvasTouchEnd}
+            onTouchCancel={handleCanvasTouchEnd}>
+            <View pointerEvents="none" style={styles.drawingSurface}>
+              {strokes.reduce<JSX.Element[]>((acc, stroke) => {
+                acc.push(...renderStrokeSegments(stroke, stroke.id));
+                return acc;
+              }, [])}
+              {currentStroke ? renderStrokeSegments(currentStroke, `${currentStroke.id}-live`) : null}
+            </View>
+            {isDrawingMode ? (
+              <View pointerEvents="none" style={styles.drawingModeBadge}>
+                <Text style={styles.drawingModeBadgeText}>Drawing mode</Text>
+              </View>
+            ) : null}
+            {shouldShowCanvasEmptyState ? (
+              <View pointerEvents="none" style={styles.canvasEmptyState}>
+                <Text style={styles.canvasEmptyTitle}>Tap the canvas to begin</Text>
+                <Text style={styles.canvasEmptyCopy}>
+                  Selected emojis will appear where you tap. Adjust them later by dragging, double
+                  tapping, or long pressing.
+                </Text>
+              </View>
+            ) : null}
+            {placements.map((placement) => {
+              const emoji = emojiCatalog.find((item) => item.id === placement.emojiId);
+
+              if (!emoji) {
+                return null;
+              }
+
+              return (
+                <DraggablePlacement
+                  key={placement.id}
+                  placement={placement}
+                  emoji={emoji.emoji}
+                  onUpdate={(updates) => updatePlacement(placement.id, updates)}
+                />
+              );
+            })}
+            {!penHiddenForSave ? (
+              <Pressable
+                style={styles.penButton}
+                accessibilityLabel="Open drawing palette"
+                accessibilityHint="Opens options to pick colors and stroke sizes"
+                onPress={() => setShowPalette(true)}>
+                <View style={[styles.penButtonCircle, isDrawingMode && styles.penButtonCircleActive]}>
+                  <Text style={[styles.penButtonIcon, isDrawingMode && styles.penButtonIconActive]}>✏️</Text>
+                </View>
+              </Pressable>
+            ) : null}
           </Pressable>
-          <Pressable style={styles.primaryButton} onPress={handleSaveSnapshot}>
-            <Text style={styles.primaryText}>Save</Text>
-          </Pressable>
+
+          <View style={styles.canvasActions}>
+            <Pressable
+              style={[styles.ghostButton, placements.length === 0 && styles.disabledSecondary]}
+              disabled={placements.length === 0}
+              onPress={handleClearGarden}>
+              <Text style={[styles.ghostButtonText, placements.length === 0 && styles.disabledText]}>
+                Clear Garden
+              </Text>
+            </Pressable>
+            <Pressable style={styles.primaryButton} onPress={handleSaveSnapshot}>
+              <Text style={styles.primaryText}>Save</Text>
+            </Pressable>
+          </View>
         </View>
-      </View>
+      </ScrollView>
       <Modal
         visible={showPalette}
         animationType="slide"
@@ -672,7 +741,7 @@ export function GardenSection({
             <View style={styles.sheetHandle} />
             <Text style={styles.sheetTitle}>Garden shop</Text>
             <Text style={styles.sheetSubtitle}>
-              Tap buy to add emoji to your inventory or select to ready it instantly.
+              Curated categories make it easy to build cozy garden scenes with the essentials on top.
             </Text>
             <View style={styles.sheetSearchBlock}>
               <View style={styles.searchRow}>
@@ -695,7 +764,31 @@ export function GardenSection({
                   </Pressable>
                 ) : null}
               </View>
-              <Text style={styles.sheetHint}>Search by name, emoji, or drop in characters directly.</Text>
+              <Text style={styles.sheetHint}>Search by name, tags, or drop emoji characters directly.</Text>
+            </View>
+            <View style={styles.categoryFilterBlock}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.categoryFilterContent}
+              >
+                {CATEGORY_OPTIONS.map((option) => {
+                  const isActive = option.id === activeCategory;
+                  return (
+                    <Pressable
+                      key={option.id}
+                      style={[styles.categoryPill, isActive && styles.categoryPillActive]}
+                      onPress={() => setActiveCategory(option.id)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: isActive }}
+                      accessibilityLabel={`Filter ${option.label}`}>
+                      <Text style={[styles.categoryPillText, isActive && styles.categoryPillTextActive]}>
+                        {`${option.icon} ${option.label}`}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
             </View>
             <FlatList
               data={filteredShopInventory}
@@ -732,7 +825,7 @@ export function GardenSection({
             <View style={styles.sheetHandle} />
             <Text style={styles.sheetTitle}>Inventory</Text>
             <Text style={styles.sheetSubtitle}>
-              Select a decoration to ready it for placement or buy more copies to expand your garden.
+              Filter by category or tags to find the perfect decorations to ready for placement.
             </Text>
             <View style={styles.sheetSearchBlock}>
               <View style={styles.searchRow}>
@@ -756,6 +849,30 @@ export function GardenSection({
                 ) : null}
               </View>
               <Text style={styles.sheetHint}>Filtering applies to both your inventory and the shop.</Text>
+            </View>
+            <View style={styles.categoryFilterBlock}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.categoryFilterContent}
+              >
+                {CATEGORY_OPTIONS.map((option) => {
+                  const isActive = option.id === activeCategory;
+                  return (
+                    <Pressable
+                      key={option.id}
+                      style={[styles.categoryPill, isActive && styles.categoryPillActive]}
+                      onPress={() => setActiveCategory(option.id)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: isActive }}
+                      accessibilityLabel={`Filter ${option.label}`}>
+                      <Text style={[styles.categoryPillText, isActive && styles.categoryPillTextActive]}>
+                        {`${option.icon} ${option.label}`}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
             </View>
             <FlatList
               data={filteredOwnedInventory}
@@ -876,22 +993,21 @@ function DraggablePlacement({ emoji, placement, onUpdate }: DraggablePlacementPr
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 24,
-    gap: 24,
     backgroundColor: '#f2f9f2',
   },
-  detailScroll: {
-    flexGrow: 0,
+  contentScroll: {
+    flex: 1,
   },
-  detailContent: {
-    gap: 20,
+  contentScrollContent: {
+    paddingHorizontal: 24,
+    gap: 24,
+    paddingBottom: 24,
   },
   harvestBanner: {
     backgroundColor: '#22543d',
-    borderRadius: 20,
-    padding: 20,
+    borderRadius: 28,
+    paddingHorizontal: 24,
+    paddingVertical: 24,
     shadowColor: '#000',
     shadowOpacity: 0.1,
     shadowOffset: { width: 0, height: 6 },
@@ -918,6 +1034,7 @@ const styles = StyleSheet.create({
   launcherRow: {
     flexDirection: 'row',
     gap: 12,
+    flexWrap: 'wrap',
   },
   launcherCard: {
     flex: 1,
@@ -930,6 +1047,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     shadowRadius: 14,
     elevation: 4,
+    minWidth: 160,
   },
   launcherCardSecondary: {
     backgroundColor: '#e6fffa',
@@ -1039,14 +1157,19 @@ const styles = StyleSheet.create({
   emojiTileFooter: {
     marginTop: 'auto',
     width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
     gap: 4,
   },
   emojiTileMeta: {
     fontSize: 10,
     color: '#1f6f4a',
+  },
+  emojiTileCategory: {
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    fontWeight: '700',
+    color: '#0f766e',
   },
   emojiTileCostText: {
     fontWeight: '700',
@@ -1070,8 +1193,8 @@ const styles = StyleSheet.create({
     color: '#22543d',
   },
   canvasContainer: {
-    flex: 1,
     gap: 16,
+    width: '100%',
   },
   selectionStatus: {
     backgroundColor: '#e6fffa',
@@ -1233,7 +1356,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   sheetCard: {
-    backgroundColor: '#f8fffb',
+    backgroundColor: '#f2f9f2',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: 20,
@@ -1277,6 +1400,38 @@ const styles = StyleSheet.create({
   sheetListContent: {
     paddingBottom: 24,
     paddingHorizontal: 4,
+  },
+  categoryFilterBlock: {
+    marginTop: 4,
+  },
+  categoryFilterContent: {
+    gap: 8,
+    paddingHorizontal: 4,
+  },
+  categoryPill: {
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: '#ecfdf3',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  categoryPillActive: {
+    backgroundColor: '#22543d',
+    borderColor: '#22543d',
+    shadowColor: '#134e32',
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  categoryPillText: {
+    color: '#134e32',
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  categoryPillTextActive: {
+    color: '#f0fff4',
   },
   sheetTileWrapper: {
     flex: 1,

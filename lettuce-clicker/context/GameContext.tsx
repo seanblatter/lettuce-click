@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
-import { gardenEmojiCatalog } from '@/constants/emojiCatalog';
+import { gardenEmojiCatalog, getAdjustedEmojiCost } from '@/constants/emojiCatalog';
 import { AppState, AppStateStatus } from 'react-native';
 
 export type HomeEmojiTheme = 'circle' | 'spiral' | 'matrix' | 'clear';
@@ -33,6 +33,7 @@ export type Placement = {
   x: number;
   y: number;
   scale: number;
+  rotation?: number;
 };
 
 type PassiveResumeNotice =
@@ -72,6 +73,8 @@ type GameContextValue = {
   placeEmoji: (emojiId: string, position: { x: number; y: number }) => boolean;
   updatePlacement: (placementId: string, updates: Partial<Placement>) => void;
   clearGarden: () => void;
+  registerCustomEmoji: (definition: EmojiDefinition) => void;
+  getEmojiCost: (emojiId: string) => number | null;
   setProfileName: (value: string) => void;
   setProfileUsername: (value: string) => void;
   setProfileImageUri: (uri: string | null) => void;
@@ -219,6 +222,7 @@ type StoredGameState = {
   emojiInventory: Record<string, number>;
   placements: Placement[];
   orbitingUpgradeEmojis: OrbitingEmoji[];
+  customEmojiCatalog?: EmojiDefinition[];
 };
 
 const GameContext = createContext<GameContextValue | undefined>(undefined);
@@ -232,6 +236,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [purchasedUpgrades, setPurchasedUpgrades] = useState<Record<string, number>>({});
   const [orbitingUpgradeEmojis, setOrbitingUpgradeEmojis] = useState<OrbitingEmoji[]>([]);
   const [emojiInventory, setEmojiInventory] = useState<Record<string, number>>({});
+  const [customEmojiCatalog, setCustomEmojiCatalog] = useState<Record<string, EmojiDefinition>>({});
   const [placements, setPlacements] = useState<Placement[]>([]);
   const [profileName, setProfileName] = useState('');
   const [profileUsername, setProfileUsername] = useState('');
@@ -254,6 +259,10 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const lifetimeHarvestRef = useRef(lifetimeHarvest);
   const profileLifetimeTotalRef = useRef(profileLifetimeTotal);
   const autoPerSecondRef = useRef(autoPerSecond);
+  const combinedEmojiCatalog = useMemo(
+    () => [...gardenEmojiCatalog, ...Object.values(customEmojiCatalog)],
+    [customEmojiCatalog]
+  );
 
   useEffect(() => {
     if (autoPerSecond <= 0) {
@@ -284,6 +293,35 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   useEffect(() => {
     autoPerSecondRef.current = autoPerSecond;
   }, [autoPerSecond]);
+
+  const registerCustomEmoji = useCallback((definition: EmojiDefinition) => {
+    setCustomEmojiCatalog((prev) => {
+      if (prev[definition.id]) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [definition.id]: definition,
+      };
+    });
+  }, []);
+
+  const getEmojiDefinition = useCallback(
+    (emojiId: string) => combinedEmojiCatalog.find((item) => item.id === emojiId) ?? null,
+    [combinedEmojiCatalog]
+  );
+
+  const getEmojiCost = useCallback(
+    (emojiId: string) => {
+      const emoji = getEmojiDefinition(emojiId);
+      if (!emoji) {
+        return null;
+      }
+      return getAdjustedEmojiCost(emoji);
+    },
+    [getEmojiDefinition]
+  );
 
   useEffect(() => {
     const backgroundStates: AppStateStatus[] = ['inactive', 'background'];
@@ -401,13 +439,13 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   };
 
   const purchaseEmoji = (emojiId: string) => {
-    const emoji = gardenEmojiCatalog.find((item) => item.id === emojiId);
+    const cost = getEmojiCost(emojiId);
 
-    if (!emoji) {
+    if (cost == null) {
       return false;
     }
 
-    if (!spendHarvest(emoji.cost)) {
+    if (!spendHarvest(cost)) {
       return false;
     }
 
@@ -439,6 +477,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         x: position.x,
         y: position.y,
         scale: 1,
+        rotation: 0,
       },
     ]);
 
@@ -485,7 +524,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     upgrades: upgradeCatalog,
     purchasedUpgrades,
     orbitingUpgradeEmojis,
-    emojiCatalog: gardenEmojiCatalog,
+    emojiCatalog: combinedEmojiCatalog,
     emojiInventory,
     placements,
     profileName,
@@ -500,6 +539,8 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     placeEmoji,
     updatePlacement,
     clearGarden,
+    registerCustomEmoji,
+    getEmojiCost,
     setProfileName,
     setProfileUsername,
     setProfileImageUri,
@@ -521,6 +562,9 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     homeEmojiTheme,
     resumeNotice,
     setProfileLifetimeTotal,
+    combinedEmojiCatalog,
+    registerCustomEmoji,
+    getEmojiCost,
   ]);
 
   useEffect(() => {
@@ -590,6 +634,16 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
             if (Array.isArray(parsed.orbitingUpgradeEmojis)) {
               setOrbitingUpgradeEmojis(parsed.orbitingUpgradeEmojis);
             }
+            if (Array.isArray(parsed.customEmojiCatalog)) {
+              setCustomEmojiCatalog(
+                parsed.customEmojiCatalog.reduce<Record<string, EmojiDefinition>>((acc, entry) => {
+                  if (entry && typeof entry.id === 'string') {
+                    acc[entry.id] = entry;
+                  }
+                  return acc;
+                }, {})
+              );
+            }
           } catch {
             // ignore malformed stored data
           }
@@ -650,12 +704,21 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       emojiInventory,
       placements,
       orbitingUpgradeEmojis,
+      customEmojiCatalog: Object.values(customEmojiCatalog),
     };
 
     AsyncStorage.setItem(GAME_STORAGE_KEY, JSON.stringify(payload)).catch(() => {
       // persistence best effort only
     });
-  }, [emojiInventory, harvest, lifetimeHarvest, orbitingUpgradeEmojis, placements, purchasedUpgrades]);
+  }, [
+    customEmojiCatalog,
+    emojiInventory,
+    harvest,
+    lifetimeHarvest,
+    orbitingUpgradeEmojis,
+    placements,
+    purchasedUpgrades,
+  ]);
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
 };

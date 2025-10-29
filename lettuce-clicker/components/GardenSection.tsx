@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, GestureResponderEvent, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, GestureResponderEvent, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 
@@ -30,6 +30,7 @@ export function GardenSection({
 }: Props) {
   const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null);
   const [activePanel, setActivePanel] = useState<'shop' | 'inventory'>('shop');
+  const [shopFilter, setShopFilter] = useState('');
 
   const inventoryList = useMemo(
     () =>
@@ -42,7 +43,34 @@ export function GardenSection({
     [emojiCatalog, emojiInventory]
   );
 
-  const ownedInventory = inventoryList.filter((item) => item.owned > 0);
+  const ownedInventory = useMemo(() => inventoryList.filter((item) => item.owned > 0), [inventoryList]);
+  const normalizedFilter = shopFilter.trim().toLowerCase();
+  const filteredShopInventory = useMemo(
+    () =>
+      normalizedFilter
+        ? inventoryList.filter(
+            (item) =>
+              item.name.toLowerCase().includes(normalizedFilter) ||
+              item.emoji.toLowerCase().includes(normalizedFilter)
+          )
+        : inventoryList,
+    [inventoryList, normalizedFilter]
+  );
+  const filteredOwnedInventory = useMemo(
+    () =>
+      normalizedFilter
+        ? ownedInventory.filter(
+            (item) =>
+              item.name.toLowerCase().includes(normalizedFilter) ||
+              item.emoji.toLowerCase().includes(normalizedFilter)
+          )
+        : ownedInventory,
+    [normalizedFilter, ownedInventory]
+  );
+  const selectedDetails = useMemo(
+    () => inventoryList.find((item) => item.id === selectedEmoji) ?? null,
+    [inventoryList, selectedEmoji]
+  );
 
   const handleCanvasPress = (event: GestureResponderEvent) => {
     if (!selectedEmoji) {
@@ -129,81 +157,167 @@ export function GardenSection({
         </Pressable>
       </View>
 
-      {activePanel === 'shop' ? (
-        <View style={styles.grid}>
-          {inventoryList.map((item) => {
-            const owned = item.owned;
-            const isSelected = selectedEmoji === item.id;
-            const canAfford = harvest >= item.cost;
+      <View style={styles.shopToolbar}>
+        <View style={styles.searchRow}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search or paste emoji"
+            placeholderTextColor="#4a5568"
+            value={shopFilter}
+            onChangeText={setShopFilter}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
+          />
+          {shopFilter.length > 0 && (
+            <Pressable
+              accessibilityLabel="Clear emoji search"
+              style={styles.clearSearchButton}
+              onPress={() => setShopFilter('')}>
+              <Text style={styles.clearSearchText}>Clear</Text>
+            </Pressable>
+          )}
+        </View>
+        <Text style={styles.toolbarHint}>
+          {activePanel === 'shop'
+            ? 'Tap to buy or select. Long press to quickly stock up.'
+            : 'Tap a tile to ready it for placement.'}
+        </Text>
+      </View>
 
-            return (
-              <View key={item.id} style={styles.card}>
+      {activePanel === 'shop' ? (
+        <View style={styles.compactGrid}>
+          {filteredShopInventory.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateTitle}>No emoji match your search</Text>
+              <Text style={styles.emptyStateCopy}>
+                Clear the search or try a different emoji keyword to keep shopping.
+              </Text>
+            </View>
+          ) : (
+            filteredShopInventory.map((item) => {
+              const owned = item.owned;
+              const isSelected = selectedEmoji === item.id;
+              const canAfford = harvest >= item.cost;
+
+              const handleTilePress = () => {
+                if (owned > 0) {
+                  handleSelect(item.id, owned);
+                  return;
+                }
+                handlePurchase(item.id);
+              };
+
+              return (
                 <Pressable
-                  style={[styles.emojiSlot, isSelected && styles.emojiSlotSelected]}
-                  onPress={() => handleSelect(item.id, owned)}>
-                  <Text style={styles.emojiGlyph}>{item.emoji}</Text>
-                  <View style={styles.ownedBadge}>
-                    <Text style={styles.ownedBadgeText}>x{owned}</Text>
-                  </View>
-                  {isSelected && <Text style={styles.selectedBadge}>Selected</Text>}
-                </Pressable>
-                <View style={styles.cardCopy}>
-                  <Text style={styles.emojiName} numberOfLines={2}>
+                  key={item.id}
+                  style={[
+                    styles.emojiTile,
+                    isSelected && styles.emojiTileSelected,
+                    !canAfford && owned === 0 && styles.emojiTileDisabled,
+                  ]}
+                  onPress={handleTilePress}
+                  onLongPress={() => handlePurchase(item.id)}
+                  delayLongPress={180}
+                  accessibilityLabel={`${item.name} emoji`}
+                  accessibilityHint={
+                    owned > 0
+                      ? 'Select to ready this decoration.'
+                      : canAfford
+                      ? 'Purchase and ready this decoration.'
+                      : 'Not enough harvest to purchase.'
+                  }>
+                  <Text style={styles.emojiGlyphLarge}>{item.emoji}</Text>
+                  <Text style={styles.emojiTileLabel} numberOfLines={1}>
                     {item.name}
                   </Text>
-                  <Text style={styles.emojiCost}>{item.cost.toLocaleString()} harvest</Text>
-                </View>
-                <Pressable
-                  accessibilityLabel={`Purchase ${item.name}`}
-                  onPress={() => handlePurchase(item.id)}
-                  disabled={!canAfford}
-                  style={[styles.purchaseButton, !canAfford && styles.purchaseButtonDisabled]}>
-                  <Text style={[styles.purchaseButtonText, !canAfford && styles.purchaseButtonTextDisabled]}>
-                    {canAfford ? 'Buy' : 'Need harvest'}
-                  </Text>
+                  <View style={styles.emojiTileFooter}>
+                    <Text style={[styles.emojiTileMeta, styles.emojiTileCostText]} numberOfLines={1}>
+                      {item.cost.toLocaleString()} harvest
+                    </Text>
+                    {isSelected ? (
+                      <Text style={[styles.emojiTileMeta, styles.emojiTileSelectedText]}>Ready</Text>
+                    ) : null}
+                  </View>
+                  {owned > 0 ? (
+                    <View style={styles.emojiTileBadge}>
+                      <Text style={styles.emojiTileBadgeText}>×{owned}</Text>
+                    </View>
+                  ) : null}
                 </Pressable>
-              </View>
-            );
-          })}
+              );
+            })
+          )}
         </View>
       ) : (
         <>
-          <View style={styles.grid}>
-            {ownedInventory.length === 0 ? (
+          <View style={styles.compactGrid}>
+            {filteredOwnedInventory.length === 0 ? (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyStateTitle}>No decorations yet</Text>
+                <Text style={styles.emptyStateTitle}>Inventory is empty</Text>
                 <Text style={styles.emptyStateCopy}>
-                  Visit the shop to purchase new friends for your garden.
+                  Purchase decorations in the shop, then come back to place them.
                 </Text>
               </View>
             ) : (
-              ownedInventory.map((item) => {
+              filteredOwnedInventory.map((item) => {
                 const isSelected = selectedEmoji === item.id;
                 return (
-                  <View key={item.id} style={styles.card}>
-                    <Pressable
-                      style={[styles.emojiSlot, isSelected && styles.emojiSlotSelected]}
-                      onPress={() => handleSelect(item.id, item.owned)}>
-                      <Text style={styles.emojiGlyph}>{item.emoji}</Text>
-                      <View style={styles.ownedBadge}>
-                        <Text style={styles.ownedBadgeText}>x{item.owned}</Text>
-                      </View>
-                      {isSelected && <Text style={styles.selectedBadge}>Selected</Text>}
-                    </Pressable>
-                    <View style={styles.cardCopy}>
-                      <Text style={styles.emojiName}>{item.name}</Text>
-                      <Text style={styles.emojiCost}>Owned • {item.owned}</Text>
+                  <Pressable
+                    key={item.id}
+                    style={[styles.emojiTile, isSelected && styles.emojiTileSelected]}
+                    onPress={() => handleSelect(item.id, item.owned)}
+                    accessibilityLabel={`${item.name} emoji`}
+                    accessibilityHint="Select to ready this decoration.">
+                    <Text style={styles.emojiGlyphLarge}>{item.emoji}</Text>
+                    <Text style={styles.emojiTileLabel} numberOfLines={1}>
+                      {item.name}
+                    </Text>
+                    <View style={styles.emojiTileFooter}>
+                      <Text style={[styles.emojiTileMeta, styles.inventoryMeta]} numberOfLines={1}>
+                        Owned ×{item.owned}
+                      </Text>
+                      {isSelected ? (
+                        <Text style={[styles.emojiTileMeta, styles.emojiTileSelectedText]}>Ready</Text>
+                      ) : null}
                     </View>
-                    <Pressable style={styles.secondaryButton} onPress={() => handleSelect(item.id, item.owned)}>
-                      <Text style={styles.secondaryText}>Choose</Text>
-                    </Pressable>
-                  </View>
+                  </Pressable>
                 );
               })
             )}
           </View>
 
+          <View style={styles.selectionStatus}>
+            {selectedDetails ? (
+              <>
+                <Text style={styles.selectionStatusTitle}>
+                  Ready to place {selectedDetails.emoji} {selectedDetails.name}
+                </Text>
+                <Text style={styles.selectionStatusCopy}>
+                  Tap anywhere on the canvas to drop it. Drag to move, double tap to enlarge, and
+                  long press to shrink.
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.selectionStatusTitle}>No decoration selected</Text>
+                <Text style={styles.selectionStatusCopy}>
+                  Choose an emoji above to prepare it for the garden canvas.
+                </Text>
+              </>
+            )}
+          </View>
+
           <Pressable style={styles.canvas} onPress={handleCanvasPress}>
+            {placements.length === 0 ? (
+              <View pointerEvents="none" style={styles.canvasEmptyState}>
+                <Text style={styles.canvasEmptyTitle}>Tap the canvas to begin</Text>
+                <Text style={styles.canvasEmptyCopy}>
+                  Selected emojis will appear where you tap. Adjust them later by dragging, double
+                  tapping, or long pressing.
+                </Text>
+              </View>
+            ) : null}
             {placements.map((placement) => {
               const emoji = emojiCatalog.find((item) => item.id === placement.emojiId);
 
@@ -268,6 +382,7 @@ function DraggablePlacement({ emoji, placement, onUpdate }: DraggablePlacementPr
   const reportUpdate = () => {
     'worklet';
     const nextScale = Math.min(Math.max(scale.value, MIN_SCALE), MAX_SCALE);
+    scale.value = nextScale;
     runOnJS(onUpdate)({ x: x.value, y: y.value, scale: nextScale });
   };
 
@@ -294,7 +409,21 @@ function DraggablePlacement({ emoji, placement, onUpdate }: DraggablePlacementPr
     .onEnd(reportUpdate)
     .onFinalize(reportUpdate);
 
-  const composedGesture = Gesture.Simultaneous(panGesture, pinchGesture);
+  const doubleTapGesture = Gesture.Tap()
+    .numberOfTaps(2)
+    .onEnd(() => {
+      scale.value = Math.min(scale.value * 1.25, MAX_SCALE);
+      reportUpdate();
+    });
+
+  const longPressGesture = Gesture.LongPress()
+    .minDuration(350)
+    .onEnd(() => {
+      scale.value = Math.max(scale.value * 0.8, MIN_SCALE);
+      reportUpdate();
+    });
+
+  const composedGesture = Gesture.Simultaneous(panGesture, pinchGesture, doubleTapGesture, longPressGesture);
 
   const animatedStyle = useAnimatedStyle(() => {
     const clampedScale = Math.min(Math.max(scale.value, MIN_SCALE), MAX_SCALE);
@@ -375,108 +504,54 @@ const styles = StyleSheet.create({
   tabButtonTextActive: {
     color: '#f0fff4',
   },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
-    justifyContent: 'space-between',
-  },
-  card: {
-    width: '47%',
-    backgroundColor: '#ffffff',
+  shopToolbar: {
+    backgroundColor: '#e6fffa',
     borderRadius: 18,
     padding: 14,
-    shadowColor: '#2f855a',
+    gap: 10,
+    shadowColor: '#0f766e',
     shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
     elevation: 3,
-    gap: 12,
   },
-  emojiSlot: {
-    width: '100%',
-    aspectRatio: 1,
-    borderRadius: 16,
-    backgroundColor: '#f7fafc',
-    borderWidth: 2,
-    borderColor: '#cbd5e0',
+  searchRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
+    gap: 10,
   },
-  emojiSlotSelected: {
-    borderColor: '#38a169',
-    backgroundColor: '#c6f6d5',
+  searchInput: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    fontSize: 15,
+    color: '#134e32',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
   },
-  emojiGlyph: {
-    fontSize: 42,
-  },
-  ownedBadge: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    backgroundColor: 'rgba(34, 84, 61, 0.85)',
+  clearSearchButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    backgroundColor: '#bbf7d0',
   },
-  ownedBadgeText: {
-    color: '#f0fff4',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  selectedBadge: {
-    position: 'absolute',
-    bottom: 6,
-    left: 0,
-    right: 0,
-    textAlign: 'center',
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#22543d',
-  },
-  cardCopy: {
-    gap: 4,
-  },
-  emojiName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#22543d',
-    textAlign: 'center',
-    minHeight: 36,
-  },
-  emojiCost: {
-    fontSize: 12,
-    color: '#4a5568',
-    textAlign: 'center',
-  },
-  purchaseButton: {
-    backgroundColor: '#2f855a',
-    paddingVertical: 8,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  purchaseButtonDisabled: {
-    backgroundColor: '#cbd5e0',
-  },
-  purchaseButtonText: {
-    color: '#f0fff4',
-    fontWeight: '700',
+  clearSearchText: {
     fontSize: 13,
-    textAlign: 'center',
+    fontWeight: '700',
+    color: '#14532d',
   },
-  purchaseButtonTextDisabled: {
-    color: '#4a5568',
+  toolbarHint: {
+    fontSize: 12,
+    color: '#0f766e',
+    lineHeight: 18,
   },
-  secondaryButton: {
-    backgroundColor: '#e6fffa',
-    paddingVertical: 8,
-    borderRadius: 12,
-  },
-  secondaryText: {
-    textAlign: 'center',
-    color: '#22543d',
-    fontWeight: '600',
+  compactGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    justifyContent: 'flex-start',
   },
   emptyState: {
     width: '100%',
@@ -497,6 +572,105 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
   },
+  emojiTile: {
+    flexBasis: '22%',
+    maxWidth: '24%',
+    minWidth: 72,
+    minHeight: 116,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 6,
+    borderWidth: 2,
+    borderColor: '#d1fae5',
+    alignItems: 'center',
+    gap: 6,
+    shadowColor: '#0f766e',
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
+  },
+  emojiTileSelected: {
+    borderColor: '#166534',
+    backgroundColor: '#dcfce7',
+    shadowColor: '#166534',
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
+  },
+  emojiTileDisabled: {
+    opacity: 0.55,
+  },
+  emojiGlyphLarge: {
+    fontSize: 34,
+  },
+  emojiTileLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#134e32',
+    textAlign: 'center',
+    width: '100%',
+  },
+  emojiTileFooter: {
+    marginTop: 'auto',
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 4,
+  },
+  emojiTileMeta: {
+    fontSize: 10,
+    color: '#1f6f4a',
+  },
+  emojiTileCostText: {
+    fontWeight: '700',
+    color: '#0f766e',
+  },
+  emojiTileSelectedText: {
+    fontWeight: '700',
+    color: '#166534',
+  },
+  emojiTileBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(15, 118, 110, 0.9)',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  emojiTileBadgeText: {
+    color: '#ecfdf3',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  inventoryMeta: {
+    color: '#22543d',
+  },
+  selectionStatus: {
+    backgroundColor: '#e6fffa',
+    borderRadius: 18,
+    padding: 16,
+    gap: 6,
+    shadowColor: '#0f766e',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  selectionStatusTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#134e32',
+  },
+  selectionStatusCopy: {
+    fontSize: 13,
+    color: '#2d3748',
+    lineHeight: 19,
+  },
   canvas: {
     backgroundColor: '#ffffff',
     borderRadius: 24,
@@ -508,6 +682,26 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 6,
     overflow: 'hidden',
+  },
+  canvasEmptyState: {
+    position: 'absolute',
+    top: '32%',
+    left: 24,
+    right: 24,
+    alignItems: 'center',
+    gap: 6,
+  },
+  canvasEmptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#134e32',
+    textAlign: 'center',
+  },
+  canvasEmptyCopy: {
+    fontSize: 13,
+    color: '#2d3748',
+    textAlign: 'center',
+    lineHeight: 18,
   },
   canvasEmoji: {
     position: 'absolute',

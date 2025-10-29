@@ -6,7 +6,7 @@ import type { HomeEmojiTheme, OrbitingEmoji } from '@/context/GameContext';
 const FULL_ROTATION_RADIANS = Math.PI * 2;
 const DEFAULT_RADIUS = 120;
 const SPIRAL_STEP = 12;
-const MATRIX_MAX_EMOJIS = 12;
+const MATRIX_MAX_EMOJIS = 18;
 
 const WINDOW = Dimensions.get('window');
 const WINDOW_WIDTH = WINDOW.width;
@@ -25,7 +25,7 @@ type OrbitingUpgradeEmojisProps = {
 };
 
 export function OrbitingUpgradeEmojis({ emojis, radius = DEFAULT_RADIUS, theme = 'circle' }: OrbitingUpgradeEmojisProps) {
-  if (emojis.length === 0) {
+  if (emojis.length === 0 || theme === 'clear') {
     return null;
   }
 
@@ -126,6 +126,7 @@ type MatrixDrop = {
   translateY: Animated.AnimatedInterpolation<string | number>;
   loop: Animated.CompositeAnimation;
   left: number;
+  column: number;
 };
 
 type MatrixEmojiRainProps = {
@@ -145,19 +146,24 @@ function MatrixEmojiRain({ emojis, radius }: MatrixEmojiRainProps) {
 
   useEffect(() => {
     setDrops((prev) => {
-      const limited = emojis.slice(0, MATRIX_MAX_EMOJIS);
+      const limited = emojis.slice(0, Math.min(MATRIX_MAX_EMOJIS, emojis.length));
       const next: MatrixDrop[] = [];
       const retained = new Set<string>();
 
-      limited.forEach((emoji, index) => {
-        const startAtTop = index === 0;
-        const targetLeft = getMatrixLeft(index);
+      limited.forEach((emoji) => {
+        const column = getMatrixColumn(emoji.id);
+        const targetLeft = getMatrixLeft(column);
         const existing = prev.find((drop) => drop.id === emoji.id);
+
         if (existing) {
           retained.add(existing.id);
-          next.push({ ...existing, left: targetLeft });
+          if (existing.left !== targetLeft || existing.column !== column) {
+            next.push({ ...existing, left: targetLeft, column });
+          } else {
+            next.push(existing);
+          }
         } else {
-          next.push(createMatrixDrop(emoji.id, startAtTop, targetLeft));
+          next.push(createMatrixDrop(emoji.id, column, targetLeft));
         }
       });
 
@@ -214,12 +220,13 @@ function MatrixEmojiRain({ emojis, radius }: MatrixEmojiRainProps) {
   );
 }
 
-function createMatrixDrop(id: string, startAtTop: boolean, left: number): MatrixDrop {
-  const animated = new Animated.Value(startAtTop ? 0 : Math.random());
-  const duration = 3600 + Math.random() * 2400;
+function createMatrixDrop(id: string, column: number, left: number): MatrixDrop {
+  const animated = new Animated.Value(0);
+  const duration = getMatrixDuration(column);
 
   const loop = Animated.loop(
     Animated.sequence([
+      Animated.delay(getMatrixDelay(column)),
       Animated.timing(animated, {
         toValue: 1,
         duration,
@@ -247,16 +254,46 @@ function createMatrixDrop(id: string, startAtTop: boolean, left: number): Matrix
     translateY,
     loop,
     left,
+    column,
   };
 }
 
-function getMatrixLeft(index: number) {
-  if (index === 0) {
-    return MATRIX_WIDTH / 2 - MATRIX_EMOJI_SIZE / 2;
+const MATRIX_PADDING = 32;
+const MATRIX_COLUMNS = 6;
+const MATRIX_DURATION_BASE = 4200;
+const MATRIX_DURATION_VARIATION = 1400;
+const MATRIX_DELAY_STEP = 160;
+
+function getMatrixColumn(id: string) {
+  let hash = 0;
+  for (let index = 0; index < id.length; index += 1) {
+    hash = (hash * 31 + id.charCodeAt(index)) & 0xffffffff;
   }
 
-  const padding = 32;
-  return padding + Math.random() * (MATRIX_WIDTH - padding * 2);
+  return Math.abs(hash) % MATRIX_COLUMNS;
+}
+
+function getMatrixLeft(column: number) {
+  const availableWidth = MATRIX_WIDTH - MATRIX_PADDING * 2 - MATRIX_EMOJI_SIZE;
+  if (availableWidth <= 0) {
+    return MATRIX_PADDING;
+  }
+
+  if (MATRIX_COLUMNS === 1) {
+    return MATRIX_PADDING + availableWidth / 2;
+  }
+
+  const step = availableWidth / (MATRIX_COLUMNS - 1);
+  return MATRIX_PADDING + column * step;
+}
+
+function getMatrixDuration(column: number) {
+  const progress = column / Math.max(1, MATRIX_COLUMNS - 1);
+  return MATRIX_DURATION_BASE + progress * MATRIX_DURATION_VARIATION;
+}
+
+function getMatrixDelay(column: number) {
+  return column * MATRIX_DELAY_STEP;
 }
 
 const styles = StyleSheet.create({

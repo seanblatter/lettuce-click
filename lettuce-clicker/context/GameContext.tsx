@@ -15,11 +15,16 @@ export type UpgradeDefinition = {
   emoji: string;
 };
 
+export type EmojiCategory = 'plants' | 'scenery' | 'creatures' | 'features' | 'accents';
+
 export type EmojiDefinition = {
   id: string;
   emoji: string;
   name: string;
   cost: number;
+  category: EmojiCategory;
+  tags: string[];
+  popularity: number;
 };
 
 export type Placement = {

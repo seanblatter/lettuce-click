@@ -1,5 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, GestureResponderEvent, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Alert,
+  FlatList,
+  GestureResponderEvent,
+  ListRenderItem,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 
@@ -44,7 +56,7 @@ export function GardenSection({
   title = 'Garden Atelier',
 }: Props) {
   const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null);
-  const [activePanel, setActivePanel] = useState<'shop' | 'inventory'>('shop');
+  const [activeSheet, setActiveSheet] = useState<'shop' | 'inventory' | null>(null);
   const [shopFilter, setShopFilter] = useState('');
   const [showPalette, setShowPalette] = useState(false);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
@@ -136,14 +148,18 @@ export function GardenSection({
     }
   };
 
-  const handleSelect = (emojiId: string, owned: number) => {
-    if (owned <= 0) {
-      Alert.alert('Purchase required', 'Buy this decoration before placing it in the garden.');
-      return;
-    }
+  const handleSelect = useCallback(
+    (emojiId: string, owned: number) => {
+      if (owned <= 0) {
+        Alert.alert('Purchase required', 'Buy this decoration before placing it in the garden.');
+        return;
+      }
 
-    setSelectedEmoji(emojiId);
-  };
+      setSelectedEmoji(emojiId);
+      setActiveSheet(null);
+    },
+    []
+  );
 
   const handlePurchase = (emojiId: string) => {
     const success = purchaseEmoji(emojiId);
@@ -329,248 +345,250 @@ export function GardenSection({
     }
   }, [isDrawingMode]);
 
-  return (
-    <View style={styles.section}>
-      <View style={styles.harvestBanner}>
-        <Text style={styles.harvestTitle}>{title}</Text>
-        <Text style={styles.harvestAmount}>{harvest.toLocaleString()} harvest ready</Text>
-        <Text style={styles.harvestHint}>
-          Purchase decorations in the shop, then switch to your inventory to tap the canvas and place
-          them.
-        </Text>
-      </View>
+  const shouldShowCanvasEmptyState = useMemo(
+    () => placements.length === 0 && strokes.length === 0 && !selectedEmoji && !isDrawingMode,
+    [placements.length, strokes.length, selectedEmoji, isDrawingMode]
+  );
+  const handleCloseSheet = useCallback(() => setActiveSheet(null), []);
+  const handleOpenSheet = useCallback((sheet: 'shop' | 'inventory') => setActiveSheet(sheet), []);
+  type InventoryEntry = (typeof inventoryList)[number];
 
-      <View style={styles.panelTabs}>
+  const keyExtractor = useCallback((item: InventoryEntry) => item.id, []);
+
+  const renderShopItem: ListRenderItem<InventoryEntry> = ({ item }) => {
+    const owned = item.owned;
+    const isSelected = selectedEmoji === item.id;
+    const canAfford = harvest >= item.cost;
+
+    const handleTilePress = () => {
+      if (owned > 0) {
+        handleSelect(item.id, owned);
+        return;
+      }
+      handlePurchase(item.id);
+    };
+
+    return (
+      <View style={styles.sheetTileWrapper}>
         <Pressable
-          style={[styles.tabButton, activePanel === 'shop' && styles.tabButtonActive]}
-          onPress={() => setActivePanel('shop')}>
-          <Text style={[styles.tabButtonText, activePanel === 'shop' && styles.tabButtonTextActive]}>Shop</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.tabButton, activePanel === 'inventory' && styles.tabButtonActive]}
-          onPress={() => setActivePanel('inventory')}>
-          <Text style={[styles.tabButtonText, activePanel === 'inventory' && styles.tabButtonTextActive]}>
-            Inventory
+          style={[
+            styles.emojiTile,
+            isSelected && styles.emojiTileSelected,
+            !canAfford && owned === 0 && styles.emojiTileDisabled,
+          ]}
+          onPress={handleTilePress}
+          accessibilityLabel={`${item.name} emoji`}
+          accessibilityHint={
+            owned > 0
+              ? 'Select to ready this decoration.'
+              : canAfford
+              ? 'Purchase and ready this decoration.'
+              : 'Not enough harvest to purchase.'
+          }>
+          <Text style={styles.emojiGlyphLarge}>{item.emoji}</Text>
+          <Text style={styles.emojiTileLabel} numberOfLines={1}>
+            {item.name}
           </Text>
+          <View style={styles.emojiTileFooter}>
+            <Text style={[styles.emojiTileMeta, styles.emojiTileCostText]} numberOfLines={1}>
+              {item.cost.toLocaleString()} harvest
+            </Text>
+          </View>
+          {owned > 0 ? (
+            <View style={styles.emojiTileBadge}>
+              <Text style={styles.emojiTileBadgeText}>×{owned}</Text>
+            </View>
+          ) : null}
         </Pressable>
-      </View>
-
-      <View style={styles.shopToolbar}>
-        <View style={styles.searchRow}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search or paste emoji"
-            placeholderTextColor="#4a5568"
-            value={shopFilter}
-            onChangeText={setShopFilter}
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="search"
-          />
-          {shopFilter.length > 0 && (
-            <Pressable
-              accessibilityLabel="Clear emoji search"
-              style={styles.clearSearchButton}
-              onPress={() => setShopFilter('')}>
-              <Text style={styles.clearSearchText}>Clear</Text>
-            </Pressable>
-          )}
-        </View>
-        <Text style={styles.toolbarHint}>
-          {activePanel === 'shop'
-            ? 'Tap to buy or select decorations instantly.'
-            : 'Tap a tile to ready it for placement.'}
-        </Text>
-      </View>
-
-      {activePanel === 'shop' ? (
-        <View style={styles.compactGrid}>
-          {filteredShopInventory.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateTitle}>No emoji match your search</Text>
-              <Text style={styles.emptyStateCopy}>
-                Clear the search or try a different emoji keyword to keep shopping.
-              </Text>
-            </View>
-          ) : (
-            filteredShopInventory.map((item) => {
-              const owned = item.owned;
-              const isSelected = selectedEmoji === item.id;
-              const canAfford = harvest >= item.cost;
-
-              const handleTilePress = () => {
-                if (owned > 0) {
-                  handleSelect(item.id, owned);
-                  return;
-                }
-                handlePurchase(item.id);
-              };
-
-              return (
-                <Pressable
-                  key={item.id}
-                  style={[
-                    styles.emojiTile,
-                    isSelected && styles.emojiTileSelected,
-                    !canAfford && owned === 0 && styles.emojiTileDisabled,
-                  ]}
-                  onPress={handleTilePress}
-                  accessibilityLabel={`${item.name} emoji`}
-                  accessibilityHint={
-                    owned > 0
-                      ? 'Select to ready this decoration.'
-                      : canAfford
-                      ? 'Purchase and ready this decoration.'
-                      : 'Not enough harvest to purchase.'
-                  }>
-                  <Text style={styles.emojiGlyphLarge}>{item.emoji}</Text>
-                  <Text style={styles.emojiTileLabel} numberOfLines={1}>
-                    {item.name}
-                  </Text>
-                  <View style={styles.emojiTileFooter}>
-                    <Text style={[styles.emojiTileMeta, styles.emojiTileCostText]} numberOfLines={1}>
-                      {item.cost.toLocaleString()} harvest
-                    </Text>
-                  </View>
-                  {owned > 0 ? (
-                    <View style={styles.emojiTileBadge}>
-                      <Text style={styles.emojiTileBadgeText}>×{owned}</Text>
-                    </View>
-                  ) : null}
-                </Pressable>
-              );
-            })
-          )}
-        </View>
-      ) : (
-        <>
-          <View style={styles.compactGrid}>
-            {filteredOwnedInventory.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyStateTitle}>Inventory is empty</Text>
-                <Text style={styles.emptyStateCopy}>
-                  Purchase decorations in the shop, then come back to place them.
-                </Text>
-              </View>
-            ) : (
-              filteredOwnedInventory.map((item) => {
-                const isSelected = selectedEmoji === item.id;
-                return (
-                  <Pressable
-                    key={item.id}
-                    style={[styles.emojiTile, isSelected && styles.emojiTileSelected]}
-                    onPress={() => handleSelect(item.id, item.owned)}
-                    accessibilityLabel={`${item.name} emoji`}
-                    accessibilityHint="Select to ready this decoration.">
-                    <Text style={styles.emojiGlyphLarge}>{item.emoji}</Text>
-                    <Text style={styles.emojiTileLabel} numberOfLines={1}>
-                      {item.name}
-                    </Text>
-                    <View style={styles.emojiTileFooter}>
-                      <Text style={[styles.emojiTileMeta, styles.inventoryMeta]} numberOfLines={1}>
-                        Owned ×{item.owned}
-                      </Text>
-                    </View>
-                  </Pressable>
-                );
-              })
-            )}
-          </View>
-
-          <View style={styles.selectionStatus}>
-            {selectedDetails ? (
-              <>
-                <Text style={styles.selectionStatusTitle}>
-                  Ready to place {selectedDetails.emoji} {selectedDetails.name}
-                </Text>
-                <Text style={styles.selectionStatusCopy}>
-                  Tap anywhere on the canvas to drop it. Drag to move, double tap to enlarge, and
-                  long press to shrink.
-                </Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.selectionStatusTitle}>No decoration selected</Text>
-                <Text style={styles.selectionStatusCopy}>
-                  Choose an emoji above to prepare it for the garden canvas.
-                </Text>
-              </>
-            )}
-          </View>
-
+        <View style={styles.tileActionRow}>
           <Pressable
-            style={styles.canvas}
-            onPress={handleCanvasPress}
-            onTouchStart={handleCanvasTouchStart}
-            onTouchMove={handleCanvasTouchMove}
-            onTouchEnd={handleCanvasTouchEnd}
-            onTouchCancel={handleCanvasTouchEnd}
-          >
-            <View pointerEvents="none" style={styles.drawingSurface}>
-              {strokes.reduce<JSX.Element[]>((acc, stroke) => {
-                acc.push(...renderStrokeSegments(stroke, stroke.id));
-                return acc;
-              }, [])}
-              {currentStroke ? renderStrokeSegments(currentStroke, `${currentStroke.id}-live`) : null}
-            </View>
-            {isDrawingMode ? (
-              <View pointerEvents="none" style={styles.drawingModeBadge}>
-                <Text style={styles.drawingModeBadgeText}>Drawing mode</Text>
-              </View>
-            ) : null}
-            {placements.length === 0 ? (
-              <View pointerEvents="none" style={styles.canvasEmptyState}>
-                <Text style={styles.canvasEmptyTitle}>Tap the canvas to begin</Text>
-                <Text style={styles.canvasEmptyCopy}>
-                  Selected emojis will appear where you tap. Adjust them later by dragging, double
-                  tapping, or long pressing.
-                </Text>
-              </View>
-            ) : null}
-            {placements.map((placement) => {
-              const emoji = emojiCatalog.find((item) => item.id === placement.emojiId);
-
-              if (!emoji) {
-                return null;
-              }
-
-              return (
-                <DraggablePlacement
-                  key={placement.id}
-                  placement={placement}
-                  emoji={emoji.emoji}
-                  onUpdate={(updates) => updatePlacement(placement.id, updates)}
-                />
-              );
-            })}
-            {!penHiddenForSave ? (
-              <Pressable
-                style={styles.penButton}
-                accessibilityLabel="Open drawing palette"
-                accessibilityHint="Opens options to pick colors and stroke sizes"
-                onPress={() => setShowPalette(true)}>
-                <View style={[styles.penButtonCircle, isDrawingMode && styles.penButtonCircleActive]}>
-                  <Text style={[styles.penButtonIcon, isDrawingMode && styles.penButtonIconActive]}>✏️</Text>
-                </View>
-              </Pressable>
-            ) : null}
+            style={[styles.tileActionButton, !canAfford && styles.disabledSecondary]}
+            onPress={() => handlePurchase(item.id)}
+            disabled={!canAfford}
+            accessibilityLabel={`Buy ${item.name}`}>
+            <Text style={[styles.tileActionButtonText, !canAfford && styles.disabledText]}>Buy</Text>
           </Pressable>
-
-          <View style={styles.canvasActions}>
+          {owned > 0 ? (
             <Pressable
-              style={[styles.ghostButton, placements.length === 0 && styles.disabledSecondary]}
-              disabled={placements.length === 0}
-              onPress={handleClearGarden}>
-              <Text style={[styles.ghostButtonText, placements.length === 0 && styles.disabledText]}>
-                Clear Garden
-              </Text>
+              style={[styles.tileActionButton, styles.tileActionGhost]}
+              onPress={() => handleSelect(item.id, owned)}
+              accessibilityLabel={`Select ${item.name}`}>
+              <Text style={styles.tileActionGhostText}>Select</Text>
             </Pressable>
-            <Pressable style={styles.primaryButton} onPress={handleSaveSnapshot}>
-              <Text style={styles.primaryText}>Save</Text>
-            </Pressable>
+          ) : null}
+        </View>
+      </View>
+    );
+  };
+
+  const renderInventoryItem: ListRenderItem<InventoryEntry> = ({ item }) => {
+    const isSelected = selectedEmoji === item.id;
+    const canAfford = harvest >= item.cost;
+
+    return (
+      <View style={styles.sheetTileWrapper}>
+        <Pressable
+          style={[styles.emojiTile, isSelected && styles.emojiTileSelected]}
+          onPress={() => handleSelect(item.id, item.owned)}
+          accessibilityLabel={`${item.name} emoji`}
+          accessibilityHint="Select to ready this decoration.">
+          <Text style={styles.emojiGlyphLarge}>{item.emoji}</Text>
+          <Text style={styles.emojiTileLabel} numberOfLines={1}>
+            {item.name}
+          </Text>
+          <View style={styles.emojiTileFooter}>
+            <Text style={[styles.emojiTileMeta, styles.inventoryMeta]} numberOfLines={1}>
+              Owned ×{item.owned}
+            </Text>
           </View>
-        </>
-      )}
+        </Pressable>
+        <View style={styles.tileActionRow}>
+          <Pressable
+            style={[styles.tileActionButton, styles.tileActionGhost]}
+            onPress={() => handleSelect(item.id, item.owned)}
+            accessibilityLabel={`Ready ${item.name} for placement`}>
+            <Text style={styles.tileActionGhostText}>Select</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.tileActionButton, !canAfford && styles.disabledSecondary]}
+            onPress={() => handlePurchase(item.id)}
+            disabled={!canAfford}
+            accessibilityLabel={`Buy more ${item.name}`}>
+            <Text style={[styles.tileActionButtonText, !canAfford && styles.disabledText]}>Buy</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  };
+
+  return (
+    <View style={styles.container}>
+      <ScrollView
+        style={styles.detailScroll}
+        contentContainerStyle={styles.detailContent}
+        showsVerticalScrollIndicator={false}>
+        <View style={styles.harvestBanner}>
+          <Text style={styles.harvestTitle}>{title}</Text>
+          <Text style={styles.harvestAmount}>{harvest.toLocaleString()} harvest ready</Text>
+          <Text style={styles.harvestHint}>
+            Open the Garden shop to purchase decorations, then visit your inventory to ready them for
+            placement.
+          </Text>
+        </View>
+
+        <View style={styles.launcherRow}>
+          <Pressable
+            style={styles.launcherCard}
+            onPress={() => handleOpenSheet('shop')}
+            accessibilityLabel="Open the Garden shop">
+            <Text style={styles.launcherTitle}>Garden shop</Text>
+            <Text style={styles.launcherCopy}>Browse every Unicode emoji and add new favorites.</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.launcherCard, styles.launcherCardSecondary]}
+            onPress={() => handleOpenSheet('inventory')}
+            accessibilityLabel="Open your inventory">
+            <Text style={[styles.launcherTitle, styles.launcherTitleSecondary]}>Inventory</Text>
+            <Text style={[styles.launcherCopy, styles.launcherCopySecondary]}>
+              Ready decorations you have purchased for placement.
+            </Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.selectionStatus}>
+          {selectedDetails ? (
+            <>
+              <Text style={styles.selectionStatusTitle}>
+                Ready to place {selectedDetails.emoji} {selectedDetails.name}
+              </Text>
+              <Text style={styles.selectionStatusCopy}>
+                Tap anywhere on the canvas to drop it. Drag to move, double tap to enlarge, and long
+                press to shrink.
+              </Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.selectionStatusTitle}>No decoration selected</Text>
+              <Text style={styles.selectionStatusCopy}>
+                Choose an emoji from your inventory or the shop to prepare it for the garden canvas.
+              </Text>
+            </>
+          )}
+        </View>
+      </ScrollView>
+
+      <View style={styles.canvasContainer}>
+        <Pressable
+          style={styles.canvas}
+          onPress={handleCanvasPress}
+          onTouchStart={handleCanvasTouchStart}
+          onTouchMove={handleCanvasTouchMove}
+          onTouchEnd={handleCanvasTouchEnd}
+          onTouchCancel={handleCanvasTouchEnd}>
+          <View pointerEvents="none" style={styles.drawingSurface}>
+            {strokes.reduce<JSX.Element[]>((acc, stroke) => {
+              acc.push(...renderStrokeSegments(stroke, stroke.id));
+              return acc;
+            }, [])}
+            {currentStroke ? renderStrokeSegments(currentStroke, `${currentStroke.id}-live`) : null}
+          </View>
+          {isDrawingMode ? (
+            <View pointerEvents="none" style={styles.drawingModeBadge}>
+              <Text style={styles.drawingModeBadgeText}>Drawing mode</Text>
+            </View>
+          ) : null}
+          {shouldShowCanvasEmptyState ? (
+            <View pointerEvents="none" style={styles.canvasEmptyState}>
+              <Text style={styles.canvasEmptyTitle}>Tap the canvas to begin</Text>
+              <Text style={styles.canvasEmptyCopy}>
+                Selected emojis will appear where you tap. Adjust them later by dragging, double
+                tapping, or long pressing.
+              </Text>
+            </View>
+          ) : null}
+          {placements.map((placement) => {
+            const emoji = emojiCatalog.find((item) => item.id === placement.emojiId);
+
+            if (!emoji) {
+              return null;
+            }
+
+            return (
+              <DraggablePlacement
+                key={placement.id}
+                placement={placement}
+                emoji={emoji.emoji}
+                onUpdate={(updates) => updatePlacement(placement.id, updates)}
+              />
+            );
+          })}
+          {!penHiddenForSave ? (
+            <Pressable
+              style={styles.penButton}
+              accessibilityLabel="Open drawing palette"
+              accessibilityHint="Opens options to pick colors and stroke sizes"
+              onPress={() => setShowPalette(true)}>
+              <View style={[styles.penButtonCircle, isDrawingMode && styles.penButtonCircleActive]}>
+                <Text style={[styles.penButtonIcon, isDrawingMode && styles.penButtonIconActive]}>✏️</Text>
+              </View>
+            </Pressable>
+          ) : null}
+        </Pressable>
+
+        <View style={styles.canvasActions}>
+          <Pressable
+            style={[styles.ghostButton, placements.length === 0 && styles.disabledSecondary]}
+            disabled={placements.length === 0}
+            onPress={handleClearGarden}>
+            <Text style={[styles.ghostButtonText, placements.length === 0 && styles.disabledText]}>
+              Clear Garden
+            </Text>
+          </Pressable>
+          <Pressable style={styles.primaryButton} onPress={handleSaveSnapshot}>
+            <Text style={styles.primaryText}>Save</Text>
+          </Pressable>
+        </View>
+      </View>
       <Modal
         visible={showPalette}
         animationType="slide"
@@ -638,6 +656,126 @@ export function GardenSection({
               onPress={() => setShowPalette(false)}
               accessibilityLabel="Close drawing palette">
               <Text style={styles.paletteCloseButtonText}>Done</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+      <Modal
+        visible={activeSheet === 'shop'}
+        animationType="slide"
+        transparent
+        onRequestClose={handleCloseSheet}
+      >
+        <View style={styles.sheetOverlay}>
+          <Pressable style={styles.sheetBackdrop} onPress={handleCloseSheet} />
+          <View style={styles.sheetCard}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>Garden shop</Text>
+            <Text style={styles.sheetSubtitle}>
+              Tap buy to add emoji to your inventory or select to ready it instantly.
+            </Text>
+            <View style={styles.sheetSearchBlock}>
+              <View style={styles.searchRow}>
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search or paste emoji"
+                  placeholderTextColor="#4a5568"
+                  value={shopFilter}
+                  onChangeText={setShopFilter}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="search"
+                />
+                {shopFilter.length > 0 ? (
+                  <Pressable
+                    accessibilityLabel="Clear emoji search"
+                    style={styles.clearSearchButton}
+                    onPress={() => setShopFilter('')}>
+                    <Text style={styles.clearSearchText}>Clear</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+              <Text style={styles.sheetHint}>Search by name, emoji, or drop in characters directly.</Text>
+            </View>
+            <FlatList
+              data={filteredShopInventory}
+              renderItem={renderShopItem}
+              keyExtractor={keyExtractor}
+              numColumns={3}
+              columnWrapperStyle={styles.sheetColumn}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.sheetListContent}
+              ListEmptyComponent={
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyStateTitle}>No emoji match your search</Text>
+                  <Text style={styles.emptyStateCopy}>
+                    Clear the search or try a different emoji keyword to keep shopping.
+                  </Text>
+                </View>
+              }
+            />
+            <Pressable style={styles.sheetCloseButton} onPress={handleCloseSheet} accessibilityLabel="Close Garden shop">
+              <Text style={styles.sheetCloseButtonText}>Done</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+      <Modal
+        visible={activeSheet === 'inventory'}
+        animationType="slide"
+        transparent
+        onRequestClose={handleCloseSheet}
+      >
+        <View style={styles.sheetOverlay}>
+          <Pressable style={styles.sheetBackdrop} onPress={handleCloseSheet} />
+          <View style={styles.sheetCard}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>Inventory</Text>
+            <Text style={styles.sheetSubtitle}>
+              Select a decoration to ready it for placement or buy more copies to expand your garden.
+            </Text>
+            <View style={styles.sheetSearchBlock}>
+              <View style={styles.searchRow}>
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search your inventory"
+                  placeholderTextColor="#4a5568"
+                  value={shopFilter}
+                  onChangeText={setShopFilter}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="search"
+                />
+                {shopFilter.length > 0 ? (
+                  <Pressable
+                    accessibilityLabel="Clear inventory search"
+                    style={styles.clearSearchButton}
+                    onPress={() => setShopFilter('')}>
+                    <Text style={styles.clearSearchText}>Clear</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+              <Text style={styles.sheetHint}>Filtering applies to both your inventory and the shop.</Text>
+            </View>
+            <FlatList
+              data={filteredOwnedInventory}
+              renderItem={renderInventoryItem}
+              keyExtractor={keyExtractor}
+              numColumns={3}
+              columnWrapperStyle={styles.sheetColumn}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.sheetListContent}
+              ListEmptyComponent={
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyStateTitle}>Inventory is empty</Text>
+                  <Text style={styles.emptyStateCopy}>
+                    Purchase decorations in the shop, then come back to place them.
+                  </Text>
+                </View>
+              }
+            />
+            <Pressable style={styles.sheetCloseButton} onPress={handleCloseSheet} accessibilityLabel="Close inventory">
+              <Text style={styles.sheetCloseButtonText}>Done</Text>
             </Pressable>
           </View>
         </View>
@@ -736,8 +874,19 @@ function DraggablePlacement({ emoji, placement, onUpdate }: DraggablePlacementPr
 }
 
 const styles = StyleSheet.create({
-  section: {
+  container: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 24,
     gap: 24,
+    backgroundColor: '#f2f9f2',
+  },
+  detailScroll: {
+    flexGrow: 0,
+  },
+  detailContent: {
+    gap: 20,
   },
   harvestBanner: {
     backgroundColor: '#22543d',
@@ -766,45 +915,41 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
-  panelTabs: {
+  launcherRow: {
     flexDirection: 'row',
-    backgroundColor: '#e6fffa',
-    borderRadius: 16,
-    padding: 4,
-    gap: 6,
+    gap: 12,
   },
-  tabButton: {
+  launcherCard: {
     flex: 1,
-    borderRadius: 12,
-    paddingVertical: 10,
-  },
-  tabButtonActive: {
     backgroundColor: '#22543d',
+    borderRadius: 18,
+    padding: 18,
+    gap: 6,
     shadowColor: '#0f2e20',
-    shadowOpacity: 0.14,
-    shadowOffset: { width: 0, height: 3 },
-    shadowRadius: 6,
-    elevation: 3,
+    shadowOpacity: 0.16,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 14,
+    elevation: 4,
   },
-  tabButtonText: {
-    textAlign: 'center',
-    fontWeight: '600',
-    color: '#276749',
-    fontSize: 15,
+  launcherCardSecondary: {
+    backgroundColor: '#e6fffa',
+    shadowColor: '#0f766e',
   },
-  tabButtonTextActive: {
+  launcherTitle: {
+    fontSize: 16,
+    fontWeight: '700',
     color: '#f0fff4',
   },
-  shopToolbar: {
-    backgroundColor: '#e6fffa',
-    borderRadius: 18,
-    padding: 14,
-    gap: 10,
-    shadowColor: '#0f766e',
-    shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 8,
-    elevation: 3,
+  launcherTitleSecondary: {
+    color: '#134e32',
+  },
+  launcherCopy: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#c6f6d5',
+  },
+  launcherCopySecondary: {
+    color: '#2d3748',
   },
   searchRow: {
     flexDirection: 'row',
@@ -833,17 +978,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#14532d',
   },
-  toolbarHint: {
-    fontSize: 12,
-    color: '#0f766e',
-    lineHeight: 18,
-  },
-  compactGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    justifyContent: 'flex-start',
-  },
   emptyState: {
     width: '100%',
     backgroundColor: '#f0fff4',
@@ -864,14 +998,12 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   emojiTile: {
-    flexBasis: '22%',
-    maxWidth: '24%',
-    minWidth: 72,
-    minHeight: 116,
+    width: '100%',
+    minHeight: 120,
     backgroundColor: '#ffffff',
     borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 6,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
     borderWidth: 2,
     borderColor: '#d1fae5',
     alignItems: 'center',
@@ -937,6 +1069,10 @@ const styles = StyleSheet.create({
   inventoryMeta: {
     color: '#22543d',
   },
+  canvasContainer: {
+    flex: 1,
+    gap: 16,
+  },
   selectionStatus: {
     backgroundColor: '#e6fffa',
     borderRadius: 18,
@@ -959,9 +1095,10 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
   canvas: {
+    flex: 1,
     backgroundColor: '#ffffff',
     borderRadius: 24,
-    height: 360,
+    minHeight: 360,
     position: 'relative',
     shadowColor: '#22543d',
     shadowOpacity: 0.12,
@@ -1086,6 +1223,102 @@ const styles = StyleSheet.create({
   },
   disabledText: {
     color: '#718096',
+  },
+  sheetOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(15, 31, 23, 0.55)',
+  },
+  sheetBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  sheetCard: {
+    backgroundColor: '#f8fffb',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 28,
+    gap: 16,
+    maxHeight: '88%',
+    width: '100%',
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 48,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: '#bbf7d0',
+  },
+  sheetTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#134e32',
+    textAlign: 'center',
+  },
+  sheetSubtitle: {
+    fontSize: 13,
+    color: '#2d3748',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  sheetSearchBlock: {
+    gap: 8,
+  },
+  sheetHint: {
+    fontSize: 12,
+    color: '#0f766e',
+    textAlign: 'center',
+  },
+  sheetColumn: {
+    gap: 12,
+    marginBottom: 12,
+  },
+  sheetListContent: {
+    paddingBottom: 24,
+    paddingHorizontal: 4,
+  },
+  sheetTileWrapper: {
+    flex: 1,
+    paddingHorizontal: 4,
+  },
+  tileActionRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+  },
+  tileActionButton: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#22543d',
+  },
+  tileActionButtonText: {
+    color: '#f0fff4',
+    fontWeight: '700',
+  },
+  tileActionGhost: {
+    backgroundColor: '#ecfdf3',
+    borderWidth: 1,
+    borderColor: '#22543d',
+  },
+  tileActionGhostText: {
+    color: '#134e32',
+    fontWeight: '700',
+  },
+  sheetCloseButton: {
+    marginTop: 12,
+    borderRadius: 16,
+    paddingVertical: 12,
+    backgroundColor: '#22543d',
+  },
+  sheetCloseButtonText: {
+    textAlign: 'center',
+    color: '#f0fff4',
+    fontWeight: '700',
+    fontSize: 16,
   },
   paletteOverlay: {
     flex: 1,

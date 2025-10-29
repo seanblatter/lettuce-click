@@ -1,17 +1,7 @@
 // eslint-disable-next-line import/no-unresolved
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useCallback, useEffect, useState } from 'react';
-import {
-  Alert,
-  BackHandler,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
@@ -19,7 +9,7 @@ import { OrbitingUpgradeEmojis } from '@/components/OrbitingUpgradeEmojis';
 import { useGame } from '@/context/GameContext';
 import type { HomeEmojiTheme } from '@/context/GameContext';
 
-const HEADER_HEIGHT = 56;
+const HEADER_BASE_HEIGHT = 44;
 const MODAL_STORAGE_KEY = 'lettuce-click:grow-your-park-dismissed';
 
 export default function HomeScreen() {
@@ -36,7 +26,8 @@ export default function HomeScreen() {
   const [menuOpen, setMenuOpen] = useState(false);
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const headerHeight = HEADER_HEIGHT + insets.top;
+  const headerPaddingTop = useMemo(() => insets.top + 6, [insets.top]);
+  const headerHeight = HEADER_BASE_HEIGHT + headerPaddingTop;
 
   useEffect(() => {
     AsyncStorage.getItem(MODAL_STORAGE_KEY)
@@ -73,23 +64,10 @@ export default function HomeScreen() {
     [setHomeEmojiTheme]
   );
 
-  const handleCloseApp = useCallback(() => {
-    setMenuOpen(false);
-    if (Platform.OS === 'android') {
-      BackHandler.exitApp();
-      return;
-    }
-
-    Alert.alert(
-      'Close App',
-      'Use the home indicator or press Command+Shift+H in the simulator to send the app to the background for testing.'
-    );
-  }, []);
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        <View style={[styles.header, { paddingTop: insets.top, height: headerHeight }]}>
+        <View style={[styles.header, { paddingTop: headerPaddingTop, minHeight: headerHeight }]}>
           <Text style={styles.headerText}>🥬 Lettuce Park Gardens</Text>
           <Pressable
             accessibilityLabel={menuOpen ? 'Close garden menu' : 'Open garden menu'}
@@ -103,7 +81,7 @@ export default function HomeScreen() {
 
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={[styles.content, { paddingTop: 32 }]}
+          contentContainerStyle={[styles.content, { paddingTop: 24 }]}
           showsVerticalScrollIndicator
           alwaysBounceVertical
         >
@@ -146,7 +124,7 @@ export default function HomeScreen() {
         </ScrollView>
 
         {menuOpen && (
-          <View style={[styles.menuOverlay, { paddingTop: headerHeight + 12 }]}>
+          <View style={[styles.menuOverlay, { paddingTop: headerHeight + 4 }]}>
             <Pressable style={styles.menuBackdrop} onPress={() => setMenuOpen(false)} />
             <View style={styles.menuCard}>
               <View style={styles.menuContent}>
@@ -156,9 +134,10 @@ export default function HomeScreen() {
                 <View style={styles.menuDivider} />
                 <Text style={styles.menuSectionTitle}>Emoji Themes</Text>
                 {[
-                  { label: 'Circle', value: 'circle' as HomeEmojiTheme },
-                  { label: 'Spiral', value: 'spiral' as HomeEmojiTheme },
-                  { label: 'Matrix', value: 'matrix' as HomeEmojiTheme },
+                  { label: 'Circle', value: 'circle' as HomeEmojiTheme, helper: 'Classic orbit' },
+                  { label: 'Spiral', value: 'spiral' as HomeEmojiTheme, helper: 'Swirling trail' },
+                  { label: 'Matrix', value: 'matrix' as HomeEmojiTheme, helper: 'Emoji rainfall' },
+                  { label: 'Clear', value: 'clear' as HomeEmojiTheme, helper: 'Hide all emoji' },
                 ].map((option) => {
                   const isActive = homeEmojiTheme === option.value;
                   return (
@@ -169,14 +148,14 @@ export default function HomeScreen() {
                       <Text style={[styles.themeOptionText, isActive && styles.themeOptionTextActive]}>
                         {option.label}
                       </Text>
+                      {option.helper ? (
+                        <Text style={[styles.themeOptionHelper, isActive && styles.themeOptionHelperActive]}>
+                          {option.helper}
+                        </Text>
+                      ) : null}
                     </Pressable>
                   );
                 })}
-                <View style={styles.menuDivider} />
-                <Text style={styles.menuSectionTitle}>Testing</Text>
-                <Pressable style={styles.menuItem} onPress={handleCloseApp}>
-                  <Text style={styles.menuItemText}>Close app (testing)</Text>
-                </Pressable>
               </View>
             </View>
           </View>
@@ -210,7 +189,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#1f6f4a',
+    backgroundColor: '#f2f9f2',
   },
   container: {
     flex: 1,
@@ -218,8 +197,8 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#1f6f4a',
-    paddingHorizontal: 24,
-    paddingBottom: 12,
+    paddingHorizontal: 20,
+    paddingBottom: 8,
     shadowColor: '#000',
     shadowOpacity: 0.12,
     shadowRadius: 10,
@@ -238,7 +217,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   menuIcon: {
-    fontSize: 28,
+    fontSize: 24,
     color: '#f7fbea',
     fontWeight: '700',
   },
@@ -250,8 +229,8 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 24,
-    paddingBottom: 160,
-    gap: 32,
+    paddingBottom: 140,
+    gap: 28,
   },
   title: {
     fontSize: 36,
@@ -419,7 +398,7 @@ const styles = StyleSheet.create({
   },
   menuOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    backgroundColor: 'rgba(15, 31, 23, 0.55)',
     alignItems: 'flex-end',
     paddingHorizontal: 16,
   },
@@ -427,53 +406,65 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   menuCard: {
-    width: 220,
+    marginHorizontal: 24,
+    borderRadius: 20,
+    backgroundColor: '#f0fff4',
+    shadowColor: '#0f2e20',
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+    overflow: 'hidden',
   },
   menuContent: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 12,
-    elevation: 6,
-    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 10,
   },
   menuItem: {
-    paddingVertical: 8,
+    paddingVertical: 10,
   },
   menuItemText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1f6f4a',
+    color: '#134e32',
   },
   menuDivider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: '#d1fae5',
-    marginVertical: 4,
+    marginVertical: 6,
   },
   menuSectionTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
-    color: '#1f6f4a',
+    color: '#134e32',
     textTransform: 'uppercase',
-    letterSpacing: 0.4,
+    letterSpacing: 0.6,
   },
   themeOption: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     borderRadius: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   themeOptionActive: {
-    backgroundColor: '#dcfce7',
+    backgroundColor: '#1f6f4a',
   },
   themeOptionText: {
-    fontSize: 15,
-    color: '#22543d',
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#134e32',
   },
   themeOptionTextActive: {
-    fontWeight: '700',
+    color: '#ecfdf3',
+  },
+  themeOptionHelper: {
+    fontSize: 12,
+    color: '#2f855a',
+  },
+  themeOptionHelperActive: {
+    color: '#bbf7d0',
   },
 });

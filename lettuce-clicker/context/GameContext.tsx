@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
-export type HomeEmojiTheme = 'circle' | 'spiral' | 'matrix';
+export type HomeEmojiTheme = 'circle' | 'spiral' | 'matrix' | 'clear';
 
 export type UpgradeDefinition = {
   id: string;
@@ -438,7 +438,12 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         }
 
         if (themeEntry[1]) {
-          if (themeEntry[1] === 'circle' || themeEntry[1] === 'spiral' || themeEntry[1] === 'matrix') {
+          if (
+            themeEntry[1] === 'circle' ||
+            themeEntry[1] === 'spiral' ||
+            themeEntry[1] === 'matrix' ||
+            themeEntry[1] === 'clear'
+          ) {
             setHomeEmojiTheme(themeEntry[1]);
           }
         }

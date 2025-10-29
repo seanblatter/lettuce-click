@@ -1,7 +1,7 @@
 // eslint-disable-next-line import/no-unresolved
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
@@ -21,11 +21,6 @@ export default function HomeScreen() {
     orbitingUpgradeEmojis,
     homeEmojiTheme,
     setHomeEmojiTheme,
-    isReady,
-    pendingWelcomeBack,
-    pendingPassiveReturn,
-    acknowledgeWelcomeBack,
-    acknowledgePassiveReturn,
   } = useGame();
   const [showGrowModal, setShowGrowModal] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -33,49 +28,6 @@ export default function HomeScreen() {
   const router = useRouter();
   const headerPaddingTop = useMemo(() => insets.top + 6, [insets.top]);
   const headerHeight = HEADER_BASE_HEIGHT + headerPaddingTop;
-
-  useEffect(() => {
-    if (!isReady || !pendingWelcomeBack) {
-      return;
-    }
-
-    Alert.alert(
-      `Welcome Back ${pendingWelcomeBack.name}!`,
-      `Your lifetime harvest has been ${pendingWelcomeBack.lifetime.toLocaleString()}.`,
-      [
-        {
-          text: 'Thanks!',
-          onPress: acknowledgeWelcomeBack,
-        },
-      ],
-      {
-        cancelable: true,
-        onDismiss: acknowledgeWelcomeBack,
-      }
-    );
-  }, [acknowledgeWelcomeBack, isReady, pendingWelcomeBack]);
-
-  useEffect(() => {
-    if (!isReady || !pendingPassiveReturn) {
-      return;
-    }
-
-    const greeting = pendingPassiveReturn.greeting;
-    Alert.alert(
-      `${greeting} ${pendingPassiveReturn.name}!`,
-      `You have harvested ${pendingPassiveReturn.passiveHarvest.toLocaleString()} since you last tended to the garden!`,
-      [
-        {
-          text: 'Great!',
-          onPress: acknowledgePassiveReturn,
-        },
-      ],
-      {
-        cancelable: true,
-        onDismiss: acknowledgePassiveReturn,
-      }
-    );
-  }, [acknowledgePassiveReturn, isReady, pendingPassiveReturn]);
 
   useEffect(() => {
     AsyncStorage.getItem(MODAL_STORAGE_KEY)
@@ -116,17 +68,15 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         <View style={[styles.header, { paddingTop: headerPaddingTop, minHeight: headerHeight }]}>
-          <View style={styles.headerShelf}>
-            <Text style={styles.headerText}>🥬 Lettuce Park Gardens</Text>
-            <Pressable
-              accessibilityLabel={menuOpen ? 'Close garden menu' : 'Open garden menu'}
-              accessibilityHint={menuOpen ? undefined : 'Opens actions and emoji theme options'}
-              style={styles.menuButton}
-              onPress={() => setMenuOpen((prev) => !prev)}
-              hitSlop={8}>
-              <Text style={[styles.menuIcon, menuOpen && styles.menuIconActive]}>{menuOpen ? '✕' : '☰'}</Text>
-            </Pressable>
-          </View>
+          <Text style={styles.headerText}>🥬 Lettuce Park Gardens</Text>
+          <Pressable
+            accessibilityLabel={menuOpen ? 'Close garden menu' : 'Open garden menu'}
+            accessibilityHint={menuOpen ? undefined : 'Opens actions and emoji theme options'}
+            style={styles.menuButton}
+            onPress={() => setMenuOpen((prev) => !prev)}
+            hitSlop={8}>
+            <Text style={[styles.menuIcon, menuOpen && styles.menuIconActive]}>{menuOpen ? '✕' : '☰'}</Text>
+          </Pressable>
         </View>
 
         <ScrollView
@@ -174,20 +124,20 @@ export default function HomeScreen() {
         </ScrollView>
 
         {menuOpen && (
-          <View style={styles.menuOverlay}>
+          <View style={[styles.menuOverlay, { paddingTop: headerHeight + 4 }]}>
             <Pressable style={styles.menuBackdrop} onPress={() => setMenuOpen(false)} />
-            <View style={[styles.menuSheet, { paddingTop: headerHeight + 12 }]}>
-              <ScrollView contentContainerStyle={styles.menuContent} showsVerticalScrollIndicator={false}>
+            <View style={styles.menuCard}>
+              <View style={styles.menuContent}>
                 <Pressable style={styles.menuItem} onPress={handleNavigateProfile}>
                   <Text style={styles.menuItemText}>Profile</Text>
                 </Pressable>
                 <View style={styles.menuDivider} />
                 <Text style={styles.menuSectionTitle}>Emoji Themes</Text>
                 {[
-                  { label: '🟢 Circle', value: 'circle' as HomeEmojiTheme },
-                  { label: '🌀 Spiral', value: 'spiral' as HomeEmojiTheme },
-                  { label: '🧮 Matrix', value: 'matrix' as HomeEmojiTheme },
-                  { label: '🚫 Clear', value: 'clear' as HomeEmojiTheme },
+                  { label: 'Circle', value: 'circle' as HomeEmojiTheme, helper: 'Classic orbit' },
+                  { label: 'Spiral', value: 'spiral' as HomeEmojiTheme, helper: 'Swirling trail' },
+                  { label: 'Matrix', value: 'matrix' as HomeEmojiTheme, helper: 'Emoji rainfall' },
+                  { label: 'Clear', value: 'clear' as HomeEmojiTheme, helper: 'Hide all emoji' },
                 ].map((option) => {
                   const isActive = homeEmojiTheme === option.value;
                   return (
@@ -198,10 +148,15 @@ export default function HomeScreen() {
                       <Text style={[styles.themeOptionText, isActive && styles.themeOptionTextActive]}>
                         {option.label}
                       </Text>
+                      {option.helper ? (
+                        <Text style={[styles.themeOptionHelper, isActive && styles.themeOptionHelperActive]}>
+                          {option.helper}
+                        </Text>
+                      ) : null}
                     </Pressable>
                   );
                 })}
-              </ScrollView>
+              </View>
             </View>
           </View>
         )}
@@ -241,22 +196,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#f2f9f2',
   },
   header: {
-    backgroundColor: '#f2f9f2',
-    paddingHorizontal: 16,
+    backgroundColor: '#1f6f4a',
+    paddingHorizontal: 20,
     paddingBottom: 8,
-  },
-  headerShelf: {
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#1f6f4a',
-    borderRadius: 20,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
   },
   headerText: {
     fontSize: 20,
@@ -264,7 +213,7 @@ const styles = StyleSheet.create({
     color: '#f7fbea',
   },
   menuButton: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 6,
   },
   menuIcon: {
@@ -450,27 +399,27 @@ const styles = StyleSheet.create({
   menuOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(15, 31, 23, 0.55)',
-    alignItems: 'stretch',
+    alignItems: 'flex-end',
+    paddingHorizontal: 16,
   },
   menuBackdrop: {
     ...StyleSheet.absoluteFillObject,
   },
-  menuSheet: {
-    flex: 1,
+  menuCard: {
+    marginHorizontal: 24,
+    borderRadius: 20,
     backgroundColor: '#f0fff4',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
     shadowColor: '#0f2e20',
     shadowOpacity: 0.16,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 8,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+    overflow: 'hidden',
   },
   menuContent: {
-    paddingTop: 24,
-    paddingHorizontal: 24,
-    paddingBottom: 32,
-    gap: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 10,
   },
   menuItem: {
     paddingVertical: 10,
@@ -510,5 +459,12 @@ const styles = StyleSheet.create({
   },
   themeOptionTextActive: {
     color: '#ecfdf3',
+  },
+  themeOptionHelper: {
+    fontSize: 12,
+    color: '#2f855a',
+  },
+  themeOptionHelperActive: {
+    color: '#bbf7d0',
   },
 });

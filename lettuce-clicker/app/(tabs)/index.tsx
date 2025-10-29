@@ -1,4 +1,3 @@
-// eslint-disable-next-line import/no-unresolved
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -9,7 +8,6 @@ import { OrbitingUpgradeEmojis } from '@/components/OrbitingUpgradeEmojis';
 import { useGame } from '@/context/GameContext';
 import type { HomeEmojiTheme } from '@/context/GameContext';
 
-const HEADER_BASE_HEIGHT = 44;
 const MODAL_STORAGE_KEY = 'lettuce-click:grow-your-park-dismissed';
 
 export default function HomeScreen() {
@@ -21,13 +19,52 @@ export default function HomeScreen() {
     orbitingUpgradeEmojis,
     homeEmojiTheme,
     setHomeEmojiTheme,
+    profileName,
+    resumeNotice,
+    clearResumeNotice,
   } = useGame();
   const [showGrowModal, setShowGrowModal] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [activeNotice, setActiveNotice] = useState<typeof resumeNotice>(null);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const headerPaddingTop = useMemo(() => insets.top + 6, [insets.top]);
-  const headerHeight = HEADER_BASE_HEIGHT + headerPaddingTop;
+  const friendlyName = useMemo(() => {
+    const trimmed = profileName.trim();
+    return trimmed.length > 0 ? trimmed : 'Gardener';
+  }, [profileName]);
+  const themeOptions = useMemo(
+    () => [
+      { label: '🔵 Circle', value: 'circle' as HomeEmojiTheme },
+      { label: '🌀 Spiral', value: 'spiral' as HomeEmojiTheme },
+      { label: '🟩 Matrix', value: 'matrix' as HomeEmojiTheme },
+      { label: '🌫️ Clear', value: 'clear' as HomeEmojiTheme },
+    ],
+    []
+  );
+  const noticeTitle = useMemo(() => {
+    if (!activeNotice) {
+      return '';
+    }
+
+    if (activeNotice.type === 'returning') {
+      return `Welcome Back ${friendlyName}!`;
+    }
+
+    return `${activeNotice.greeting}, ${friendlyName}!`;
+  }, [activeNotice, friendlyName]);
+
+  const noticeCopy = useMemo(() => {
+    if (!activeNotice) {
+      return '';
+    }
+
+    if (activeNotice.type === 'returning') {
+      return `Your lifetime harvest has been ${activeNotice.lifetimeHarvest.toLocaleString()}. Tap to keep cultivating at ${autoPerSecond.toLocaleString()} auto clicks each second.`;
+    }
+
+    return `You have harvested ${activeNotice.passiveHarvest.toLocaleString()} since you last tended to the Garden! Your stores now hold ${harvest.toLocaleString()} harvest with lifetime totals at ${lifetimeHarvest.toLocaleString()}. Auto clicks continue humming at ${autoPerSecond.toLocaleString()} per second.`;
+  }, [activeNotice, autoPerSecond, harvest, lifetimeHarvest]);
 
   useEffect(() => {
     AsyncStorage.getItem(MODAL_STORAGE_KEY)
@@ -41,6 +78,12 @@ export default function HomeScreen() {
         setShowGrowModal(true);
       });
   }, []);
+
+  useEffect(() => {
+    if (resumeNotice) {
+      setActiveNotice(resumeNotice);
+    }
+  }, [resumeNotice]);
 
   const handleDismissGrow = useCallback(async () => {
     setShowGrowModal(false);
@@ -64,19 +107,26 @@ export default function HomeScreen() {
     [setHomeEmojiTheme]
   );
 
+  const handleDismissNotice = useCallback(() => {
+    setActiveNotice(null);
+    clearResumeNotice();
+  }, [clearResumeNotice]);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        <View style={[styles.header, { paddingTop: headerPaddingTop, minHeight: headerHeight }]}>
-          <Text style={styles.headerText}>🥬 Lettuce Park Gardens</Text>
-          <Pressable
-            accessibilityLabel={menuOpen ? 'Close garden menu' : 'Open garden menu'}
-            accessibilityHint={menuOpen ? undefined : 'Opens actions and emoji theme options'}
-            style={styles.menuButton}
-            onPress={() => setMenuOpen((prev) => !prev)}
-            hitSlop={8}>
-            <Text style={[styles.menuIcon, menuOpen && styles.menuIconActive]}>{menuOpen ? '✕' : '☰'}</Text>
-          </Pressable>
+        <View style={[styles.headerWrapper, { paddingTop: headerPaddingTop }]}>
+          <View style={styles.headerShelf}>
+            <Text style={styles.headerText}>🥬 Lettuce Park Gardens</Text>
+            <Pressable
+              accessibilityLabel={menuOpen ? 'Close garden menu' : 'Open garden menu'}
+              accessibilityHint={menuOpen ? undefined : 'Opens actions and emoji theme options'}
+              style={styles.menuButton}
+              onPress={() => setMenuOpen((prev) => !prev)}
+              hitSlop={8}>
+              <Text style={[styles.menuIcon, menuOpen && styles.menuIconActive]}>{menuOpen ? '✕' : '☰'}</Text>
+            </Pressable>
+          </View>
         </View>
 
         <ScrollView
@@ -123,43 +173,36 @@ export default function HomeScreen() {
           </View>
         </ScrollView>
 
-        {menuOpen && (
-          <View style={[styles.menuOverlay, { paddingTop: headerHeight + 4 }]}>
+        <Modal
+          visible={menuOpen}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setMenuOpen(false)}
+        >
+          <View style={styles.menuModalOverlay}>
             <Pressable style={styles.menuBackdrop} onPress={() => setMenuOpen(false)} />
-            <View style={styles.menuCard}>
-              <View style={styles.menuContent}>
+            <View style={styles.menuModalCard}>
+              <View style={styles.menuModalContent}>
                 <Pressable style={styles.menuItem} onPress={handleNavigateProfile}>
                   <Text style={styles.menuItemText}>Profile</Text>
                 </Pressable>
                 <View style={styles.menuDivider} />
                 <Text style={styles.menuSectionTitle}>Emoji Themes</Text>
-                {[
-                  { label: 'Circle', value: 'circle' as HomeEmojiTheme, helper: 'Classic orbit' },
-                  { label: 'Spiral', value: 'spiral' as HomeEmojiTheme, helper: 'Swirling trail' },
-                  { label: 'Matrix', value: 'matrix' as HomeEmojiTheme, helper: 'Emoji rainfall' },
-                  { label: 'Clear', value: 'clear' as HomeEmojiTheme, helper: 'Hide all emoji' },
-                ].map((option) => {
+                {themeOptions.map((option) => {
                   const isActive = homeEmojiTheme === option.value;
                   return (
                     <Pressable
                       key={option.value}
                       onPress={() => handleSelectTheme(option.value)}
                       style={[styles.themeOption, isActive && styles.themeOptionActive]}>
-                      <Text style={[styles.themeOptionText, isActive && styles.themeOptionTextActive]}>
-                        {option.label}
-                      </Text>
-                      {option.helper ? (
-                        <Text style={[styles.themeOptionHelper, isActive && styles.themeOptionHelperActive]}>
-                          {option.helper}
-                        </Text>
-                      ) : null}
+                      <Text style={[styles.themeOptionText, isActive && styles.themeOptionTextActive]}>{option.label}</Text>
                     </Pressable>
                   );
                 })}
               </View>
             </View>
           </View>
-        )}
+        </Modal>
       </View>
 
       <Modal
@@ -182,6 +225,23 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={Boolean(activeNotice)}
+        animationType="fade"
+        transparent
+        onRequestClose={handleDismissNotice}
+      >
+        <View style={styles.noticeOverlay}>
+          <View style={styles.noticeCard}>
+            <Text style={styles.noticeTitle}>{noticeTitle}</Text>
+            <Text style={styles.noticeCopy}>{noticeCopy}</Text>
+            <Pressable style={styles.noticeButton} onPress={handleDismissNotice}>
+              <Text style={styles.noticeButtonText}>Back to the garden</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -195,10 +255,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f2f9f2',
   },
-  header: {
-    backgroundColor: '#1f6f4a',
+  headerWrapper: {
     paddingHorizontal: 20,
-    paddingBottom: 8,
+    paddingBottom: 14,
+    backgroundColor: '#f2f9f2',
+  },
+  headerShelf: {
+    backgroundColor: '#1f6f4a',
+    borderRadius: 28,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
     shadowColor: '#000',
     shadowOpacity: 0.12,
     shadowRadius: 10,
@@ -396,30 +462,32 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 16,
   },
-  menuOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(15, 31, 23, 0.55)',
-    alignItems: 'flex-end',
-    paddingHorizontal: 16,
-  },
   menuBackdrop: {
     ...StyleSheet.absoluteFillObject,
   },
-  menuCard: {
-    marginHorizontal: 24,
-    borderRadius: 20,
+  menuModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 31, 23, 0.58)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  menuModalCard: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 24,
     backgroundColor: '#f0fff4',
     shadowColor: '#0f2e20',
-    shadowOpacity: 0.16,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 6,
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
     overflow: 'hidden',
   },
-  menuContent: {
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    gap: 10,
+  menuModalContent: {
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+    gap: 14,
   },
   menuItem: {
     paddingVertical: 10,
@@ -442,12 +510,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
   },
   themeOption: {
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 14,
   },
   themeOptionActive: {
     backgroundColor: '#1f6f4a',
@@ -460,11 +525,49 @@ const styles = StyleSheet.create({
   themeOptionTextActive: {
     color: '#ecfdf3',
   },
-  themeOptionHelper: {
-    fontSize: 12,
-    color: '#2f855a',
+  noticeOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 28,
   },
-  themeOptionHelperActive: {
-    color: '#bbf7d0',
+  noticeCard: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 24,
+    backgroundColor: '#ffffff',
+    padding: 24,
+    gap: 16,
+    shadowColor: '#0f2e20',
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 10,
+  },
+  noticeTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#1f6f4a',
+    textAlign: 'center',
+  },
+  noticeCopy: {
+    fontSize: 15,
+    color: '#2d3748',
+    lineHeight: 22,
+    textAlign: 'center',
+  },
+  noticeButton: {
+    marginTop: 4,
+    alignSelf: 'center',
+    backgroundColor: '#1f6f4a',
+    borderRadius: 18,
+    paddingHorizontal: 26,
+    paddingVertical: 12,
+  },
+  noticeButtonText: {
+    color: '#f0fff4',
+    fontWeight: '700',
+    fontSize: 16,
   },
 });

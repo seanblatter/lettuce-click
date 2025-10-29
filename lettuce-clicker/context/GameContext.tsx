@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
 
 export type HomeEmojiTheme = 'circle' | 'spiral' | 'matrix' | 'clear';
 
@@ -27,6 +28,19 @@ export type Placement = {
   scale: number;
 };
 
+type PassiveResumeNotice =
+  | {
+      type: 'returning';
+      lifetimeHarvest: number;
+      timestamp: number;
+    }
+  | {
+      type: 'background';
+      passiveHarvest: number;
+      greeting: string;
+      timestamp: number;
+    };
+
 type GameContextValue = {
   harvest: number;
   lifetimeHarvest: number;
@@ -43,6 +57,7 @@ type GameContextValue = {
   profileUsername: string;
   profileImageUri: string | null;
   homeEmojiTheme: HomeEmojiTheme;
+  resumeNotice: PassiveResumeNotice | null;
   setProfileLifetimeTotal: (value: number) => void;
   addHarvest: () => void;
   purchaseUpgrade: (upgradeId: string) => boolean;
@@ -54,10 +69,13 @@ type GameContextValue = {
   setProfileUsername: (value: string) => void;
   setProfileImageUri: (uri: string | null) => void;
   setHomeEmojiTheme: (theme: HomeEmojiTheme) => void;
+  clearResumeNotice: () => void;
 };
 
 const PROFILE_STORAGE_KEY = 'lettuce-click:profile';
 const THEME_STORAGE_KEY = 'lettuce-click:emoji-theme';
+const GAME_STORAGE_KEY = 'lettuce-click:game';
+const LAST_EXIT_STORAGE_KEY = 'lettuce-click:last-exit';
 
 const upgradeCatalog: UpgradeDefinition[] = [
   {
@@ -214,6 +232,15 @@ export type OrbitingEmoji = {
   emoji: string;
 };
 
+type StoredGameState = {
+  harvest: number;
+  lifetimeHarvest: number;
+  purchasedUpgrades: Record<string, number>;
+  emojiInventory: Record<string, number>;
+  placements: Placement[];
+  orbitingUpgradeEmojis: OrbitingEmoji[];
+};
+
 const GameContext = createContext<GameContextValue | undefined>(undefined);
 
 export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
@@ -230,7 +257,23 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [profileUsername, setProfileUsername] = useState('');
   const [profileImageUri, setProfileImageUri] = useState<string | null>(null);
   const [homeEmojiTheme, setHomeEmojiTheme] = useState<HomeEmojiTheme>('circle');
+  const [resumeNotice, setResumeNotice] = useState<PassiveResumeNotice | null>(null);
   const initialisedRef = useRef(false);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const backgroundInfoRef = useRef<
+    | {
+        timestamp: number;
+        harvest: number;
+        lifetimeHarvest: number;
+        profileLifetimeTotal: number;
+        autoPerSecond: number;
+      }
+    | null
+  >(null);
+  const harvestRef = useRef(harvest);
+  const lifetimeHarvestRef = useRef(lifetimeHarvest);
+  const profileLifetimeTotalRef = useRef(profileLifetimeTotal);
+  const autoPerSecondRef = useRef(autoPerSecond);
 
   useEffect(() => {
     if (autoPerSecond <= 0) {
@@ -245,6 +288,90 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
 
     return () => clearInterval(interval);
   }, [autoPerSecond]);
+
+  useEffect(() => {
+    harvestRef.current = harvest;
+  }, [harvest]);
+
+  useEffect(() => {
+    lifetimeHarvestRef.current = lifetimeHarvest;
+  }, [lifetimeHarvest]);
+
+  useEffect(() => {
+    profileLifetimeTotalRef.current = profileLifetimeTotal;
+  }, [profileLifetimeTotal]);
+
+  useEffect(() => {
+    autoPerSecondRef.current = autoPerSecond;
+  }, [autoPerSecond]);
+
+  useEffect(() => {
+    const backgroundStates: AppStateStatus[] = ['inactive', 'background'];
+
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      const previousState = appStateRef.current;
+      appStateRef.current = nextAppState;
+
+      if (!initialisedRef.current) {
+        return;
+      }
+
+      const movingToBackground = previousState === 'active' && backgroundStates.includes(nextAppState);
+      const movingToForeground = backgroundStates.includes(previousState) && nextAppState === 'active';
+
+      if (movingToBackground) {
+        backgroundInfoRef.current = {
+          timestamp: Date.now(),
+          harvest: harvestRef.current,
+          lifetimeHarvest: lifetimeHarvestRef.current,
+          profileLifetimeTotal: profileLifetimeTotalRef.current,
+          autoPerSecond: autoPerSecondRef.current,
+        };
+
+        AsyncStorage.setItem(LAST_EXIT_STORAGE_KEY, Date.now().toString()).catch(() => {
+          // persistence best effort only
+        });
+        return;
+      }
+
+      if (movingToForeground) {
+        AsyncStorage.removeItem(LAST_EXIT_STORAGE_KEY).catch(() => {
+          // persistence best effort only
+        });
+
+        const info = backgroundInfoRef.current;
+        backgroundInfoRef.current = null;
+
+        if (!info) {
+          return;
+        }
+
+        const elapsedSeconds = Math.max(Math.floor((Date.now() - info.timestamp) / 1000), 0);
+        const passiveHarvest = elapsedSeconds * Math.max(info.autoPerSecond, 0);
+        const greetings = ['Hi', 'Howdy', "What's Up", 'Hello'] as const;
+        const greeting = greetings[Math.floor(Math.random() * greetings.length) % greetings.length];
+
+        if (passiveHarvest > 0) {
+          setHarvest((prev) => prev + passiveHarvest);
+          setLifetimeHarvest((prev) => prev + passiveHarvest);
+          setProfileLifetimeTotal((prev) => prev + passiveHarvest);
+        }
+
+        setResumeNotice({
+          type: 'background',
+          passiveHarvest,
+          greeting,
+          timestamp: Date.now(),
+        });
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   const spendHarvest = (amount: number) => {
     if (harvest < amount) {
@@ -385,6 +512,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     profileUsername,
     profileImageUri,
     homeEmojiTheme,
+    resumeNotice,
     setProfileLifetimeTotal,
     addHarvest,
     purchaseUpgrade,
@@ -396,6 +524,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     setProfileUsername,
     setProfileImageUri,
     setHomeEmojiTheme,
+    clearResumeNotice: () => setResumeNotice(null),
   }), [
     harvest,
     lifetimeHarvest,
@@ -410,6 +539,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     profileUsername,
     profileImageUri,
     homeEmojiTheme,
+    resumeNotice,
     setProfileLifetimeTotal,
   ]);
 
@@ -418,8 +548,8 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       return;
     }
 
-    AsyncStorage.multiGet([PROFILE_STORAGE_KEY, THEME_STORAGE_KEY])
-      .then(([profileEntry, themeEntry]) => {
+    AsyncStorage.multiGet([PROFILE_STORAGE_KEY, THEME_STORAGE_KEY, GAME_STORAGE_KEY, LAST_EXIT_STORAGE_KEY])
+      .then(([profileEntry, themeEntry, gameEntry, exitEntry]) => {
         if (profileEntry[1]) {
           try {
             const parsed = JSON.parse(profileEntry[1]) as {
@@ -446,6 +576,54 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
           ) {
             setHomeEmojiTheme(themeEntry[1]);
           }
+        }
+
+        let loadedLifetimeHarvest: number | undefined;
+
+        if (gameEntry[1]) {
+          try {
+            const parsed = JSON.parse(gameEntry[1]) as Partial<StoredGameState>;
+            if (typeof parsed.harvest === 'number' && Number.isFinite(parsed.harvest)) {
+              setHarvest(parsed.harvest);
+            }
+            if (typeof parsed.lifetimeHarvest === 'number' && Number.isFinite(parsed.lifetimeHarvest)) {
+              setLifetimeHarvest(parsed.lifetimeHarvest);
+              loadedLifetimeHarvest = parsed.lifetimeHarvest;
+            }
+            if (parsed.purchasedUpgrades && typeof parsed.purchasedUpgrades === 'object') {
+              setPurchasedUpgrades(parsed.purchasedUpgrades);
+              const computedAuto = Object.entries(parsed.purchasedUpgrades).reduce((total, [upgradeId, count]) => {
+                const upgrade = upgradeCatalog.find((item) => item.id === upgradeId);
+                if (!upgrade || typeof count !== 'number') {
+                  return total;
+                }
+                return total + upgrade.increment * count;
+              }, 0);
+              setAutoPerSecond(computedAuto);
+            }
+            if (parsed.emojiInventory && typeof parsed.emojiInventory === 'object') {
+              setEmojiInventory(parsed.emojiInventory);
+            }
+            if (Array.isArray(parsed.placements)) {
+              setPlacements(parsed.placements);
+            }
+            if (Array.isArray(parsed.orbitingUpgradeEmojis)) {
+              setOrbitingUpgradeEmojis(parsed.orbitingUpgradeEmojis);
+            }
+          } catch {
+            // ignore malformed stored data
+          }
+        }
+
+        if (exitEntry[1]) {
+          setResumeNotice({
+            type: 'returning',
+            lifetimeHarvest: loadedLifetimeHarvest ?? lifetimeHarvestRef.current,
+            timestamp: Date.now(),
+          });
+          AsyncStorage.removeItem(LAST_EXIT_STORAGE_KEY).catch(() => {
+            // persistence best effort only
+          });
         }
       })
       .finally(() => {
@@ -479,6 +657,25 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       // persistence best effort only
     });
   }, [homeEmojiTheme]);
+
+  useEffect(() => {
+    if (!initialisedRef.current) {
+      return;
+    }
+
+    const payload: StoredGameState = {
+      harvest,
+      lifetimeHarvest,
+      purchasedUpgrades,
+      emojiInventory,
+      placements,
+      orbitingUpgradeEmojis,
+    };
+
+    AsyncStorage.setItem(GAME_STORAGE_KEY, JSON.stringify(payload)).catch(() => {
+      // persistence best effort only
+    });
+  }, [emojiInventory, harvest, lifetimeHarvest, orbitingUpgradeEmojis, placements, purchasedUpgrades]);
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
 };

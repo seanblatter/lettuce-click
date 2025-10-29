@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Alert, GestureResponderEvent, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, GestureResponderEvent, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 
@@ -17,6 +17,21 @@ type Props = {
   title?: string;
 };
 
+type StrokePoint = {
+  x: number;
+  y: number;
+};
+
+type Stroke = {
+  id: string;
+  color: string;
+  size: number;
+  points: StrokePoint[];
+};
+
+const DRAW_COLORS = ['#1f6f4a', '#15803d', '#0ea5e9', '#ec4899', '#f59e0b', '#7c3aed', '#0f172a', '#f97316'];
+const PEN_SIZES = [3, 5, 8, 12];
+
 export function GardenSection({
   harvest,
   emojiCatalog,
@@ -31,6 +46,13 @@ export function GardenSection({
   const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null);
   const [activePanel, setActivePanel] = useState<'shop' | 'inventory'>('shop');
   const [shopFilter, setShopFilter] = useState('');
+  const [showPalette, setShowPalette] = useState(false);
+  const [isDrawingMode, setIsDrawingMode] = useState(false);
+  const [penColor, setPenColor] = useState(DRAW_COLORS[0]);
+  const [penSize, setPenSize] = useState(PEN_SIZES[1]);
+  const [strokes, setStrokes] = useState<Stroke[]>([]);
+  const [currentStroke, setCurrentStroke] = useState<Stroke | null>(null);
+  const [penHiddenForSave, setPenHiddenForSave] = useState(false);
 
   const inventoryList = useMemo(
     () =>
@@ -45,27 +67,38 @@ export function GardenSection({
 
   const ownedInventory = useMemo(() => inventoryList.filter((item) => item.owned > 0), [inventoryList]);
   const normalizedFilter = shopFilter.trim().toLowerCase();
+  const emojiFilterTokens = useMemo(
+    () => (normalizedFilter ? Array.from(normalizedFilter).filter((glyph) => glyph.trim().length > 0) : []),
+    [normalizedFilter]
+  );
+  const matchesFilter = useCallback(
+    (item: (typeof inventoryList)[number]) => {
+      if (!normalizedFilter) {
+        return true;
+      }
+
+      const normalizedName = item.name.toLowerCase();
+      if (normalizedName.includes(normalizedFilter)) {
+        return true;
+      }
+
+      if (item.emoji.toLowerCase().includes(normalizedFilter)) {
+        return true;
+      }
+
+      return emojiFilterTokens.some((glyph) => item.emoji.includes(glyph));
+    },
+    [emojiFilterTokens, normalizedFilter]
+  );
   const filteredShopInventory = useMemo(
     () =>
-      normalizedFilter
-        ? inventoryList.filter(
-            (item) =>
-              item.name.toLowerCase().includes(normalizedFilter) ||
-              item.emoji.toLowerCase().includes(normalizedFilter)
-          )
-        : inventoryList,
-    [inventoryList, normalizedFilter]
+      normalizedFilter ? inventoryList.filter((item) => matchesFilter(item)) : inventoryList,
+    [inventoryList, matchesFilter, normalizedFilter]
   );
   const filteredOwnedInventory = useMemo(
     () =>
-      normalizedFilter
-        ? ownedInventory.filter(
-            (item) =>
-              item.name.toLowerCase().includes(normalizedFilter) ||
-              item.emoji.toLowerCase().includes(normalizedFilter)
-          )
-        : ownedInventory,
-    [normalizedFilter, ownedInventory]
+      normalizedFilter ? ownedInventory.filter((item) => matchesFilter(item)) : ownedInventory,
+    [matchesFilter, normalizedFilter, ownedInventory]
   );
   const selectedDetails = useMemo(
     () => inventoryList.find((item) => item.id === selectedEmoji) ?? null,
@@ -73,6 +106,10 @@ export function GardenSection({
   );
 
   const handleCanvasPress = (event: GestureResponderEvent) => {
+    if (isDrawingMode) {
+      return;
+    }
+
     if (!selectedEmoji) {
       return;
     }
@@ -125,11 +162,172 @@ export function GardenSection({
   };
 
   const handleSaveSnapshot = () => {
+    setPenHiddenForSave(true);
     Alert.alert(
       'Save your garden',
-      "Use your device's screenshot tools to capture the garden canvas once you finish decorating."
+      "Use your device's screenshot tools to capture the garden canvas once you finish decorating.",
+      [
+        {
+          text: 'Got it',
+          onPress: () => setPenHiddenForSave(false),
+        },
+      ],
+      {
+        cancelable: true,
+        onDismiss: () => setPenHiddenForSave(false),
+      }
     );
   };
+
+  const handleClearDrawings = useCallback(() => {
+    setStrokes([]);
+    setCurrentStroke(null);
+  }, []);
+
+  const renderStrokeSegments = useCallback(
+    (stroke: Stroke, prefix: string) => {
+      if (stroke.points.length === 0) {
+        return [] as JSX.Element[];
+      }
+
+      const segments: JSX.Element[] = [];
+      const firstPoint = stroke.points[0];
+      segments.push(
+        <View
+          key={`${prefix}-point-0`}
+          style={[
+            styles.strokeSegment,
+            {
+              width: stroke.size,
+              height: stroke.size,
+              borderRadius: stroke.size / 2,
+              left: firstPoint.x - stroke.size / 2,
+              top: firstPoint.y - stroke.size / 2,
+              backgroundColor: stroke.color,
+              transform: [],
+            },
+          ]}
+        />
+      );
+
+      for (let index = 1; index < stroke.points.length; index += 1) {
+        const prev = stroke.points[index - 1];
+        const point = stroke.points[index];
+        const dx = point.x - prev.x;
+        const dy = point.y - prev.y;
+        const distance = Math.hypot(dx, dy);
+
+        if (distance === 0) {
+          continue;
+        }
+
+        const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+        segments.push(
+          <View
+            key={`${prefix}-segment-${index}`}
+            style={[
+              styles.strokeSegment,
+              {
+                width: distance,
+                height: stroke.size,
+                backgroundColor: stroke.color,
+                left: (prev.x + point.x) / 2 - distance / 2,
+                top: (prev.y + point.y) / 2 - stroke.size / 2,
+                borderRadius: stroke.size / 2,
+                transform: [{ rotateZ: `${angle}deg` }],
+              },
+            ]}
+          />
+        );
+      }
+
+      return segments;
+    },
+    []
+  );
+
+  const beginStroke = useCallback(
+    (x: number, y: number) => {
+      const stroke: Stroke = {
+        id: `stroke-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        color: penColor,
+        size: penSize,
+        points: [{ x, y }],
+      };
+      setCurrentStroke(stroke);
+    },
+    [penColor, penSize]
+  );
+
+  const appendPoint = useCallback((x: number, y: number) => {
+    setCurrentStroke((prev) => {
+      if (!prev) {
+        return prev;
+      }
+
+      const lastPoint = prev.points[prev.points.length - 1];
+      if (lastPoint && Math.abs(lastPoint.x - x) < 0.5 && Math.abs(lastPoint.y - y) < 0.5) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        points: [...prev.points, { x, y }],
+      };
+    });
+  }, []);
+
+  const endStroke = useCallback(() => {
+    setCurrentStroke((prev) => {
+      if (prev && prev.points.length > 0) {
+        setStrokes((existing) => [...existing, prev]);
+      }
+      return null;
+    });
+  }, []);
+
+  const handleCanvasTouchStart = useCallback(
+    (event: GestureResponderEvent) => {
+      if (!isDrawingMode) {
+        return;
+      }
+
+      const { locationX, locationY } = event.nativeEvent;
+      beginStroke(locationX, locationY);
+    },
+    [beginStroke, isDrawingMode]
+  );
+
+  const handleCanvasTouchMove = useCallback(
+    (event: GestureResponderEvent) => {
+      if (!isDrawingMode) {
+        return;
+      }
+
+      const touch = event.nativeEvent.touches?.[0];
+      if (touch) {
+        appendPoint(touch.locationX, touch.locationY);
+        return;
+      }
+
+      appendPoint(event.nativeEvent.locationX, event.nativeEvent.locationY);
+    },
+    [appendPoint, isDrawingMode]
+  );
+
+  const handleCanvasTouchEnd = useCallback(() => {
+    if (!isDrawingMode) {
+      return;
+    }
+
+    endStroke();
+  }, [endStroke, isDrawingMode]);
+
+  useEffect(() => {
+    if (!isDrawingMode) {
+      setCurrentStroke(null);
+    }
+  }, [isDrawingMode]);
 
   return (
     <View style={styles.section}>
@@ -180,7 +378,7 @@ export function GardenSection({
         </View>
         <Text style={styles.toolbarHint}>
           {activePanel === 'shop'
-            ? 'Tap to buy or select. Long press to quickly stock up.'
+            ? 'Tap to buy or select decorations instantly.'
             : 'Tap a tile to ready it for placement.'}
         </Text>
       </View>
@@ -217,8 +415,6 @@ export function GardenSection({
                     !canAfford && owned === 0 && styles.emojiTileDisabled,
                   ]}
                   onPress={handleTilePress}
-                  onLongPress={() => handlePurchase(item.id)}
-                  delayLongPress={180}
                   accessibilityLabel={`${item.name} emoji`}
                   accessibilityHint={
                     owned > 0
@@ -235,9 +431,6 @@ export function GardenSection({
                     <Text style={[styles.emojiTileMeta, styles.emojiTileCostText]} numberOfLines={1}>
                       {item.cost.toLocaleString()} harvest
                     </Text>
-                    {isSelected ? (
-                      <Text style={[styles.emojiTileMeta, styles.emojiTileSelectedText]}>Ready</Text>
-                    ) : null}
                   </View>
                   {owned > 0 ? (
                     <View style={styles.emojiTileBadge}>
@@ -277,9 +470,6 @@ export function GardenSection({
                       <Text style={[styles.emojiTileMeta, styles.inventoryMeta]} numberOfLines={1}>
                         Owned ×{item.owned}
                       </Text>
-                      {isSelected ? (
-                        <Text style={[styles.emojiTileMeta, styles.emojiTileSelectedText]}>Ready</Text>
-                      ) : null}
                     </View>
                   </Pressable>
                 );
@@ -308,7 +498,26 @@ export function GardenSection({
             )}
           </View>
 
-          <Pressable style={styles.canvas} onPress={handleCanvasPress}>
+          <Pressable
+            style={styles.canvas}
+            onPress={handleCanvasPress}
+            onTouchStart={handleCanvasTouchStart}
+            onTouchMove={handleCanvasTouchMove}
+            onTouchEnd={handleCanvasTouchEnd}
+            onTouchCancel={handleCanvasTouchEnd}
+          >
+            <View pointerEvents="none" style={styles.drawingSurface}>
+              {strokes.reduce<JSX.Element[]>((acc, stroke) => {
+                acc.push(...renderStrokeSegments(stroke, stroke.id));
+                return acc;
+              }, [])}
+              {currentStroke ? renderStrokeSegments(currentStroke, `${currentStroke.id}-live`) : null}
+            </View>
+            {isDrawingMode ? (
+              <View pointerEvents="none" style={styles.drawingModeBadge}>
+                <Text style={styles.drawingModeBadgeText}>Drawing mode</Text>
+              </View>
+            ) : null}
             {placements.length === 0 ? (
               <View pointerEvents="none" style={styles.canvasEmptyState}>
                 <Text style={styles.canvasEmptyTitle}>Tap the canvas to begin</Text>
@@ -334,6 +543,17 @@ export function GardenSection({
                 />
               );
             })}
+            {!penHiddenForSave ? (
+              <Pressable
+                style={styles.penButton}
+                accessibilityLabel="Open drawing palette"
+                accessibilityHint="Opens options to pick colors and stroke sizes"
+                onPress={() => setShowPalette(true)}>
+                <View style={[styles.penButtonCircle, isDrawingMode && styles.penButtonCircleActive]}>
+                  <Text style={[styles.penButtonIcon, isDrawingMode && styles.penButtonIconActive]}>✏️</Text>
+                </View>
+              </Pressable>
+            ) : null}
           </Pressable>
 
           <View style={styles.canvasActions}>
@@ -351,6 +571,77 @@ export function GardenSection({
           </View>
         </>
       )}
+      <Modal
+        visible={showPalette}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowPalette(false)}
+      >
+        <View style={styles.paletteOverlay}>
+          <Pressable style={styles.paletteBackdrop} onPress={() => setShowPalette(false)} />
+          <View style={styles.paletteCard}>
+            <View style={styles.paletteHandle} />
+            <Text style={styles.paletteTitle}>Garden sketchbook</Text>
+            <Text style={styles.paletteSubtitle}>
+              Choose a pen color and stroke size, then toggle drawing mode to sketch directly on your garden canvas.
+            </Text>
+            <View style={styles.paletteSection}>
+              <Text style={styles.paletteLabel}>Pen color</Text>
+              <View style={styles.paletteColorRow}>
+                {DRAW_COLORS.map((color) => (
+                  <Pressable
+                    key={color}
+                    style={[styles.colorSwatch, { backgroundColor: color }, penColor === color && styles.colorSwatchActive]}
+                    onPress={() => setPenColor(color)}
+                    accessibilityLabel={`Set pen color to ${color}`}
+                  />
+                ))}
+              </View>
+            </View>
+            <View style={styles.paletteSection}>
+              <Text style={styles.paletteLabel}>Pen size</Text>
+              <View style={styles.paletteSizeRow}>
+                {PEN_SIZES.map((size) => (
+                  <Pressable
+                    key={size}
+                    style={[styles.sizeOption, penSize === size && styles.sizeOptionActive]}
+                    onPress={() => setPenSize(size)}
+                    accessibilityLabel={`Set pen size to ${size} pixels`}>
+                    <View
+                      style={[
+                        styles.sizeOptionPreview,
+                        { width: size * 2, height: size * 2, borderRadius: size, backgroundColor: penColor },
+                      ]}
+                    />
+                    <Text style={styles.sizeOptionLabel}>{size}px</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+            <Pressable
+              style={[styles.drawingToggle, isDrawingMode && styles.drawingToggleActive]}
+              onPress={() => setIsDrawingMode((prev) => !prev)}
+              accessibilityLabel={isDrawingMode ? 'Disable drawing mode' : 'Enable drawing mode'}>
+              <Text style={[styles.drawingToggleText, isDrawingMode && styles.drawingToggleTextActive]}>
+                {isDrawingMode ? 'Drawing mode is on' : 'Enable drawing mode'}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.clearDrawingButton, strokes.length === 0 && styles.disabledSecondary]}
+              onPress={handleClearDrawings}
+              disabled={strokes.length === 0}
+              accessibilityLabel="Clear all drawings">
+              <Text style={[styles.clearDrawingText, strokes.length === 0 && styles.disabledText]}>Clear drawings</Text>
+            </Pressable>
+            <Pressable
+              style={styles.paletteCloseButton}
+              onPress={() => setShowPalette(false)}
+              accessibilityLabel="Close drawing palette">
+              <Text style={styles.paletteCloseButtonText}>Done</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -629,10 +920,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0f766e',
   },
-  emojiTileSelectedText: {
-    fontWeight: '700',
-    color: '#166534',
-  },
   emojiTileBadge: {
     position: 'absolute',
     top: 8,
@@ -683,6 +970,24 @@ const styles = StyleSheet.create({
     elevation: 6,
     overflow: 'hidden',
   },
+  drawingSurface: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  drawingModeBadge: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    backgroundColor: 'rgba(34, 84, 61, 0.92)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  drawingModeBadgeText: {
+    color: '#f0fff4',
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
   canvasEmptyState: {
     position: 'absolute',
     top: '32%',
@@ -712,6 +1017,39 @@ const styles = StyleSheet.create({
   },
   canvasEmojiGlyph: {
     fontSize: 34,
+  },
+  penButton: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+  },
+  penButtonCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#f0fff4',
+    borderWidth: 2,
+    borderColor: '#1f6f4a',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#134e32',
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
+  },
+  penButtonCircleActive: {
+    backgroundColor: '#1f6f4a',
+  },
+  penButtonIcon: {
+    fontSize: 26,
+    color: '#1f6f4a',
+  },
+  penButtonIconActive: {
+    color: '#f0fff4',
+  },
+  strokeSegment: {
+    position: 'absolute',
   },
   canvasActions: {
     flexDirection: 'row',
@@ -748,5 +1086,145 @@ const styles = StyleSheet.create({
   },
   disabledText: {
     color: '#718096',
+  },
+  paletteOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(15, 31, 23, 0.55)',
+    paddingBottom: 16,
+  },
+  paletteBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  paletteCard: {
+    backgroundColor: '#f8fffb',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 28,
+    gap: 16,
+    shadowColor: '#0f2e20',
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: -4 },
+  },
+  paletteHandle: {
+    alignSelf: 'center',
+    width: 48,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: '#bbf7d0',
+  },
+  paletteTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#134e32',
+    textAlign: 'center',
+  },
+  paletteSubtitle: {
+    fontSize: 13,
+    color: '#2d3748',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  paletteSection: {
+    gap: 10,
+  },
+  paletteLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#134e32',
+  },
+  paletteColorRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  colorSwatch: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  colorSwatchActive: {
+    borderColor: '#1f6f4a',
+    shadowColor: '#1f6f4a',
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  paletteSizeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  sizeOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    backgroundColor: '#ffffff',
+  },
+  sizeOptionActive: {
+    borderColor: '#1f6f4a',
+    backgroundColor: '#ecfdf3',
+  },
+  sizeOptionPreview: {
+    borderRadius: 999,
+  },
+  sizeOptionLabel: {
+    fontSize: 12,
+    color: '#134e32',
+    fontWeight: '600',
+  },
+  drawingToggle: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#1f6f4a',
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  drawingToggleActive: {
+    backgroundColor: '#22543d',
+  },
+  drawingToggleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f6f4a',
+  },
+  drawingToggleTextActive: {
+    color: '#f0fff4',
+  },
+  clearDrawingButton: {
+    borderRadius: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#0f766e',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clearDrawingText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0f766e',
+  },
+  paletteCloseButton: {
+    backgroundColor: '#22543d',
+    borderRadius: 16,
+    paddingVertical: 12,
+  },
+  paletteCloseButtonText: {
+    textAlign: 'center',
+    color: '#f0fff4',
+    fontWeight: '700',
+    fontSize: 16,
   },
 });

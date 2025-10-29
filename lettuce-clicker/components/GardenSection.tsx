@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -12,8 +12,10 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import * as MediaLibrary from 'expo-media-library';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import { captureRef } from 'react-native-view-shot';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { emojiCategoryOrder } from '@/constants/emojiCatalog';
@@ -43,6 +45,12 @@ type Stroke = {
   points: StrokePoint[];
 };
 
+const VARIATION_SELECTOR_REGEX = /[\uFE0E\uFE0F]/g;
+
+const stripVariationSelectors = (value: string) => value.replace(VARIATION_SELECTOR_REGEX, '');
+
+const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 const DRAW_COLORS = ['#1f6f4a', '#15803d', '#0ea5e9', '#ec4899', '#f59e0b', '#7c3aed', '#0f172a', '#f97316'];
 const PEN_SIZES = [3, 5, 8, 12];
 
@@ -68,6 +76,7 @@ const CATEGORY_OPTIONS: { id: CategoryFilter; label: string; icon: string }[] = 
 type InventoryEntry = EmojiDefinition & {
   owned: number;
   searchBlob: string;
+  normalizedEmoji: string;
 };
 
 export function GardenSection({
@@ -92,7 +101,9 @@ export function GardenSection({
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [currentStroke, setCurrentStroke] = useState<Stroke | null>(null);
   const [penHiddenForSave, setPenHiddenForSave] = useState(false);
+  const [isSavingSnapshot, setIsSavingSnapshot] = useState(false);
   const [activeCategory, setActiveCategory] = useState<CategoryFilter>('all');
+  const canvasRef = useRef<View | null>(null);
 
   const inventoryList = useMemo(
     () =>
@@ -102,11 +113,13 @@ export function GardenSection({
           const normalizedName = item.name.toLowerCase();
           const condensedName = normalizedName.replace(/\s+/g, '');
           const categoryLabel = CATEGORY_LABELS[item.category].toLowerCase();
+          const normalizedEmoji = stripVariationSelectors(item.emoji).toLowerCase();
           const searchBlob = Array.from(
             new Set([
               normalizedName,
               condensedName,
               item.emoji.toLowerCase(),
+              normalizedEmoji,
               categoryLabel,
               ...normalizedTags,
             ])
@@ -116,6 +129,7 @@ export function GardenSection({
             ...item,
             owned: emojiInventory[item.id] ?? 0,
             searchBlob,
+            normalizedEmoji,
           };
         })
         .sort((a, b) => {
@@ -139,9 +153,13 @@ export function GardenSection({
 
   const ownedInventory = useMemo(() => inventoryList.filter((item) => item.owned > 0), [inventoryList]);
   const normalizedFilter = shopFilter.trim().toLowerCase();
+  const normalizedFilterEmoji = useMemo(() => stripVariationSelectors(normalizedFilter), [normalizedFilter]);
   const emojiFilterTokens = useMemo(
-    () => (normalizedFilter ? Array.from(normalizedFilter).filter((glyph) => glyph.trim().length > 0) : []),
-    [normalizedFilter]
+    () =>
+      normalizedFilterEmoji
+        ? Array.from(normalizedFilterEmoji).filter((glyph) => glyph.trim().length > 0)
+        : [],
+    [normalizedFilterEmoji]
   );
   const normalizedFilterWords = useMemo(
     () => (normalizedFilter ? normalizedFilter.split(/\s+/).filter(Boolean) : []),
@@ -161,28 +179,36 @@ export function GardenSection({
         return true;
       }
 
-      if (item.emoji.toLowerCase().includes(normalizedFilter)) {
+      if (normalizedFilterEmoji && item.normalizedEmoji.includes(normalizedFilterEmoji)) {
         return true;
       }
 
-      return emojiFilterTokens.some((glyph) => item.emoji.includes(glyph));
+      return emojiFilterTokens.some((glyph) => item.normalizedEmoji.includes(glyph));
     },
-    [emojiFilterTokens, normalizedFilter, normalizedFilterWords]
+    [emojiFilterTokens, normalizedFilter, normalizedFilterEmoji, normalizedFilterWords]
   );
   const matchesCategory = useCallback(
     (item: InventoryEntry) => (activeCategory === 'all' ? true : item.category === activeCategory),
     [activeCategory]
   );
-  const filteredShopInventory = useMemo(
-    () =>
-      inventoryList.filter((item) => matchesCategory(item) && matchesFilter(item)),
-    [inventoryList, matchesCategory, matchesFilter]
-  );
-  const filteredOwnedInventory = useMemo(
-    () =>
-      ownedInventory.filter((item) => matchesCategory(item) && matchesFilter(item)),
-    [matchesCategory, matchesFilter, ownedInventory]
-  );
+  const filteredShopInventory = useMemo(() => {
+    const filtered = inventoryList.filter((item) => matchesCategory(item) && matchesFilter(item));
+
+    if (filtered.length === 0 && normalizedFilter) {
+      return inventoryList.filter((item) => matchesCategory(item));
+    }
+
+    return filtered;
+  }, [inventoryList, matchesCategory, matchesFilter, normalizedFilter]);
+  const filteredOwnedInventory = useMemo(() => {
+    const filtered = ownedInventory.filter((item) => matchesCategory(item) && matchesFilter(item));
+
+    if (filtered.length === 0 && normalizedFilter && ownedInventory.length > 0) {
+      return ownedInventory.filter((item) => matchesCategory(item));
+    }
+
+    return filtered;
+  }, [matchesCategory, matchesFilter, normalizedFilter, ownedInventory]);
   const selectedDetails = useMemo(
     () => inventoryList.find((item) => item.id === selectedEmoji) ?? null,
     [inventoryList, selectedEmoji]
@@ -240,31 +266,60 @@ export function GardenSection({
       return;
     }
 
-    setSelectedEmoji(emojiId);
-  };
-
-  const handleClearGarden = () => {
-    clearGarden();
-    setSelectedEmoji(null);
-  };
-
-  const handleSaveSnapshot = () => {
-    setPenHiddenForSave(true);
     Alert.alert(
-      'Save your garden',
-      "Use your device's screenshot tools to capture the garden canvas once you finish decorating.",
+      'Purchased!',
+      'Your new decoration is ready in your inventory to be selected.',
       [
         {
-          text: 'Got it',
-          onPress: () => setPenHiddenForSave(false),
+          text: 'Go to inventory',
+          onPress: () => handleOpenSheet('inventory'),
         },
-      ],
-      {
-        cancelable: true,
-        onDismiss: () => setPenHiddenForSave(false),
-      }
+        {
+          text: 'Keep shopping',
+          style: 'cancel',
+        },
+      ]
     );
   };
+
+  const handleClearGarden = useCallback(() => {
+    if (placements.length > 0) {
+      clearGarden();
+    }
+    handleClearDrawings();
+    setIsDrawingMode(false);
+    setSelectedEmoji(null);
+  }, [clearGarden, handleClearDrawings, placements, setIsDrawingMode]);
+
+  const handleSaveSnapshot = useCallback(async () => {
+    if (!canvasRef.current || isSavingSnapshot) {
+      return;
+    }
+
+    const permission = await MediaLibrary.requestPermissionsAsync();
+
+    if (!permission.granted) {
+      Alert.alert(
+        'Permission needed',
+        'Allow photo library access so we can save your garden to your device.'
+      );
+      return;
+    }
+
+    try {
+      setIsSavingSnapshot(true);
+      setPenHiddenForSave(true);
+      await wait(80);
+      const snapshotUri = await captureRef(canvasRef, { format: 'png', quality: 1 });
+      await MediaLibrary.saveToLibraryAsync(snapshotUri);
+      Alert.alert('Garden saved', 'Your garden snapshot is now in your photos.');
+    } catch {
+      Alert.alert('Save failed', 'We could not save the garden. Please try again.');
+    } finally {
+      setPenHiddenForSave(false);
+      setIsSavingSnapshot(false);
+    }
+  }, [canvasRef, isSavingSnapshot]);
 
   const handleClearDrawings = useCallback(() => {
     setStrokes([]);
@@ -425,6 +480,10 @@ export function GardenSection({
 
   const keyExtractor = useCallback((item: InventoryEntry) => item.id, []);
 
+  const bannerTopPadding = insets.top + 24;
+  const contentBottomPadding = insets.bottom + 48;
+  const canClearGarden = placements.length > 0 || strokes.length > 0;
+
   const renderShopItem: ListRenderItem<InventoryEntry> = ({ item }) => {
     const owned = item.owned;
     const isSelected = selectedEmoji === item.id;
@@ -433,7 +492,20 @@ export function GardenSection({
 
     const handleTilePress = () => {
       if (owned > 0) {
-        handleSelect(item.id, owned);
+        Alert.alert(
+          'Find it in inventory',
+          'Open your inventory to ready this decoration for placement.',
+          [
+            {
+              text: 'Go to inventory',
+              onPress: () => handleOpenSheet('inventory'),
+            },
+            {
+              text: 'Close',
+              style: 'cancel',
+            },
+          ]
+        );
         return;
       }
       handlePurchase(item.id);
@@ -482,14 +554,6 @@ export function GardenSection({
             accessibilityLabel={`Buy ${item.name}`}>
             <Text style={[styles.tileActionButtonText, !canAfford && styles.disabledText]}>Buy</Text>
           </Pressable>
-          {owned > 0 ? (
-            <Pressable
-              style={[styles.tileActionButton, styles.tileActionGhost]}
-              onPress={() => handleSelect(item.id, owned)}
-              accessibilityLabel={`Select ${item.name}`}>
-              <Text style={styles.tileActionGhostText}>Select</Text>
-            </Pressable>
-          ) : null}
         </View>
       </View>
     );
@@ -507,6 +571,11 @@ export function GardenSection({
           accessibilityLabel={`${item.name} emoji`}
           accessibilityHint="Select to ready this decoration.">
           <Text style={styles.emojiGlyphLarge}>{item.emoji}</Text>
+          {item.owned > 0 ? (
+            <View style={styles.emojiTileBadge}>
+              <Text style={styles.emojiTileBadgeText}>×{item.owned}</Text>
+            </View>
+          ) : null}
           <Text style={styles.emojiTileLabel} numberOfLines={1}>
             {item.name}
           </Text>
@@ -527,15 +596,16 @@ export function GardenSection({
     <View style={styles.container}>
       <ScrollView
         style={styles.contentScroll}
+        contentInsetAdjustmentBehavior="never"
         contentContainerStyle={[
           styles.contentScrollContent,
           {
-            paddingTop: Math.max(insets.top, 12),
-            paddingBottom: insets.bottom + 48,
+            paddingTop: 0,
+            paddingBottom: contentBottomPadding,
           },
         ]}
         showsVerticalScrollIndicator={false}>
-        <View style={styles.harvestBanner}>
+        <View style={[styles.harvestBanner, { paddingTop: bannerTopPadding }]}>
           <Text style={styles.harvestTitle}>{title}</Text>
           <Text style={styles.harvestAmount}>{harvest.toLocaleString()} harvest ready</Text>
           <Text style={styles.harvestHint}>
@@ -548,17 +618,19 @@ export function GardenSection({
             style={styles.launcherCard}
             onPress={() => handleOpenSheet('shop')}
             accessibilityLabel="Open the Garden shop">
-            <Text style={styles.launcherTitle}>Garden shop</Text>
-            <Text style={styles.launcherCopy}>
+            <Text style={styles.launcherIcon}>🏡</Text>
+            <Text style={styles.launcherHeading}>GardenShop</Text>
+            <Text style={styles.launcherDescription}>
               Discover popular plants, scenery, and accents tailored for storytelling scenes.
             </Text>
           </Pressable>
           <Pressable
-            style={[styles.launcherCard, styles.launcherCardSecondary]}
+            style={styles.launcherCard}
             onPress={() => handleOpenSheet('inventory')}
             accessibilityLabel="Open your inventory">
-            <Text style={[styles.launcherTitle, styles.launcherTitleSecondary]}>Inventory</Text>
-            <Text style={[styles.launcherCopy, styles.launcherCopySecondary]}>
+            <Text style={styles.launcherIcon}>🧰</Text>
+            <Text style={styles.launcherHeading}>Inventory</Text>
+            <Text style={styles.launcherDescription}>
               Ready decorations you have purchased for placement.
             </Text>
           </Pressable>
@@ -571,8 +643,8 @@ export function GardenSection({
                 Ready to place {selectedDetails.emoji} {selectedDetails.name}
               </Text>
               <Text style={styles.selectionStatusCopy}>
-                Tap anywhere on the canvas to drop it. Drag to move, double tap to enlarge, and long
-                press to shrink.
+                Tap anywhere on the canvas to drop it. Drag to move, pinch to resize, twist to rotate,
+                double tap to enlarge, and long press to shrink.
               </Text>
             </>
           ) : (
@@ -587,6 +659,7 @@ export function GardenSection({
 
         <View style={styles.canvasContainer}>
           <Pressable
+            ref={canvasRef}
             style={styles.canvas}
             onPress={handleCanvasPress}
             onTouchStart={handleCanvasTouchStart}
@@ -609,8 +682,8 @@ export function GardenSection({
               <View pointerEvents="none" style={styles.canvasEmptyState}>
                 <Text style={styles.canvasEmptyTitle}>Tap the canvas to begin</Text>
                 <Text style={styles.canvasEmptyCopy}>
-                  Selected emojis will appear where you tap. Adjust them later by dragging, double
-                  tapping, or long pressing.
+                  Selected emojis will appear where you tap. Adjust them later by dragging, pinching,
+                  twisting, double tapping, or long pressing.
                 </Text>
               </View>
             ) : null}
@@ -645,15 +718,18 @@ export function GardenSection({
 
           <View style={styles.canvasActions}>
             <Pressable
-              style={[styles.ghostButton, placements.length === 0 && styles.disabledSecondary]}
-              disabled={placements.length === 0}
+              style={[styles.ghostButton, !canClearGarden && styles.disabledSecondary]}
+              disabled={!canClearGarden}
               onPress={handleClearGarden}>
-              <Text style={[styles.ghostButtonText, placements.length === 0 && styles.disabledText]}>
+              <Text style={[styles.ghostButtonText, !canClearGarden && styles.disabledText]}>
                 Clear Garden
               </Text>
             </Pressable>
-            <Pressable style={styles.primaryButton} onPress={handleSaveSnapshot}>
-              <Text style={styles.primaryText}>Save</Text>
+            <Pressable
+              style={[styles.primaryButton, isSavingSnapshot && styles.primaryButtonDisabled]}
+              onPress={handleSaveSnapshot}
+              disabled={isSavingSnapshot}>
+              <Text style={styles.primaryText}>{isSavingSnapshot ? 'Saving…' : 'Save'}</Text>
             </Pressable>
           </View>
         </View>
@@ -918,18 +994,23 @@ function DraggablePlacement({ emoji, placement, onUpdate }: DraggablePlacementPr
   const panStartX = useSharedValue(placement.x);
   const panStartY = useSharedValue(placement.y);
   const pinchStart = useSharedValue(placement.scale ?? 1);
+  const rotation = useSharedValue(placement.rotation ?? 0);
+  const rotationStart = useSharedValue(placement.rotation ?? 0);
 
   useEffect(() => {
     x.value = placement.x;
     y.value = placement.y;
     scale.value = placement.scale ?? 1;
-  }, [placement.x, placement.y, placement.scale, scale, x, y]);
+    rotation.value = placement.rotation ?? 0;
+  }, [placement.rotation, placement.x, placement.y, placement.scale, rotation, scale, x, y]);
 
   const reportUpdate = () => {
     'worklet';
     const nextScale = Math.min(Math.max(scale.value, MIN_SCALE), MAX_SCALE);
     scale.value = nextScale;
-    runOnJS(onUpdate)({ x: x.value, y: y.value, scale: nextScale });
+    const normalizedRotation = ((rotation.value % 360) + 360) % 360;
+    rotation.value = normalizedRotation;
+    runOnJS(onUpdate)({ x: x.value, y: y.value, scale: nextScale, rotation: normalizedRotation });
   };
 
   const panGesture = Gesture.Pan()
@@ -955,6 +1036,16 @@ function DraggablePlacement({ emoji, placement, onUpdate }: DraggablePlacementPr
     .onEnd(reportUpdate)
     .onFinalize(reportUpdate);
 
+  const rotationGesture = Gesture.Rotation()
+    .onStart(() => {
+      rotationStart.value = rotation.value;
+    })
+    .onChange((event) => {
+      rotation.value = rotationStart.value + (event.rotation * 180) / Math.PI;
+    })
+    .onEnd(reportUpdate)
+    .onFinalize(reportUpdate);
+
   const doubleTapGesture = Gesture.Tap()
     .numberOfTaps(2)
     .onEnd(() => {
@@ -969,15 +1060,22 @@ function DraggablePlacement({ emoji, placement, onUpdate }: DraggablePlacementPr
       reportUpdate();
     });
 
-  const composedGesture = Gesture.Simultaneous(panGesture, pinchGesture, doubleTapGesture, longPressGesture);
+  const composedGesture = Gesture.Simultaneous(
+    panGesture,
+    pinchGesture,
+    rotationGesture,
+    doubleTapGesture,
+    longPressGesture
+  );
 
   const animatedStyle = useAnimatedStyle(() => {
     const clampedScale = Math.min(Math.max(scale.value, MIN_SCALE), MAX_SCALE);
     const halfSize = (EMOJI_SIZE * clampedScale) / 2;
+    const normalizedRotation = ((rotation.value % 360) + 360) % 360;
     return {
       left: x.value - halfSize,
       top: y.value - halfSize,
-      transform: [{ scale: clampedScale }],
+      transform: [{ scale: clampedScale }, { rotate: `${normalizedRotation}deg` }],
     };
   });
 
@@ -1005,9 +1103,10 @@ const styles = StyleSheet.create({
   },
   harvestBanner: {
     backgroundColor: '#22543d',
-    borderRadius: 28,
+    borderRadius: 20,
     paddingHorizontal: 24,
-    paddingVertical: 24,
+    paddingBottom: 24,
+    paddingTop: 24,
     shadowColor: '#000',
     shadowOpacity: 0.1,
     shadowOffset: { width: 0, height: 6 },
@@ -1038,36 +1137,34 @@ const styles = StyleSheet.create({
   },
   launcherCard: {
     flex: 1,
-    backgroundColor: '#22543d',
-    borderRadius: 18,
-    padding: 18,
-    gap: 6,
-    shadowColor: '#0f2e20',
-    shadowOpacity: 0.16,
+    backgroundColor: '#dbeafe',
+    borderRadius: 20,
+    paddingVertical: 20,
+    paddingHorizontal: 18,
+    gap: 10,
+    alignItems: 'center',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.15,
     shadowOffset: { width: 0, height: 8 },
     shadowRadius: 14,
     elevation: 4,
     minWidth: 160,
   },
-  launcherCardSecondary: {
-    backgroundColor: '#e6fffa',
-    shadowColor: '#0f766e',
+  launcherIcon: {
+    fontSize: 44,
+    textAlign: 'center',
   },
-  launcherTitle: {
-    fontSize: 16,
+  launcherHeading: {
+    fontSize: 18,
     fontWeight: '700',
-    color: '#f0fff4',
+    color: '#1f2937',
+    textAlign: 'center',
   },
-  launcherTitleSecondary: {
-    color: '#134e32',
-  },
-  launcherCopy: {
+  launcherDescription: {
     fontSize: 13,
-    lineHeight: 19,
-    color: '#c6f6d5',
-  },
-  launcherCopySecondary: {
-    color: '#2d3748',
+    lineHeight: 18,
+    color: '#1f2937',
+    textAlign: 'center',
   },
   searchRow: {
     flexDirection: 'row',
@@ -1179,13 +1276,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 8,
     right: 8,
-    backgroundColor: 'rgba(15, 118, 110, 0.9)',
+    backgroundColor: '#047857',
     borderRadius: 10,
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
   emojiTileBadgeText: {
-    color: '#ecfdf3',
+    color: '#ffffff',
     fontSize: 11,
     fontWeight: '700',
   },
@@ -1336,6 +1433,9 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 12,
   },
+  primaryButtonDisabled: {
+    backgroundColor: '#94a3b8',
+  },
   primaryText: {
     textAlign: 'center',
     color: '#f0fff4',
@@ -1441,9 +1541,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     marginTop: 8,
+    width: '100%',
+    justifyContent: 'center',
   },
   tileActionButton: {
     flex: 1,
+    width: '100%',
     borderRadius: 12,
     paddingVertical: 10,
     alignItems: 'center',
@@ -1452,15 +1555,6 @@ const styles = StyleSheet.create({
   },
   tileActionButtonText: {
     color: '#f0fff4',
-    fontWeight: '700',
-  },
-  tileActionGhost: {
-    backgroundColor: '#ecfdf3',
-    borderWidth: 1,
-    borderColor: '#22543d',
-  },
-  tileActionGhostText: {
-    color: '#134e32',
     fontWeight: '700',
   },
   sheetCloseButton: {

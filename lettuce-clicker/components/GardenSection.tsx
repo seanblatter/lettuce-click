@@ -802,9 +802,6 @@ export function GardenSection({
             accessibilityLabel="Open the Garden shop">
             <Text style={styles.launcherIcon}>🏡</Text>
             <Text style={styles.launcherHeading}>GardenShop</Text>
-            <Text style={styles.launcherDescription}>
-              Discover popular plants, scenery, and accents tailored for storytelling scenes.
-            </Text>
           </Pressable>
           <Pressable
             style={styles.launcherCard}
@@ -812,9 +809,6 @@ export function GardenSection({
             accessibilityLabel="Open your inventory">
             <Text style={styles.launcherIcon}>🧰</Text>
             <Text style={styles.launcherHeading}>Inventory</Text>
-            <Text style={styles.launcherDescription}>
-              Ready decorations you have purchased for placement.
-            </Text>
           </Pressable>
         </View>
 
@@ -1477,6 +1471,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     gap: 10,
     alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: '#0f172a',
     shadowOpacity: 0.15,
     shadowOffset: { width: 0, height: 8 },
@@ -1491,12 +1486,6 @@ const styles = StyleSheet.create({
   launcherHeading: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1f2937',
-    textAlign: 'center',
-  },
-  launcherDescription: {
-    fontSize: 13,
-    lineHeight: 18,
     color: '#1f2937',
     textAlign: 'center',
   },

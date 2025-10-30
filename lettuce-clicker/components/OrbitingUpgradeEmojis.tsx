@@ -30,25 +30,47 @@ type OrbitingUpgradeEmojisProps = {
   theme?: HomeEmojiTheme;
 };
 
+const resolveBaseTheme = (theme: HomeEmojiTheme): 'circle' | 'spiral' | 'matrix' | 'clear' => {
+  switch (theme) {
+    case 'clear':
+      return 'clear';
+    case 'matrix':
+    case 'confetti':
+      return 'matrix';
+    case 'spiral':
+    case 'wave':
+    case 'echo':
+    case 'aurora':
+    case 'starlight':
+    case 'nebula':
+      return 'spiral';
+    default:
+      return 'circle';
+  }
+};
+
 export function OrbitingUpgradeEmojis({ emojis, radius = DEFAULT_RADIUS, theme = 'circle' }: OrbitingUpgradeEmojisProps) {
-  if (emojis.length === 0 || theme === 'clear') {
+  const baseTheme = resolveBaseTheme(theme);
+
+  if (emojis.length === 0 || baseTheme === 'clear') {
     return null;
   }
 
-  if (theme === 'matrix') {
-    return <MatrixEmojiRain emojis={emojis} radius={radius} />;
+  if (baseTheme === 'matrix') {
+    return <MatrixEmojiRain emojis={emojis} radius={radius} variant={theme} />;
   }
 
-  return <OrbitingRing emojis={emojis} radius={radius} theme={theme} />;
+  return <OrbitingRing emojis={emojis} radius={radius} theme={theme} pattern={baseTheme} />;
 }
 
 type OrbitingRingProps = {
   emojis: OrbitingEmoji[];
   radius: number;
   theme: HomeEmojiTheme;
+  pattern: 'circle' | 'spiral';
 };
 
-function OrbitingRing({ emojis, radius, theme }: OrbitingRingProps) {
+function OrbitingRing({ emojis, radius, theme, pattern }: OrbitingRingProps) {
   const rotation = useRef(new Animated.Value(0)).current;
   const spiralDrift = useRef(new Animated.Value(0)).current;
   const spiralLoopRef = useRef<Animated.CompositeAnimation | null>(null);
@@ -64,7 +86,7 @@ function OrbitingRing({ emojis, radius, theme }: OrbitingRingProps) {
     const loop = Animated.loop(
       Animated.timing(rotation, {
         toValue: 1,
-        duration: theme === 'spiral' ? 16000 : 12000,
+        duration: pattern === 'spiral' ? 16000 : 12000,
         easing: Easing.linear,
         useNativeDriver: true,
       })
@@ -80,7 +102,7 @@ function OrbitingRing({ emojis, radius, theme }: OrbitingRingProps) {
   useEffect(() => {
     spiralLoopRef.current?.stop();
 
-    if (theme !== 'spiral' || emojis.length === 0) {
+    if (pattern !== 'spiral' || emojis.length === 0) {
       spiralDrift.setValue(0);
       return;
     }
@@ -120,14 +142,40 @@ function OrbitingRing({ emojis, radius, theme }: OrbitingRingProps) {
     [rotation]
   );
 
+  const themeEmojiStyle = useMemo(() => {
+    switch (theme) {
+      case 'bubble':
+        return styles.emojiBubble;
+      case 'bubble-pop':
+        return styles.emojiBubblePop;
+      case 'wave':
+      case 'echo':
+        return styles.emojiWave;
+      case 'laser':
+        return styles.emojiLaser;
+      case 'aurora':
+        return styles.emojiAurora;
+      case 'firefly':
+        return styles.emojiFirefly;
+      case 'starlight':
+        return styles.emojiStarlight;
+      case 'nebula':
+        return styles.emojiNebula;
+      case 'supernova':
+        return styles.emojiSupernova;
+      default:
+        return null;
+    }
+  }, [theme]);
+
   const positioned = useMemo(() => {
     if (emojis.length === 0) {
       return [];
     }
 
-    const limit = emojis.slice(0, theme === 'spiral' ? 72 : 48);
+    const limit = emojis.slice(0, pattern === 'spiral' ? 72 : 48);
 
-    if (theme === 'spiral') {
+    if (pattern === 'spiral') {
       const maxPossibleArms = Math.max(1, Math.min(limit.length, SPIRAL_MAX_ARMS));
       const desiredArms = Math.max(SPIRAL_DEFAULT_ARMS, Math.ceil(limit.length / 6));
       const arms = Math.max(1, Math.min(maxPossibleArms, desiredArms));
@@ -160,7 +208,7 @@ function OrbitingRing({ emojis, radius, theme }: OrbitingRingProps) {
       <Animated.View style={[styles.container, { transform: [{ rotate }] }]}>
         {positioned.map(({ id, emoji, angle, distance }) => {
           const translateTransform =
-            theme === 'spiral'
+            pattern === 'spiral'
               ? {
                   translateX: spiralDrift.interpolate({
                     inputRange: [0, 1],
@@ -182,7 +230,7 @@ function OrbitingRing({ emojis, radius, theme }: OrbitingRingProps) {
                   ],
                 },
               ]}>
-              <Text style={[styles.emoji, theme === 'spiral' && styles.emojiSpiral]}>{emoji}</Text>
+              <Text style={[styles.emoji, pattern === 'spiral' && styles.emojiSpiral, themeEmojiStyle]}>{emoji}</Text>
             </Animated.View>
           );
         })}
@@ -198,16 +246,20 @@ type MatrixDrop = {
   loop: Animated.CompositeAnimation;
   left: number;
   column: number;
+  variant: HomeEmojiTheme;
 };
 
 type MatrixEmojiRainProps = {
   emojis: OrbitingEmoji[];
   radius: number;
+  variant: HomeEmojiTheme;
 };
 
-function MatrixEmojiRain({ emojis, radius }: MatrixEmojiRainProps) {
+function MatrixEmojiRain({ emojis, radius, variant }: MatrixEmojiRainProps) {
   const [drops, setDrops] = useState<MatrixDrop[]>([]);
   const dropsRef = useRef<MatrixDrop[]>([]);
+
+  const isConfetti = variant === 'confetti';
 
   useEffect(() => {
     return () => {
@@ -228,13 +280,16 @@ function MatrixEmojiRain({ emojis, radius }: MatrixEmojiRainProps) {
 
         if (existing) {
           retained.add(existing.id);
-          if (existing.left !== targetLeft || existing.column !== column) {
-            next.push({ ...existing, left: targetLeft, column });
+          const needsRefresh =
+            existing.left !== targetLeft || existing.column !== column || existing.variant !== variant;
+          if (needsRefresh) {
+            existing.loop.stop();
+            next.push(createMatrixDrop(emoji.id, column, targetLeft, variant));
           } else {
             next.push(existing);
           }
         } else {
-          next.push(createMatrixDrop(emoji.id, column, targetLeft));
+          next.push(createMatrixDrop(emoji.id, column, targetLeft, variant));
         }
       });
 
@@ -247,7 +302,7 @@ function MatrixEmojiRain({ emojis, radius }: MatrixEmojiRainProps) {
       dropsRef.current = next;
       return next;
     });
-  }, [emojis]);
+  }, [emojis, variant]);
 
   if (drops.length === 0) {
     return null;
@@ -278,6 +333,7 @@ function MatrixEmojiRain({ emojis, radius }: MatrixEmojiRainProps) {
             key={drop.id}
             style={[
               styles.matrixEmoji,
+              isConfetti && styles.matrixEmojiConfetti,
               {
                 transform: [{ translateY: drop.translateY }],
                 left: drop.left,
@@ -291,13 +347,13 @@ function MatrixEmojiRain({ emojis, radius }: MatrixEmojiRainProps) {
   );
 }
 
-function createMatrixDrop(id: string, column: number, left: number): MatrixDrop {
+function createMatrixDrop(id: string, column: number, left: number, variant: HomeEmojiTheme): MatrixDrop {
   const animated = new Animated.Value(0);
-  const duration = getMatrixDuration(column);
+  const duration = getMatrixDuration(column, variant);
 
   const loop = Animated.loop(
     Animated.sequence([
-      Animated.delay(getMatrixDelay(column)),
+      Animated.delay(getMatrixDelay(column, variant)),
       Animated.timing(animated, {
         toValue: 1,
         duration,
@@ -326,6 +382,7 @@ function createMatrixDrop(id: string, column: number, left: number): MatrixDrop 
     loop,
     left,
     column,
+    variant,
   };
 }
 
@@ -334,6 +391,9 @@ const MATRIX_COLUMNS = 7;
 const MATRIX_DURATION_BASE = 2800;
 const MATRIX_DURATION_VARIATION = 1200;
 const MATRIX_DELAY_STEP = 90;
+const CONFETTI_DURATION_BASE = 1800;
+const CONFETTI_DURATION_VARIATION = 900;
+const CONFETTI_DELAY_STEP = 60;
 
 function getMatrixColumn(id: string) {
   let hash = 0;
@@ -358,13 +418,16 @@ function getMatrixLeft(column: number) {
   return MATRIX_PADDING + column * step;
 }
 
-function getMatrixDuration(column: number) {
+function getMatrixDuration(column: number, variant: HomeEmojiTheme) {
   const progress = column / Math.max(1, MATRIX_COLUMNS - 1);
-  return MATRIX_DURATION_BASE + progress * MATRIX_DURATION_VARIATION;
+  const base = variant === 'confetti' ? CONFETTI_DURATION_BASE : MATRIX_DURATION_BASE;
+  const variation = variant === 'confetti' ? CONFETTI_DURATION_VARIATION : MATRIX_DURATION_VARIATION;
+  return base + progress * variation;
 }
 
-function getMatrixDelay(column: number) {
-  return column * MATRIX_DELAY_STEP;
+function getMatrixDelay(column: number, variant: HomeEmojiTheme) {
+  const step = variant === 'confetti' ? CONFETTI_DELAY_STEP : MATRIX_DELAY_STEP;
+  return column * step;
 }
 
 const styles = StyleSheet.create({
@@ -393,6 +456,51 @@ const styles = StyleSheet.create({
   emojiSpiral: {
     fontSize: 22,
   },
+  emojiBubble: {
+    textShadowColor: '#bae6fd',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
+  },
+  emojiBubblePop: {
+    textShadowColor: '#fbbf24',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10,
+  },
+  emojiWave: {
+    textShadowColor: '#38bdf8',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 9,
+  },
+  emojiLaser: {
+    textShadowColor: '#f472b6',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 12,
+  },
+  emojiAurora: {
+    textShadowColor: '#a855f7',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 14,
+  },
+  emojiFirefly: {
+    textShadowColor: '#fde68a',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 12,
+  },
+  emojiStarlight: {
+    textShadowColor: '#c4b5fd',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 11,
+  },
+  emojiNebula: {
+    textShadowColor: '#818cf8',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 13,
+  },
+  emojiSupernova: {
+    textShadowColor: '#fb7185',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 14,
+  },
   matrixWrapper: {
     position: 'absolute',
     alignItems: 'flex-start',
@@ -404,5 +512,11 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(15, 118, 110, 0.6)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 6,
+  },
+  matrixEmojiConfetti: {
+    color: '#f97316',
+    textShadowColor: '#fed7aa',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 8,
   },
 });

@@ -5,7 +5,18 @@ import { UpgradeSection } from '@/components/UpgradeSection';
 import { useGame } from '@/context/GameContext';
 
 export default function UpgradesScreen() {
-  const { harvest, autoPerSecond, upgrades, purchasedUpgrades, purchaseUpgrade } = useGame();
+  const {
+    harvest,
+    autoPerSecond,
+    upgrades,
+    purchasedUpgrades,
+    purchaseUpgrade,
+    emojiThemes,
+    ownedThemes,
+    purchaseEmojiTheme,
+    homeEmojiTheme,
+    setHomeEmojiTheme,
+  } = useGame();
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -21,6 +32,11 @@ export default function UpgradesScreen() {
           upgrades={upgrades}
           purchasedUpgrades={purchasedUpgrades}
           purchaseUpgrade={purchaseUpgrade}
+          emojiThemes={emojiThemes}
+          ownedThemes={ownedThemes}
+          purchaseEmojiTheme={purchaseEmojiTheme}
+          homeEmojiTheme={homeEmojiTheme}
+          setHomeEmojiTheme={setHomeEmojiTheme}
         />
       </ScrollView>
     </SafeAreaView>

@@ -59,6 +59,8 @@ export default function HomeScreen() {
     orbitingUpgradeEmojis,
     homeEmojiTheme,
     setHomeEmojiTheme,
+    emojiThemes,
+    ownedThemes,
     profileName,
     resumeNotice,
     clearResumeNotice,
@@ -119,13 +121,17 @@ export default function HomeScreen() {
     return dailyCountdown;
   }, [dailyCountdown, isDailySpinAvailable]);
   const themeOptions = useMemo(
-    () => [
-      { label: '🔵 Circle', value: 'circle' as HomeEmojiTheme },
-      { label: '🌀 Spiral', value: 'spiral' as HomeEmojiTheme },
-      { label: '🟩 Matrix', value: 'matrix' as HomeEmojiTheme },
-      { label: '🌫️ Clear', value: 'clear' as HomeEmojiTheme },
-    ],
-    []
+    () =>
+      emojiThemes
+        .filter((theme) => ownedThemes[theme.id])
+        .sort((a, b) => {
+          if (a.cost === b.cost) {
+            return a.name.localeCompare(b.name);
+          }
+          return a.cost - b.cost;
+        })
+        .map((theme) => ({ label: `${theme.emoji} ${theme.name}`, value: theme.id })),
+    [emojiThemes, ownedThemes]
   );
   const noticeTitle = useMemo(() => {
     if (!activeNotice) {

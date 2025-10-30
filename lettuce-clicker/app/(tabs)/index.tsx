@@ -28,7 +28,7 @@ export default function HomeScreen() {
   const [activeNotice, setActiveNotice] = useState<typeof resumeNotice>(null);
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const headerPaddingTop = useMemo(() => insets.top + 6, [insets.top]);
+  const headerPaddingTop = useMemo(() => Math.max(insets.top, 4), [insets.top]);
   const friendlyName = useMemo(() => {
     const trimmed = profileName.trim();
     return trimmed.length > 0 ? trimmed : 'Gardener';
@@ -131,7 +131,7 @@ export default function HomeScreen() {
 
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={[styles.content, { paddingTop: 24 }]}
+          contentContainerStyle={[styles.content, { paddingTop: 12 }]}
           showsVerticalScrollIndicator
           alwaysBounceVertical
         >
@@ -268,14 +268,17 @@ const styles = StyleSheet.create({
   },
   headerWrapper: {
     paddingHorizontal: 20,
-    paddingBottom: 18,
+    paddingBottom: 10,
     backgroundColor: '#14532d',
   },
   headerShelf: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 24,
+    backgroundColor: '#14532d',
   },
   headerText: {
     fontSize: 20,

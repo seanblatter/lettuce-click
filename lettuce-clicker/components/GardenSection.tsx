@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import {
   Alert,
+  Animated as RNAnimated,
   FlatList,
   GestureResponderEvent,
+  LayoutChangeEvent,
+  LayoutRectangle,
   ListRenderItem,
   Modal,
+  PanResponder,
+  PanResponderGestureState,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,9 +18,11 @@ import {
   TextInput,
   View,
 } from 'react-native';
+// eslint-disable-next-line import/no-unresolved
 import * as MediaLibrary from 'expo-media-library';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+// eslint-disable-next-line import/no-unresolved
 import { captureRef } from 'react-native-view-shot';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -25,12 +33,14 @@ type Props = {
   harvest: number;
   emojiCatalog: EmojiDefinition[];
   emojiInventory: Record<string, number>;
+  inventoryOrder: string[];
   placements: Placement[];
   purchaseEmoji: (emojiId: string) => boolean;
   placeEmoji: (emojiId: string, position: { x: number; y: number }) => boolean;
   updatePlacement: (placementId: string, updates: Partial<Placement>) => void;
   clearGarden: () => void;
   registerCustomEmoji: (emoji: string) => EmojiDefinition | null;
+  reorderInventory: (order: string[]) => void;
   title?: string;
 };
 
@@ -86,16 +96,28 @@ type EmojiToken = {
   normalized: string;
 };
 
+type DraggedTileState = {
+  id: string;
+  originX: number;
+  originY: number;
+  width: number;
+  height: number;
+};
+
+const INVENTORY_COLUMNS = 3;
+
 export function GardenSection({
   harvest,
   emojiCatalog,
   emojiInventory,
+  inventoryOrder,
   placements,
   purchaseEmoji,
   placeEmoji,
   updatePlacement,
   clearGarden,
   registerCustomEmoji,
+  reorderInventory,
   title = 'Garden Atelier',
 }: Props) {
   const insets = useSafeAreaInsets();
@@ -111,6 +133,10 @@ export function GardenSection({
   const [penHiddenForSave, setPenHiddenForSave] = useState(false);
   const [isSavingSnapshot, setIsSavingSnapshot] = useState(false);
   const [activeCategory, setActiveCategory] = useState<CategoryFilter>('all');
+  const [draggingItem, setDraggingItem] = useState<DraggedTileState | null>(null);
+  const [hoveredTargetId, setHoveredTargetId] = useState<string | null>(null);
+  const draggingValue = useRef(new RNAnimated.ValueXY({ x: 0, y: 0 })).current;
+  const tileLayoutsRef = useRef<Record<string, (LayoutRectangle & { index: number })>>({});
   const canvasRef = useRef<View | null>(null);
 
   const inventoryList = useMemo(
@@ -160,6 +186,39 @@ export function GardenSection({
   );
 
   const ownedInventory = useMemo(() => inventoryList.filter((item) => item.owned > 0), [inventoryList]);
+  const orderedOwnedInventory = useMemo(() => {
+    if (ownedInventory.length === 0) {
+      return [] as InventoryEntry[];
+    }
+
+    const orderIndex = new Map(inventoryOrder.map((id, index) => [id, index]));
+    const ranked = [...ownedInventory];
+
+    ranked.sort((a, b) => {
+      const indexA = orderIndex.get(a.id);
+      const indexB = orderIndex.get(b.id);
+
+      if (indexA !== undefined && indexB !== undefined) {
+        if (indexA !== indexB) {
+          return indexA - indexB;
+        }
+        return 0;
+      }
+
+      if (indexA !== undefined) {
+        return -1;
+      }
+
+      if (indexB !== undefined) {
+        return 1;
+      }
+
+      return 0;
+    });
+
+    return ranked;
+  }, [inventoryOrder, ownedInventory]);
+  const ownedOrderIds = useMemo(() => orderedOwnedInventory.map((item) => item.id), [orderedOwnedInventory]);
   const normalizedFilter = shopFilter.trim().toLowerCase();
   const normalizedFilterEmoji = useMemo(() => stripVariationSelectors(normalizedFilter), [normalizedFilter]);
   const emojiTokens = useMemo<EmojiToken[]>(() => {
@@ -238,14 +297,228 @@ export function GardenSection({
     return filtered;
   }, [inventoryList, matchesCategory, matchesFilter, normalizedEmojiTokens, normalizedFilter]);
   const filteredOwnedInventory = useMemo(() => {
-    const filtered = ownedInventory.filter((item) => matchesCategory(item) && matchesFilter(item));
+    const filtered = orderedOwnedInventory.filter((item) => matchesCategory(item) && matchesFilter(item));
 
-    if (filtered.length === 0 && normalizedFilter && ownedInventory.length > 0) {
-      return ownedInventory.filter((item) => matchesCategory(item));
+    if (filtered.length === 0 && normalizedFilter && orderedOwnedInventory.length > 0) {
+      return orderedOwnedInventory.filter((item) => matchesCategory(item));
     }
 
     return filtered;
-  }, [matchesCategory, matchesFilter, normalizedFilter, ownedInventory]);
+  }, [matchesCategory, matchesFilter, normalizedFilter, orderedOwnedInventory]);
+  useEffect(() => {
+    const active = new Set(orderedOwnedInventory.map((item) => item.id));
+    Object.keys(tileLayoutsRef.current).forEach((id) => {
+      if (!active.has(id)) {
+        delete tileLayoutsRef.current[id];
+      }
+    });
+  }, [orderedOwnedInventory]);
+  const handleTileLayout = useCallback((id: string, index: number, layout: LayoutRectangle) => {
+    tileLayoutsRef.current[id] = { ...layout, index };
+  }, []);
+  const handleBeginDrag = useCallback(
+    (id: string) => {
+      const layout = tileLayoutsRef.current[id];
+
+      if (!layout) {
+        return;
+      }
+
+      draggingValue.stopAnimation();
+      draggingValue.setValue({ x: 0, y: 0 });
+      setDraggingItem({ id, originX: layout.x, originY: layout.y, width: layout.width, height: layout.height });
+      setHoveredTargetId(id);
+    },
+    [draggingValue]
+  );
+  const computeDropTargetIndex = useCallback(
+    (sourceId: string, dx: number, dy: number) => {
+      const layout = tileLayoutsRef.current[sourceId];
+
+      if (!layout || orderedOwnedInventory.length === 0) {
+        return -1;
+      }
+
+      const pointX = layout.x + layout.width / 2 + dx;
+      const pointY = layout.y + layout.height / 2 + dy;
+
+      let closestId = sourceId;
+      let closestIndex = layout.index;
+      let closestDistance = Number.POSITIVE_INFINITY;
+      let closestInside = false;
+
+      Object.entries(tileLayoutsRef.current).forEach(([id, entry]) => {
+        const centerX = entry.x + entry.width / 2;
+        const centerY = entry.y + entry.height / 2;
+        const inside =
+          pointX >= entry.x && pointX <= entry.x + entry.width && pointY >= entry.y && pointY <= entry.y + entry.height;
+        const distance = Math.hypot(pointX - centerX, pointY - centerY);
+
+        if (inside) {
+          if (!closestInside || distance < closestDistance || (distance === closestDistance && entry.index < closestIndex)) {
+            closestInside = true;
+            closestDistance = distance;
+            closestId = id;
+            closestIndex = entry.index;
+          }
+          return;
+        }
+
+        if (closestInside) {
+          return;
+        }
+
+        if (distance < closestDistance || (distance === closestDistance && entry.index < closestIndex)) {
+          closestDistance = distance;
+          closestId = id;
+          closestIndex = entry.index;
+        }
+      });
+
+      let targetIndex = closestIndex;
+
+      if (closestId === sourceId) {
+        const horizontalShift = dx;
+        const verticalShift = dy;
+
+        if (verticalShift > layout.height / 2) {
+          targetIndex = layout.index + INVENTORY_COLUMNS;
+        } else if (verticalShift < -layout.height / 2) {
+          targetIndex = layout.index - INVENTORY_COLUMNS;
+        } else if (horizontalShift > layout.width / 2) {
+          targetIndex = layout.index + 1;
+        } else if (horizontalShift < -layout.width / 2) {
+          targetIndex = layout.index - 1;
+        }
+
+        if (verticalShift > layout.height && layout.index >= orderedOwnedInventory.length - INVENTORY_COLUMNS) {
+          targetIndex = orderedOwnedInventory.length;
+        }
+      } else {
+        const targetLayout = tileLayoutsRef.current[closestId];
+
+        if (targetLayout) {
+          const dropAfter =
+            pointY > targetLayout.y + targetLayout.height / 2 ||
+            (Math.abs(pointY - (targetLayout.y + targetLayout.height / 2)) <= targetLayout.height / 2 &&
+              pointX > targetLayout.x + targetLayout.width / 2);
+
+          if (dropAfter) {
+            targetIndex = closestIndex + 1;
+          }
+        }
+      }
+
+      return Math.max(0, Math.min(targetIndex, orderedOwnedInventory.length));
+    },
+    [orderedOwnedInventory]
+  );
+  const commitReorder = useCallback(
+    (sourceId: string, targetIndex: number) => {
+      if (orderedOwnedInventory.length <= 1) {
+        return;
+      }
+
+      const sourceIndex = ownedOrderIds.indexOf(sourceId);
+
+      if (sourceIndex === -1) {
+        return;
+      }
+
+      const boundedTarget = Math.max(0, Math.min(targetIndex, ownedOrderIds.length));
+
+      if (boundedTarget === sourceIndex || boundedTarget === sourceIndex + 1) {
+        return;
+      }
+
+      const withoutSource = ownedOrderIds.filter((id) => id !== sourceId);
+      let insertionIndex = boundedTarget;
+
+      if (insertionIndex > sourceIndex) {
+        insertionIndex -= 1;
+      }
+
+      if (insertionIndex < 0) {
+        insertionIndex = 0;
+      }
+
+      if (insertionIndex > withoutSource.length) {
+        insertionIndex = withoutSource.length;
+      }
+
+      const nextOrder = [...withoutSource];
+      nextOrder.splice(insertionIndex, 0, sourceId);
+      reorderInventory(nextOrder);
+    },
+    [ownedOrderIds, orderedOwnedInventory.length, reorderInventory]
+  );
+  const handleDragMove = useCallback(
+    (dx: number, dy: number) => {
+      draggingValue.setValue({ x: dx, y: dy });
+
+      if (!draggingItem) {
+        return;
+      }
+
+      const targetIndex = computeDropTargetIndex(draggingItem.id, dx, dy);
+
+      if (targetIndex < 0) {
+        setHoveredTargetId(null);
+        return;
+      }
+
+      if (targetIndex >= orderedOwnedInventory.length) {
+        setHoveredTargetId(null);
+        return;
+      }
+
+      const targetId = orderedOwnedInventory[targetIndex]?.id ?? null;
+      setHoveredTargetId(targetId);
+    },
+    [computeDropTargetIndex, draggingItem, draggingValue, orderedOwnedInventory]
+  );
+  const handleDragRelease = useCallback(
+    (dx: number, dy: number, cancelled: boolean) => {
+      const current = draggingItem;
+
+      if (!current) {
+        return;
+      }
+
+      const targetIndex = computeDropTargetIndex(current.id, dx, dy);
+
+      RNAnimated.spring(draggingValue, {
+        toValue: { x: 0, y: 0 },
+        useNativeDriver: false,
+        bounciness: 6,
+      }).start(() => {
+        setDraggingItem(null);
+        setHoveredTargetId(null);
+      });
+
+      if (!cancelled && targetIndex >= 0) {
+        commitReorder(current.id, targetIndex);
+      }
+    },
+    [commitReorder, computeDropTargetIndex, draggingItem, draggingValue]
+  );
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: () => Boolean(draggingItem),
+        onPanResponderMove: (_, gestureState: PanResponderGestureState) => {
+          handleDragMove(gestureState.dx, gestureState.dy);
+        },
+        onPanResponderRelease: (_, gestureState: PanResponderGestureState) => {
+          handleDragRelease(gestureState.dx, gestureState.dy, false);
+        },
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderTerminate: (_, gestureState: PanResponderGestureState) => {
+          handleDragRelease(gestureState.dx, gestureState.dy, true);
+        },
+      }),
+    [draggingItem, handleDragMove, handleDragRelease]
+  );
   const selectedDetails = useMemo(
     () => inventoryList.find((item) => item.id === selectedEmoji) ?? null,
     [inventoryList, selectedEmoji]
@@ -303,6 +576,11 @@ export function GardenSection({
     }
   };
 
+  const handleClearDrawings = useCallback(() => {
+    setStrokes([]);
+    setCurrentStroke(null);
+  }, []);
+
   const handleClearGarden = useCallback(() => {
     if (placements.length > 0) {
       clearGarden();
@@ -342,18 +620,13 @@ export function GardenSection({
     }
   }, [canvasRef, isSavingSnapshot]);
 
-  const handleClearDrawings = useCallback(() => {
-    setStrokes([]);
-    setCurrentStroke(null);
-  }, []);
-
   const renderStrokeSegments = useCallback(
     (stroke: Stroke, prefix: string) => {
       if (stroke.points.length === 0) {
-        return [] as JSX.Element[];
+        return [] as ReactNode[];
       }
 
-      const segments: JSX.Element[] = [];
+      const segments: ReactNode[] = [];
       const firstPoint = stroke.points[0];
       segments.push(
         <View
@@ -576,17 +849,56 @@ export function GardenSection({
     );
   };
 
-  const renderInventoryItem: ListRenderItem<InventoryEntry> = ({ item }) => {
+  const canReorderAllFavorites = activeCategory === 'all' && normalizedFilter.length === 0;
+  const renderInventoryItem: ListRenderItem<InventoryEntry> = ({ item, index }) => {
     const isSelected = selectedEmoji === item.id;
+    const isDragging = draggingItem?.id === item.id;
+    const isDropTarget = hoveredTargetId === item.id && draggingItem?.id !== item.id;
     const categoryLabel = CATEGORY_LABELS[item.category];
 
+    const handlePress = () => {
+      if (draggingItem) {
+        return;
+      }
+      handleSelect(item.id, item.owned);
+    };
+
+    const handleLongPress = () => {
+      if (!canReorderAllFavorites || orderedOwnedInventory.length <= 1) {
+        return;
+      }
+      handleBeginDrag(item.id);
+    };
+
+    const animatedStyle = isDragging ? { transform: draggingValue.getTranslateTransform() } : undefined;
+    const panHandlers = isDragging ? panResponder.panHandlers : undefined;
+
     return (
-      <View style={styles.sheetTileWrapper}>
+      <RNAnimated.View
+        style={[
+          styles.sheetTileWrapper,
+          canReorderAllFavorites && styles.sheetTileWrapperReorderable,
+          isDragging && styles.sheetTileWrapperDragging,
+          animatedStyle,
+        ]}
+        onLayout={(event: LayoutChangeEvent) => handleTileLayout(item.id, index, event.nativeEvent.layout)}
+        {...(panHandlers ?? {})}
+      >
         <Pressable
-          style={[styles.emojiTile, isSelected && styles.emojiTileSelected]}
-          onPress={() => handleSelect(item.id, item.owned)}
+          style={[
+            styles.emojiTile,
+            isSelected && styles.emojiTileSelected,
+            canReorderAllFavorites && styles.emojiTileReorderable,
+            isDragging && styles.emojiTileDragging,
+            isDropTarget && styles.emojiTileDropTarget,
+          ]}
+          onPress={handlePress}
+          onLongPress={handleLongPress}
+          delayLongPress={200}
+          disabled={draggingItem !== null && draggingItem.id !== item.id}
           accessibilityLabel={`${item.name} emoji`}
-          accessibilityHint="Select to ready this decoration.">
+          accessibilityHint="Select to ready this decoration."
+        >
           <Text style={styles.emojiGlyphLarge}>{item.emoji}</Text>
           {item.owned > 0 ? (
             <View style={styles.emojiTileBadge}>
@@ -605,7 +917,7 @@ export function GardenSection({
             </Text>
           </View>
         </Pressable>
-      </View>
+      </RNAnimated.View>
     );
   };
 
@@ -684,7 +996,7 @@ export function GardenSection({
             onTouchEnd={handleCanvasTouchEnd}
             onTouchCancel={handleCanvasTouchEnd}>
             <View pointerEvents="none" style={styles.drawingSurface}>
-              {strokes.reduce<JSX.Element[]>((acc, stroke) => {
+              {strokes.reduce<ReactNode[]>((acc, stroke) => {
                 acc.push(...renderStrokeSegments(stroke, stroke.id));
                 return acc;
               }, [])}
@@ -967,14 +1279,19 @@ export function GardenSection({
                 })}
               </ScrollView>
             </View>
+            {canReorderAllFavorites ? (
+              <Text style={styles.reorderHint}>Long-press a favorite to drag it into a new position.</Text>
+            ) : null}
             <FlatList
-              data={filteredOwnedInventory}
+              data={canReorderAllFavorites ? orderedOwnedInventory : filteredOwnedInventory}
               renderItem={renderInventoryItem}
               keyExtractor={keyExtractor}
               numColumns={3}
               columnWrapperStyle={styles.sheetColumn}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.sheetListContent}
+              scrollEnabled={!draggingItem}
+              extraData={{ hoveredTargetId, draggingId: draggingItem?.id }}
               ListEmptyComponent={
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyStateTitle}>Inventory is empty</Text>
@@ -1246,6 +1563,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     elevation: 2,
   },
+  emojiTileReorderable: {
+    borderStyle: 'solid',
+  },
   emojiTileSelected: {
     borderColor: '#166534',
     backgroundColor: '#dcfce7',
@@ -1257,6 +1577,14 @@ const styles = StyleSheet.create({
   },
   emojiTileDisabled: {
     opacity: 0.55,
+  },
+  emojiTileDragging: {
+    opacity: 0.85,
+    borderColor: '#0ea5e9',
+  },
+  emojiTileDropTarget: {
+    borderColor: '#0ea5e9',
+    backgroundColor: '#e0f2fe',
   },
   emojiGlyphLarge: {
     fontSize: 34,
@@ -1518,6 +1846,13 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     paddingHorizontal: 4,
   },
+  reorderHint: {
+    marginTop: 8,
+    marginBottom: 4,
+    textAlign: 'center',
+    fontSize: 12,
+    color: '#0f766e',
+  },
   categoryFilterBlock: {
     marginTop: 4,
   },
@@ -1553,6 +1888,13 @@ const styles = StyleSheet.create({
   sheetTileWrapper: {
     flex: 1,
     paddingHorizontal: 4,
+  },
+  sheetTileWrapperReorderable: {
+    position: 'relative',
+  },
+  sheetTileWrapperDragging: {
+    zIndex: 20,
+    elevation: 8,
   },
   tileActionRow: {
     flexDirection: 'row',

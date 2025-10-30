@@ -5,17 +5,17 @@ import type { HomeEmojiTheme, OrbitingEmoji } from '@/context/GameContext';
 
 const FULL_ROTATION_RADIANS = Math.PI * 2;
 const DEFAULT_RADIUS = 120;
-const SPIRAL_STEP = 14;
+const SPIRAL_STEP = 12;
 const SPIRAL_BASE_RADIUS_RATIO = 0.35;
 const SPIRAL_DEFAULT_ARMS = 4;
 const SPIRAL_MAX_ARMS = 6;
 const SPIRAL_ANGLE_STEP = Math.PI / 24;
-const MATRIX_MAX_EMOJIS = 28;
+const MATRIX_MAX_EMOJIS = 18;
 
 const WINDOW = Dimensions.get('window');
 const WINDOW_WIDTH = WINDOW.width;
 const WINDOW_HEIGHT = WINDOW.height;
-const MATRIX_EXTRA_SPREAD = 180;
+const MATRIX_EXTRA_SPREAD = 160;
 const MATRIX_WIDTH = WINDOW_WIDTH + MATRIX_EXTRA_SPREAD;
 const MATRIX_HEIGHT = WINDOW_HEIGHT * 1.6;
 const MATRIX_START_Y = -WINDOW_HEIGHT * 0.6;
@@ -46,23 +46,8 @@ type OrbitingRingProps = {
   theme: HomeEmojiTheme;
 };
 
-type PositionedEmoji = OrbitingEmoji & {
-  angle: number;
-  distance: number;
-  driftDirection?: number;
-  driftScale?: number;
-  baseDistance?: Animated.Value;
-};
-
-type OrbitingSpriteProps = {
-  item: PositionedEmoji;
-  theme: HomeEmojiTheme;
-  spiralDrift: Animated.Value;
-};
-
 function OrbitingRing({ emojis, radius, theme }: OrbitingRingProps) {
   const rotation = useRef(new Animated.Value(0)).current;
-  const spiralDrift = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     rotation.stopAnimation();
@@ -88,38 +73,6 @@ function OrbitingRing({ emojis, radius, theme }: OrbitingRingProps) {
     };
   }, [emojis.length, rotation, theme]);
 
-  useEffect(() => {
-    spiralDrift.stopAnimation();
-    spiralDrift.setValue(0);
-
-    if (theme !== 'spiral' || emojis.length === 0) {
-      return;
-    }
-
-    const driftLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(spiralDrift, {
-          toValue: 1,
-          duration: 16000,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(spiralDrift, {
-          toValue: -1,
-          duration: 16000,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-      ])
-    );
-
-    driftLoop.start();
-
-    return () => {
-      driftLoop.stop();
-    };
-  }, [emojis.length, spiralDrift, theme]);
-
   const rotate = useMemo(
     () =>
       rotation.interpolate({
@@ -129,7 +82,7 @@ function OrbitingRing({ emojis, radius, theme }: OrbitingRingProps) {
     [rotation]
   );
 
-  const positioned = useMemo<PositionedEmoji[]>(() => {
+  const positioned = useMemo(() => {
     if (emojis.length === 0) {
       return [];
     }
@@ -150,17 +103,7 @@ function OrbitingRing({ emojis, radius, theme }: OrbitingRingProps) {
         const angle =
           (FULL_ROTATION_RADIANS / arms) * armIndex + stepIndex * SPIRAL_ANGLE_STEP;
 
-        const driftDirection = index % 2 === 0 ? 1 : -1;
-        const driftScale = SPIRAL_STEP * 0.9 + stepIndex * 4;
-
-        return {
-          ...item,
-          angle,
-          distance,
-          driftDirection,
-          driftScale,
-          baseDistance: new Animated.Value(distance),
-        };
+        return { ...item, angle, distance };
       });
     }
 
@@ -177,46 +120,24 @@ function OrbitingRing({ emojis, radius, theme }: OrbitingRingProps) {
   return (
     <View pointerEvents="none" style={styles.wrapper}>
       <Animated.View style={[styles.container, { transform: [{ rotate }] }]}>
-        {positioned.map((item) => (
-          <OrbitingSprite key={item.id} item={item} theme={theme} spiralDrift={spiralDrift} />
+        {positioned.map(({ id, emoji, angle, distance }) => (
+          <Animated.View
+            key={id}
+            style={[
+              styles.emojiWrapper,
+              {
+                transform: [
+                  { rotate: `${angle}rad` },
+                  { translateX: distance },
+                  { rotate: `${-angle}rad` },
+                ],
+              },
+            ]}>
+            <Text style={[styles.emoji, theme === 'spiral' && styles.emojiSpiral]}>{emoji}</Text>
+          </Animated.View>
         ))}
       </Animated.View>
     </View>
-  );
-}
-
-function OrbitingSprite(props: OrbitingSpriteProps) {
-  const { item, theme, spiralDrift } = props;
-  const { emoji, angle, distance } = item;
-  const direction = typeof item.driftDirection === 'number' ? item.driftDirection : 1;
-  const scale = typeof item.driftScale === 'number' ? item.driftScale : SPIRAL_STEP;
-  const baseDistanceValue =
-    item.baseDistance !== undefined ? item.baseDistance : new Animated.Value(distance);
-
-  let translateXValue: number | Animated.AnimatedInterpolation<string | number> = distance;
-
-  if (theme === 'spiral') {
-    const drift = Animated.multiply(spiralDrift, direction * scale);
-    translateXValue = Animated.add(
-      baseDistanceValue,
-      drift
-    ) as Animated.AnimatedInterpolation<string | number>;
-  }
-
-  return (
-    <Animated.View
-      style={[
-        styles.emojiWrapper,
-        {
-          transform: [
-            { rotate: `${angle}rad` },
-            { translateX: translateXValue },
-            { rotate: `${-angle}rad` },
-          ],
-        },
-      ]}>
-      <Text style={[styles.emoji, theme === 'spiral' && styles.emojiSpiral]}>{emoji}</Text>
-    </Animated.View>
   );
 }
 
@@ -359,10 +280,10 @@ function createMatrixDrop(id: string, column: number, left: number): MatrixDrop 
 }
 
 const MATRIX_PADDING = 32;
-const MATRIX_COLUMNS: number = 8;
-const MATRIX_DURATION_BASE = 2800;
-const MATRIX_DURATION_VARIATION = 900;
-const MATRIX_DELAY_STEP = 110;
+const MATRIX_COLUMNS = 6;
+const MATRIX_DURATION_BASE = 4200;
+const MATRIX_DURATION_VARIATION = 1400;
+const MATRIX_DELAY_STEP = 160;
 
 function getMatrixColumn(id: string) {
   let hash = 0;

@@ -10,11 +10,75 @@ const CATEGORY_COST_MULTIPLIER: Record<EmojiCategory, number> = {
 
 const COST_ROUNDING_INCREMENT = 5;
 
+const clampCost = (value: number) => {
+  if (!Number.isFinite(value)) {
+    return 1000;
+  }
+
+  const rounded = Math.round(value);
+  return Math.max(1000, Math.min(100000, rounded));
+};
+
+const hashString = (value: string) => {
+  let hash = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const charCode = value.charCodeAt(index);
+    hash = (hash << 5) - hash + charCode;
+    hash |= 0;
+  }
+
+  return hash >>> 0;
+};
+
+const mulberry32 = (seed: number) => {
+  let state = seed >>> 0;
+
+  return () => {
+    state = (state + 0x6d2b79f5) | 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+};
+
+const generateGaussianSample = (random: () => number) => {
+  let u = 0;
+  let v = 0;
+
+  while (u === 0) {
+    u = random();
+  }
+
+  while (v === 0) {
+    v = random();
+  }
+
+  const magnitude = Math.sqrt(-2.0 * Math.log(u));
+  const angle = 2.0 * Math.PI * v;
+  return magnitude * Math.cos(angle);
+};
+
+const generateGaussianCost = (id: string, fallback: number) => {
+  const seed = hashString(id) || hashString(`${id}-fallback`);
+  const random = mulberry32(seed);
+  const gaussian = generateGaussianSample(random);
+  const mean = 42000;
+  const standardDeviation = 18000;
+  const estimate = mean + gaussian * standardDeviation;
+
+  if (!Number.isFinite(estimate)) {
+    return clampCost(fallback || mean);
+  }
+
+  return clampCost(estimate);
+};
+
 const adjustCostForCategory = (cost: number, category: EmojiCategory) => {
   const multiplier = CATEGORY_COST_MULTIPLIER[category] ?? 1.4;
   const adjusted = cost * multiplier;
   const rounded = Math.ceil(adjusted / COST_ROUNDING_INCREMENT) * COST_ROUNDING_INCREMENT;
-  return Math.max(rounded, cost + COST_ROUNDING_INCREMENT);
+  return clampCost(rounded);
 };
 
 const createEmoji = (
@@ -36,7 +100,10 @@ const createEmoji = (
     id: definition.id,
     emoji: definition.emoji,
     name: definition.name,
-    cost: adjustCostForCategory(definition.cost, definition.category),
+    cost: adjustCostForCategory(
+      generateGaussianCost(definition.id, definition.cost),
+      definition.category
+    ),
     category: definition.category,
     tags: Array.from(new Set(normalizedTags)),
     popularity: definition.popularity,

@@ -12,19 +12,7 @@ import React, {
 import { gardenEmojiCatalog } from '@/constants/emojiCatalog';
 import { AppState, AppStateStatus } from 'react-native';
 
-export type HomeEmojiTheme =
-  | 'circle'
-  | 'spiral'
-  | 'matrix'
-  | 'clear'
-  | 'bubble'
-  | 'bubble-pop'
-  | 'wave'
-  | 'echo'
-  | 'confetti'
-  | 'laser'
-  | 'aurora'
-  | 'firefly';
+export type HomeEmojiTheme = 'circle' | 'spiral' | 'matrix' | 'clear';
 
 export type UpgradeDefinition = {
   id: string;
@@ -33,16 +21,6 @@ export type UpgradeDefinition = {
   cost: number;
   increment: number;
   emoji: string;
-};
-
-export type ThemeDefinition = {
-  id: HomeEmojiTheme;
-  name: string;
-  description: string;
-  cost: number;
-  emoji: string;
-  previewEmojis: string[];
-  isStarter?: boolean;
 };
 
 export type EmojiCategory = 'plants' | 'scenery' | 'creatures' | 'features' | 'accents';
@@ -93,8 +71,6 @@ type GameContextValue = {
   upgrades: UpgradeDefinition[];
   purchasedUpgrades: Record<string, number>;
   orbitingUpgradeEmojis: OrbitingEmoji[];
-  themes: ThemeDefinition[];
-  purchasedThemes: Record<HomeEmojiTheme, boolean>;
   emojiCatalog: EmojiDefinition[];
   emojiInventory: Record<string, number>;
   placements: Placement[];
@@ -120,7 +96,6 @@ type GameContextValue = {
   setProfileUsername: (value: string) => void;
   setProfileImageUri: (uri: string | null) => void;
   setHomeEmojiTheme: (theme: HomeEmojiTheme) => void;
-  purchaseTheme: (themeId: HomeEmojiTheme) => boolean;
   purchasePremiumUpgrade: () => void;
   setPremiumAccentColor: (color: string) => void;
   setCustomClickEmoji: (emoji: string) => void;
@@ -255,117 +230,6 @@ const upgradeCatalog: UpgradeDefinition[] = [
   },
 ];
 
-const themeCatalog: ThemeDefinition[] = [
-  {
-    id: 'circle',
-    name: 'Circle Orbit',
-    description: 'A classic halo of emojis revolving around your garden centerpiece.',
-    cost: 0,
-    emoji: '🔵',
-    previewEmojis: ['🌿', '🌸', '🦋', '🍃'],
-    isStarter: true,
-  },
-  {
-    id: 'spiral',
-    name: 'Spiral Bloom',
-    description: 'Layered spirals unfurl with gentle motion and bloom-like depth.',
-    cost: 0,
-    emoji: '🌀',
-    previewEmojis: ['🌺', '🌙', '🪻', '🍀'],
-    isStarter: true,
-  },
-  {
-    id: 'matrix',
-    name: 'Matrix Drift',
-    description: 'Emoji rain cascades down like a luminous greenhouse waterfall.',
-    cost: 0,
-    emoji: '🟩',
-    previewEmojis: ['🌱', '🌾', '🍄', '🪴'],
-    isStarter: true,
-  },
-  {
-    id: 'clear',
-    name: 'Clear Skies',
-    description: 'Strip things back to highlight your garden without orbiting accents.',
-    cost: 0,
-    emoji: '🌫️',
-    previewEmojis: ['✨', '🌤️', '☁️', '🌿'],
-    isStarter: true,
-  },
-  {
-    id: 'bubble',
-    name: 'Bubble Drift',
-    description: 'Bubbly clusters ebb and flow with a soft, floating pulse.',
-    cost: 3500,
-    emoji: '🫧',
-    previewEmojis: ['🫧', '🌟', '🪷', '💧'],
-  },
-  {
-    id: 'bubble-pop',
-    name: 'Popped Bubbles',
-    description: 'Playful bursts pop in and out with lively spacing and bounce.',
-    cost: 5600,
-    emoji: '🎈',
-    previewEmojis: ['🎈', '💥', '🫧', '🌈'],
-  },
-  {
-    id: 'wave',
-    name: 'Wave Chorus',
-    description: 'Rippled bands sweep across the screen in soothing tides.',
-    cost: 7200,
-    emoji: '🌊',
-    previewEmojis: ['🌊', '🐚', '💠', '🪼'],
-  },
-  {
-    id: 'echo',
-    name: 'Echo Rings',
-    description: 'Concentric echoes shimmer outward with layered trails.',
-    cost: 9100,
-    emoji: '📡',
-    previewEmojis: ['📡', '🔔', '✨', '🌀'],
-  },
-  {
-    id: 'confetti',
-    name: 'Confetti Burst',
-    description: 'Celebratory cascades scatter emojis like festival confetti.',
-    cost: 12800,
-    emoji: '🎊',
-    previewEmojis: ['🎊', '🎉', '🎈', '⭐'],
-  },
-  {
-    id: 'laser',
-    name: 'Laser Sweep',
-    description: 'A neon sweep streaks across with precise, rhythmic beams.',
-    cost: 17400,
-    emoji: '🔺',
-    previewEmojis: ['🔺', '🔻', '✨', '🌌'],
-  },
-  {
-    id: 'aurora',
-    name: 'Aurora Veil',
-    description: 'Curtains of light glide upward like a midnight aurora.',
-    cost: 19600,
-    emoji: '🌌',
-    previewEmojis: ['🌌', '✨', '🌠', '🌙'],
-  },
-  {
-    id: 'firefly',
-    name: 'Firefly Lanterns',
-    description: 'Fireflies flicker in gentle swarms around your garden.',
-    cost: 21400,
-    emoji: '🪲',
-    previewEmojis: ['🪲', '✨', '🌟', '🕯️'],
-  },
-];
-
-const starterThemeDefaults: Record<HomeEmojiTheme, boolean> = themeCatalog.reduce(
-  (acc, theme) => {
-    acc[theme.id] = Boolean(theme.isStarter);
-    return acc;
-  },
-  {} as Record<HomeEmojiTheme, boolean>
-);
-
 export type OrbitingEmoji = {
   id: string;
   emoji: string;
@@ -375,7 +239,6 @@ type StoredGameState = {
   harvest: number;
   lifetimeHarvest: number;
   purchasedUpgrades: Record<string, number>;
-  purchasedThemes?: Record<HomeEmojiTheme, boolean>;
   emojiInventory: Record<string, number>;
   placements: Placement[];
   orbitingUpgradeEmojis: OrbitingEmoji[];
@@ -394,16 +257,13 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [tapValue, setTapValue] = useState(1);
   const [autoPerSecond, setAutoPerSecond] = useState(0);
   const [purchasedUpgrades, setPurchasedUpgrades] = useState<Record<string, number>>({});
-  const [purchasedThemes, setPurchasedThemes] = useState<Record<HomeEmojiTheme, boolean>>(
-    () => ({ ...starterThemeDefaults })
-  );
   const [orbitingUpgradeEmojis, setOrbitingUpgradeEmojis] = useState<OrbitingEmoji[]>([]);
   const [emojiInventory, setEmojiInventory] = useState<Record<string, number>>({});
   const [placements, setPlacements] = useState<Placement[]>([]);
   const [profileName, setProfileName] = useState('');
   const [profileUsername, setProfileUsername] = useState('');
   const [profileImageUri, setProfileImageUri] = useState<string | null>(null);
-  const [homeEmojiTheme, setHomeEmojiThemeState] = useState<HomeEmojiTheme>('circle');
+  const [homeEmojiTheme, setHomeEmojiTheme] = useState<HomeEmojiTheme>('circle');
   const [resumeNotice, setResumeNotice] = useState<PassiveResumeNotice | null>(null);
   const [customEmojiCatalog, setCustomEmojiCatalog] = useState<Record<string, EmojiDefinition>>({});
   const [hasPremiumUpgrade, setHasPremiumUpgrade] = useState(false);
@@ -426,7 +286,6 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const profileLifetimeTotalRef = useRef(profileLifetimeTotal);
   const tapValueRef = useRef(tapValue);
   const autoPerSecondRef = useRef(autoPerSecond);
-  const purchasedThemesRef = useRef<Record<HomeEmojiTheme, boolean>>({ ...starterThemeDefaults });
   const VARIATION_SELECTOR_REGEX = /[\uFE0E\uFE0F]/g;
 
   const stripVariationSelectors = useCallback(
@@ -680,45 +539,6 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
 
   const spendHarvestAmount = useCallback((amount: number) => spendHarvest(amount), [spendHarvest]);
 
-  const setHomeEmojiTheme = useCallback(
-    (theme: HomeEmojiTheme) => {
-      if (!purchasedThemesRef.current[theme]) {
-        return;
-      }
-
-      setHomeEmojiThemeState(theme);
-    },
-    []
-  );
-
-  const purchaseTheme = useCallback(
-    (themeId: HomeEmojiTheme) => {
-      const theme = themeCatalog.find((item) => item.id === themeId);
-
-      if (!theme) {
-        return false;
-      }
-
-      if (purchasedThemesRef.current[themeId]) {
-        setHomeEmojiThemeState(themeId);
-        return true;
-      }
-
-      if (!spendHarvest(theme.cost)) {
-        return false;
-      }
-
-      setPurchasedThemes((prev) => {
-        const updated = { ...prev, [themeId]: true };
-        purchasedThemesRef.current = updated;
-        return updated;
-      });
-      setHomeEmojiThemeState(themeId);
-      return true;
-    },
-    [spendHarvest]
-  );
-
   const purchasePremiumUpgrade = useCallback(() => {
     setHasPremiumUpgrade(true);
   }, []);
@@ -864,8 +684,6 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     upgrades: upgradeCatalog,
     purchasedUpgrades,
     orbitingUpgradeEmojis,
-    themes: themeCatalog,
-    purchasedThemes,
     emojiCatalog: combinedEmojiCatalog,
     emojiInventory,
     placements,
@@ -891,7 +709,6 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     setProfileUsername,
     setProfileImageUri,
     setHomeEmojiTheme,
-    purchaseTheme,
     purchasePremiumUpgrade,
     setPremiumAccentColor,
     setCustomClickEmoji,
@@ -903,7 +720,6 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     tapValue,
     autoPerSecond,
     purchasedUpgrades,
-    purchasedThemes,
     orbitingUpgradeEmojis,
     emojiInventory,
     placements,
@@ -919,15 +735,10 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     registerCustomEmoji,
     addHarvestAmount,
     spendHarvestAmount,
-    purchaseTheme,
     purchasePremiumUpgrade,
     setPremiumAccentColor,
     setCustomClickEmoji,
   ]);
-
-  useEffect(() => {
-    purchasedThemesRef.current = purchasedThemes;
-  }, [purchasedThemes]);
 
   useEffect(() => {
     if (initialisedRef.current) {
@@ -954,9 +765,13 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         }
 
         if (themeEntry[1]) {
-          const storedTheme = themeEntry[1] as HomeEmojiTheme;
-          if (themeCatalog.some((theme) => theme.id === storedTheme)) {
-            setHomeEmojiThemeState(storedTheme);
+          if (
+            themeEntry[1] === 'circle' ||
+            themeEntry[1] === 'spiral' ||
+            themeEntry[1] === 'matrix' ||
+            themeEntry[1] === 'clear'
+          ) {
+            setHomeEmojiTheme(themeEntry[1]);
           }
         }
 
@@ -993,17 +808,6 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
               setPurchasedUpgrades({});
               setAutoPerSecond(0);
               loadedAutoPerSecond = 0;
-            }
-            if (!shouldResetSession && parsed.purchasedThemes && typeof parsed.purchasedThemes === 'object') {
-              const mergedThemes: Record<HomeEmojiTheme, boolean> = {
-                ...starterThemeDefaults,
-                ...parsed.purchasedThemes,
-              };
-              setPurchasedThemes(mergedThemes);
-              purchasedThemesRef.current = mergedThemes;
-            } else if (shouldResetSession) {
-              setPurchasedThemes({ ...starterThemeDefaults });
-              purchasedThemesRef.current = { ...starterThemeDefaults };
             }
             if (!shouldResetSession && parsed.emojiInventory && typeof parsed.emojiInventory === 'object') {
               setEmojiInventory(parsed.emojiInventory);
@@ -1106,7 +910,6 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       harvest,
       lifetimeHarvest,
       purchasedUpgrades,
-      purchasedThemes,
       emojiInventory,
       placements,
       orbitingUpgradeEmojis,
@@ -1126,7 +929,6 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     harvest,
     hasPremiumUpgrade,
     lifetimeHarvest,
-    purchasedThemes,
     orbitingUpgradeEmojis,
     placements,
     premiumAccentColor,

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type {
@@ -56,128 +56,223 @@ export function UpgradeSection({
     [emojiThemes]
   );
 
+  const [activeWorkshop, setActiveWorkshop] = useState<'automation' | 'themes'>('automation');
+
+  const ownedThemeCount = useMemo(
+    () => sortedThemes.filter((theme) => ownedThemes[theme.id]).length,
+    [ownedThemes, sortedThemes]
+  );
+
+  const lockedThemes = useMemo(
+    () => sortedThemes.filter((theme) => !ownedThemes[theme.id]),
+    [ownedThemes, sortedThemes]
+  );
+
+  const nextThemeCost = lockedThemes.find((theme) => theme.cost > 0)?.cost ?? null;
+  const themeToggleHint = lockedThemes.length
+    ? nextThemeCost
+      ? `Next unlock ${nextThemeCost.toLocaleString()} harvest`
+      : 'Free unlock ready'
+    : 'Showcase every orbit style you own';
+  const activeTheme = useMemo(
+    () => sortedThemes.find((theme) => theme.id === homeEmojiTheme) ?? null,
+    [homeEmojiTheme, sortedThemes]
+  );
+
   return (
     <View style={styles.section}>
-      <View style={styles.bannerCard}>
-        <Text style={styles.bannerTitle}>{title}</Text>
-        <Text style={styles.bannerHarvest}>{harvest.toLocaleString()} harvest on hand</Text>
-        <Text style={styles.bannerHint}>
-          Invest your harvest to expand automation and unlock fresh emoji atmospheres.
-        </Text>
-        <View style={styles.bannerStatsRow}>
-          <View style={styles.bannerStat}>
-            <Text style={styles.bannerStatLabel}>Auto clicks /s</Text>
-            <Text style={styles.bannerStatValue}>{autoPerSecond.toLocaleString()}</Text>
-          </View>
-          <View style={styles.bannerStatDivider} />
-          <View style={styles.bannerStat}>
-            <Text style={styles.bannerStatLabel}>Upgrades owned</Text>
-            <Text style={styles.bannerStatValue}>{ownedUpgradeCount.toLocaleString()}</Text>
+      <View style={styles.heroCard}>
+        <View style={styles.heroBackdrop}>
+          <View style={[styles.heroBubble, styles.heroBubbleOne]} />
+          <View style={[styles.heroBubble, styles.heroBubbleTwo]} />
+          <View style={[styles.heroBubble, styles.heroBubbleThree]} />
+        </View>
+        <View style={styles.heroContent}>
+          <Text style={styles.heroOverline}>Workshop Pavilion</Text>
+          <Text style={styles.heroTitle}>{title}</Text>
+          <Text style={styles.heroHarvest}>{harvest.toLocaleString()} harvest on hand</Text>
+          <Text style={styles.heroHint}>
+            Invest your harvest to expand automation, then bring fresh ambience to your garden centerpiece.
+          </Text>
+          <View style={styles.heroStatsRow}>
+            <View style={styles.heroStat}>
+              <Text style={styles.heroStatLabel}>Auto clicks /s</Text>
+              <Text style={styles.heroStatValue}>{autoPerSecond.toLocaleString()}</Text>
+            </View>
+            <View style={styles.heroDivider} />
+            <View style={styles.heroStat}>
+              <Text style={styles.heroStatLabel}>Upgrades owned</Text>
+              <Text style={styles.heroStatValue}>{ownedUpgradeCount.toLocaleString()}</Text>
+            </View>
+            <View style={styles.heroDivider} />
+            <View style={styles.heroStat}>
+              <Text style={styles.heroStatLabel}>Themes unlocked</Text>
+              <Text style={styles.heroStatValue}>{ownedThemeCount}</Text>
+            </View>
           </View>
         </View>
       </View>
 
+      <View style={styles.workshopToggleRow}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ selected: activeWorkshop === 'automation' }}
+          onPress={() => setActiveWorkshop('automation')}
+          style={[styles.workshopToggleCard, activeWorkshop === 'automation' && styles.workshopToggleActive]}
+        >
+          <Text style={[styles.workshopToggleLabel, activeWorkshop === 'automation' && styles.workshopToggleLabelActive]}>
+            Automation Workshop
+          </Text>
+          <Text style={[styles.workshopToggleHint, activeWorkshop === 'automation' && styles.workshopToggleHintActive]}>
+            Boost idle harvest engines with greenhouse tech.
+          </Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ selected: activeWorkshop === 'themes' }}
+          onPress={() => setActiveWorkshop('themes')}
+          style={[styles.workshopToggleCard, activeWorkshop === 'themes' && styles.workshopToggleActive]}
+        >
+          <Text style={[styles.workshopToggleLabel, activeWorkshop === 'themes' && styles.workshopToggleLabelActive]}>
+            Themes Workshop
+          </Text>
+          <Text style={[styles.workshopToggleHint, activeWorkshop === 'themes' && styles.workshopToggleHintActive]}>
+            {themeToggleHint}
+          </Text>
+          {lockedThemes.length ? (
+            <View style={styles.workshopToggleBadge}>
+              <Text style={styles.workshopToggleBadgeText}>{lockedThemes.length} to unlock</Text>
+            </View>
+          ) : null}
+        </Pressable>
+      </View>
+
       <View style={styles.panelContainer}>
-        <View style={styles.upgradePanel}>
-          <Text style={styles.panelTitle}>Automation Workshop</Text>
-          <Text style={styles.panelSubtitle}>
-            Purchase equipment to boost your idle income and attract new orbiting emojis.
-          </Text>
-          {upgrades.map((upgrade) => {
-            const owned = purchasedUpgrades[upgrade.id] ?? 0;
-            const canAfford = harvest >= upgrade.cost;
-            return (
-              <View key={upgrade.id} style={styles.upgradeCard}>
-                <View style={styles.upgradeHeader}>
-                  <View style={styles.upgradeTitleGroup}>
-                    <Text style={styles.upgradeEmoji}>{upgrade.emoji}</Text>
-                    <Text style={styles.upgradeTitle}>{upgrade.name}</Text>
-                  </View>
-                  <Text style={styles.upgradeCost}>{upgrade.cost.toLocaleString()} harvest</Text>
-                </View>
-                <Text style={styles.upgradeDescription}>{upgrade.description}</Text>
-                <Text style={styles.upgradeBoost}>+{upgrade.increment.toLocaleString()} auto clicks /s</Text>
-                <Text style={styles.upgradeOwned}>Owned: {owned}</Text>
-                <Pressable
-                  accessibilityLabel={`Purchase ${upgrade.name}`}
-                  disabled={!canAfford}
-                  onPress={() => purchaseUpgrade(upgrade.id)}
-                  style={[styles.upgradeButton, !canAfford && styles.upgradeButtonDisabled]}>
-                  <Text style={styles.upgradeButtonText}>
-                    {canAfford ? 'Purchase upgrade' : 'Need more harvest'}
-                  </Text>
-                </Pressable>
-              </View>
-            );
-          })}
-        </View>
-
-        <View style={styles.themePanel}>
-          <Text style={styles.panelTitle}>Emoji Theme Studio</Text>
-          <Text style={styles.panelSubtitle}>
-            Unlock premium orbit styles, then apply them instantly to your garden centerpiece.
-          </Text>
-          {sortedThemes.map((theme) => {
-            const owned = ownedThemes[theme.id] ?? false;
-            const isActive = homeEmojiTheme === theme.id;
-            const canAfford = harvest >= theme.cost || theme.cost === 0;
-            const statusLabel = isActive ? 'Active' : owned ? 'Owned' : 'Locked';
-            const costLabel = theme.cost === 0 ? 'Free starter' : `${theme.cost.toLocaleString()} harvest`;
-
-            return (
-              <View key={theme.id} style={[styles.themeCard, isActive && styles.themeCardActive]}>
-                <View style={styles.themeHeader}>
-                  <Text style={styles.themeEmoji}>{theme.emoji}</Text>
-                  <View style={styles.themeTitleBlock}>
-                    <Text style={styles.themeName}>{theme.name}</Text>
-                    <Text style={styles.themeCost}>{costLabel}</Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.themeStatusPill,
-                      isActive && styles.themeStatusPillActive,
-                      owned && !isActive && styles.themeStatusPillOwned,
-                    ]}>
-                    <Text
-                      style={[
-                        styles.themeStatusText,
-                        isActive && styles.themeStatusTextActive,
-                        owned && !isActive && styles.themeStatusTextOwned,
-                      ]}>
-                      {statusLabel}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={styles.themeDescription}>{theme.description}</Text>
-                <View style={styles.themeActions}>
-                  {owned ? (
+        {activeWorkshop === 'automation' ? (
+          <View style={styles.workshopPanel}>
+            <View style={styles.panelHeaderRow}>
+              <Text style={styles.panelTitle}>Automation Workshop</Text>
+              <Text style={styles.panelSubtitle}>
+                Purchase equipment to boost idle income and attract new orbiting emojis.
+              </Text>
+            </View>
+            <View style={styles.workshopList}>
+              {upgrades.map((upgrade) => {
+                const owned = purchasedUpgrades[upgrade.id] ?? 0;
+                const canAfford = harvest >= upgrade.cost;
+                return (
+                  <View key={upgrade.id} style={styles.upgradeCard}>
+                    <View style={styles.upgradeHeader}>
+                      <View style={styles.upgradeTitleGroup}>
+                        <Text style={styles.upgradeEmoji}>{upgrade.emoji}</Text>
+                        <Text style={styles.upgradeTitle}>{upgrade.name}</Text>
+                      </View>
+                      <Text style={styles.upgradeCost}>{upgrade.cost.toLocaleString()} harvest</Text>
+                    </View>
+                    <Text style={styles.upgradeDescription}>{upgrade.description}</Text>
+                    <Text style={styles.upgradeBoost}>+{upgrade.increment.toLocaleString()} auto clicks /s</Text>
+                    <Text style={styles.upgradeOwned}>Owned: {owned}</Text>
                     <Pressable
-                      accessibilityLabel={`Apply ${theme.name}`}
-                      style={[styles.themeApplyButton, isActive && styles.themeApplyButtonDisabled]}
-                      onPress={() => setHomeEmojiTheme(theme.id)}
-                      disabled={isActive}>
-                      <Text
-                        style={[styles.themeApplyText, isActive && styles.themeApplyTextDisabled]}>
-                        {isActive ? 'In use' : 'Apply theme'}
+                      accessibilityLabel={`Purchase ${upgrade.name}`}
+                      disabled={!canAfford}
+                      onPress={() => purchaseUpgrade(upgrade.id)}
+                      style={[styles.upgradeButton, !canAfford && styles.upgradeButtonDisabled]}
+                    >
+                      <Text style={styles.upgradeButtonText}>
+                        {canAfford ? 'Purchase upgrade' : 'Need more harvest'}
                       </Text>
                     </Pressable>
-                  ) : (
-                    <Pressable
-                      accessibilityLabel={`Purchase ${theme.name}`}
-                      style={[styles.themePurchaseButton, !canAfford && styles.themePurchaseButtonDisabled]}
-                      onPress={() => purchaseEmojiTheme(theme.id)}
-                      disabled={!canAfford}>
-                      <Text
-                        style={[styles.themePurchaseText, !canAfford && styles.themePurchaseTextDisabled]}>
-                        {canAfford ? 'Purchase theme' : 'Need more harvest'}
-                      </Text>
-                    </Pressable>
-                  )}
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        ) : (
+          <View style={styles.workshopPanel}>
+            <View style={styles.panelHeaderRow}>
+              <Text style={styles.panelTitle}>Emoji Theme Studio</Text>
+              <Text style={styles.panelSubtitle}>
+                Unlock premium orbit styles, then apply them instantly to your garden centerpiece.
+              </Text>
+            </View>
+            {activeTheme ? (
+              <View style={styles.themeSummaryCard}>
+                <View style={styles.themeSummaryBadge}>
+                  <Text style={styles.themeSummaryEmoji}>{activeTheme.emoji}</Text>
+                </View>
+                <View style={styles.themeSummaryBody}>
+                  <Text style={styles.themeSummaryTitle}>{activeTheme.name}</Text>
+                  <Text style={styles.themeSummaryCopy}>Currently orbiting your lettuce centerpiece.</Text>
                 </View>
               </View>
-            );
-          })}
-        </View>
+            ) : null}
+            <View style={styles.themeList}>
+              {sortedThemes.map((theme) => {
+                const owned = ownedThemes[theme.id] ?? false;
+                const isActive = homeEmojiTheme === theme.id;
+                const canAfford = harvest >= theme.cost || theme.cost === 0;
+                const statusLabel = isActive ? 'Active' : owned ? 'Owned' : 'Locked';
+                const costLabel = theme.cost === 0 ? 'Free starter' : `${theme.cost.toLocaleString()} harvest`;
+
+                return (
+                  <View key={theme.id} style={[styles.themeCard, isActive && styles.themeCardActive]}>
+                    <View style={styles.themeHeader}>
+                      <Text style={styles.themeEmoji}>{theme.emoji}</Text>
+                      <View style={styles.themeTitleBlock}>
+                        <Text style={styles.themeName}>{theme.name}</Text>
+                        <Text style={styles.themeCost}>{costLabel}</Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.themeStatusPill,
+                          isActive && styles.themeStatusPillActive,
+                          owned && !isActive && styles.themeStatusPillOwned,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.themeStatusText,
+                            isActive && styles.themeStatusTextActive,
+                            owned && !isActive && styles.themeStatusTextOwned,
+                          ]}
+                        >
+                          {statusLabel}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.themeDescription}>{theme.description}</Text>
+                    <View style={styles.themeActions}>
+                      {owned ? (
+                        <Pressable
+                          accessibilityLabel={`Apply ${theme.name}`}
+                          style={[styles.themeApplyButton, isActive && styles.themeApplyButtonDisabled]}
+                          onPress={() => setHomeEmojiTheme(theme.id)}
+                          disabled={isActive}
+                        >
+                          <Text style={[styles.themeApplyText, isActive && styles.themeApplyTextDisabled]}>
+                            {isActive ? 'In use' : 'Apply theme'}
+                          </Text>
+                        </Pressable>
+                      ) : (
+                        <Pressable
+                          accessibilityLabel={`Purchase ${theme.name}`}
+                          style={[styles.themePurchaseButton, !canAfford && styles.themePurchaseButtonDisabled]}
+                          onPress={() => purchaseEmojiTheme(theme.id)}
+                          disabled={!canAfford}
+                        >
+                          <Text style={[styles.themePurchaseText, !canAfford && styles.themePurchaseTextDisabled]}>
+                            {canAfford ? 'Purchase theme' : 'Need more harvest'}
+                          </Text>
+                        </Pressable>
+                      )}
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -187,107 +282,205 @@ const styles = StyleSheet.create({
   section: {
     gap: 24,
   },
-  bannerCard: {
-    backgroundColor: '#1f6f4a',
-    borderRadius: 24,
-    paddingVertical: 24,
-    paddingHorizontal: 24,
+  heroCard: {
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: '#14532d',
+    borderRadius: 26,
+    padding: 24,
     shadowColor: '#0b3d2c',
-    shadowOpacity: 0.18,
-    shadowOffset: { width: 0, height: 10 },
-    shadowRadius: 18,
-    elevation: 6,
-    gap: 10,
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 12 },
+    shadowRadius: 22,
+    elevation: 8,
   },
-  bannerTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#dcfce7',
+  heroBackdrop: {
+    position: 'absolute',
+    inset: 0,
   },
-  bannerHarvest: {
+  heroBubble: {
+    position: 'absolute',
+    borderRadius: 999,
+    opacity: 0.55,
+  },
+  heroBubbleOne: {
+    width: 260,
+    height: 260,
+    backgroundColor: '#166534',
+    top: -40,
+    left: -60,
+    shadowColor: '#064e3b',
+    shadowOpacity: 0.45,
+    shadowRadius: 40,
+    shadowOffset: { width: 0, height: 12 },
+  },
+  heroBubbleTwo: {
+    width: 200,
+    height: 200,
+    backgroundColor: '#0f766e',
+    bottom: -40,
+    right: -70,
+    shadowColor: '#0f766e',
+    shadowOpacity: 0.38,
+    shadowRadius: 32,
+    shadowOffset: { width: 0, height: 14 },
+  },
+  heroBubbleThree: {
+    width: 160,
+    height: 160,
+    backgroundColor: '#bbf7d0',
+    top: 40,
+    right: -30,
+    shadowColor: '#34d399',
+    shadowOpacity: 0.35,
+    shadowRadius: 26,
+    shadowOffset: { width: 0, height: 12 },
+  },
+  heroContent: {
+    gap: 12,
+  },
+  heroOverline: {
+    fontSize: 12,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: '#bbf7d0',
+    fontWeight: '700',
+  },
+  heroTitle: {
     fontSize: 26,
     fontWeight: '800',
-    color: '#bbf7d0',
+    color: '#f0fff4',
   },
-  bannerHint: {
+  heroHarvest: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#dcfce7',
+  },
+  heroHint: {
     fontSize: 14,
     lineHeight: 20,
     color: '#e6fffa',
   },
-  bannerStatsRow: {
-    marginTop: 8,
+  heroStatsRow: {
+    marginTop: 4,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(19,78,32,0.28)',
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    gap: 16,
+    backgroundColor: 'rgba(15, 118, 110, 0.35)',
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    gap: 18,
   },
-  bannerStat: {
+  heroStat: {
     flex: 1,
   },
-  bannerStatLabel: {
-    fontSize: 13,
-    color: '#c6f6d5',
+  heroStatLabel: {
+    fontSize: 12,
+    color: '#bbf7d0',
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    letterSpacing: 0.9,
   },
-  bannerStatValue: {
+  heroStatValue: {
     fontSize: 18,
     fontWeight: '700',
     color: '#f0fff4',
   },
-  bannerStatDivider: {
+  heroDivider: {
     width: 1,
     height: '70%',
-    backgroundColor: 'rgba(220,252,231,0.35)',
+    backgroundColor: 'rgba(226, 252, 239, 0.35)',
+  },
+  workshopToggleRow: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  workshopToggleCard: {
+    flex: 1,
+    borderRadius: 22,
+    padding: 18,
+    backgroundColor: '#eafaf1',
+    shadowColor: '#bbf7d0',
+    shadowOpacity: 0.35,
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 18,
+    elevation: 4,
+    gap: 8,
+  },
+  workshopToggleActive: {
+    backgroundColor: '#14532d',
+    shadowColor: '#0b3d2c',
+  },
+  workshopToggleLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#14532d',
+  },
+  workshopToggleLabelActive: {
+    color: '#f8fafc',
+  },
+  workshopToggleHint: {
+    fontSize: 13,
+    color: '#276749',
+    lineHeight: 18,
+  },
+  workshopToggleHintActive: {
+    color: '#d1fae5',
+  },
+  workshopToggleBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 6,
+    backgroundColor: '#bbf7d0',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  workshopToggleBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#166534',
   },
   panelContainer: {
     gap: 24,
   },
-  upgradePanel: {
-    backgroundColor: '#ffffff',
-    borderRadius: 22,
-    padding: 20,
-    shadowColor: '#2f855a',
-    shadowOpacity: 0.1,
-    shadowOffset: { width: 0, height: 8 },
-    shadowRadius: 16,
-    elevation: 5,
-    gap: 16,
-  },
-  themePanel: {
+  workshopPanel: {
     backgroundColor: '#f8fafc',
-    borderRadius: 22,
-    padding: 20,
+    borderRadius: 24,
+    padding: 22,
     shadowColor: '#0f172a',
     shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: 10 },
+    shadowOffset: { width: 0, height: 12 },
     shadowRadius: 20,
     elevation: 4,
-    gap: 16,
+    gap: 18,
+  },
+  panelHeaderRow: {
+    gap: 8,
   },
   panelTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1f2937',
+    color: '#0f172a',
   },
   panelSubtitle: {
     fontSize: 14,
-    color: '#4a5568',
+    color: '#475569',
     lineHeight: 20,
+  },
+  workshopList: {
+    gap: 16,
   },
   upgradeCard: {
     backgroundColor: '#ffffff',
     borderRadius: 18,
     padding: 18,
-    shadowColor: '#2f855a',
+    shadowColor: '#1f2937',
     shadowOpacity: 0.08,
     shadowOffset: { width: 0, height: 6 },
     shadowRadius: 12,
     elevation: 3,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     gap: 10,
   },
   upgradeHeader: {
@@ -305,7 +498,7 @@ const styles = StyleSheet.create({
   upgradeTitle: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#1a4731',
+    color: '#14532d',
     flexShrink: 1,
     flexWrap: 'wrap',
   },
@@ -315,27 +508,27 @@ const styles = StyleSheet.create({
   upgradeCost: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#276749',
+    color: '#166534',
     maxWidth: '40%',
     textAlign: 'right',
   },
   upgradeDescription: {
     fontSize: 14,
-    color: '#2d3748',
+    color: '#334155',
     lineHeight: 20,
   },
   upgradeBoost: {
     fontSize: 13,
-    color: '#2f855a',
+    color: '#15803d',
     fontWeight: '600',
   },
   upgradeOwned: {
     fontSize: 13,
-    color: '#4a5568',
+    color: '#475569',
   },
   upgradeButton: {
     marginTop: 4,
-    backgroundColor: '#22543d',
+    backgroundColor: '#14532d',
     paddingVertical: 10,
     borderRadius: 12,
   },
@@ -347,6 +540,48 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '700',
   },
+  themeSummaryCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#ecfeff',
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+  },
+  themeSummaryBadge: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: '#0ea5e9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0284c7',
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+  },
+  themeSummaryEmoji: {
+    fontSize: 30,
+  },
+  themeSummaryBody: {
+    flex: 1,
+    gap: 2,
+  },
+  themeSummaryTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  themeSummaryCopy: {
+    fontSize: 13,
+    color: '#075985',
+    lineHeight: 18,
+  },
+  themeList: {
+    gap: 16,
+  },
   themeCard: {
     backgroundColor: '#ffffff',
     borderRadius: 18,
@@ -357,6 +592,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     shadowRadius: 12,
     elevation: 2,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   themeCardActive: {
     borderWidth: 2,
@@ -377,17 +614,17 @@ const styles = StyleSheet.create({
   themeName: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#1f2937',
+    color: '#0f172a',
   },
   themeCost: {
     fontSize: 13,
-    color: '#4a5568',
+    color: '#64748b',
   },
   themeStatusPill: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: '#e5e7eb',
+    backgroundColor: '#e2e8f0',
   },
   themeStatusPillOwned: {
     backgroundColor: '#bfdbfe',
@@ -417,7 +654,7 @@ const styles = StyleSheet.create({
   },
   themePurchaseButton: {
     flex: 1,
-    backgroundColor: '#1f6f4a',
+    backgroundColor: '#14532d',
     borderRadius: 12,
     paddingVertical: 10,
   },
@@ -439,7 +676,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   themeApplyButtonDisabled: {
-    backgroundColor: '#bfdbfe',
+    backgroundColor: '#bae6fd',
   },
   themeApplyText: {
     textAlign: 'center',
@@ -447,6 +684,6 @@ const styles = StyleSheet.create({
     color: '#f8fafc',
   },
   themeApplyTextDisabled: {
-    color: '#1e3a8a',
+    color: '#1d4ed8',
   },
 });

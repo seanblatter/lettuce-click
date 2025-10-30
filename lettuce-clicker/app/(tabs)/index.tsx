@@ -71,6 +71,7 @@ export default function HomeScreen() {
   } = useGame();
   const [showGrowModal, setShowGrowModal] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPage, setMenuPage] = useState<'overview' | 'themes'>('overview');
   const [activeNotice, setActiveNotice] = useState<typeof resumeNotice>(null);
   const [showDailyBonus, setShowDailyBonus] = useState(false);
   const [availableBonusSpins, setAvailableBonusSpins] = useState(0);
@@ -120,7 +121,7 @@ export default function HomeScreen() {
 
     return dailyCountdown;
   }, [dailyCountdown, isDailySpinAvailable]);
-  const themeOptions = useMemo(
+  const ownedThemeList = useMemo(
     () =>
       emojiThemes
         .filter((theme) => ownedThemes[theme.id])
@@ -129,10 +130,30 @@ export default function HomeScreen() {
             return a.name.localeCompare(b.name);
           }
           return a.cost - b.cost;
-        })
-        .map((theme) => ({ label: `${theme.emoji} ${theme.name}`, value: theme.id })),
+        }),
     [emojiThemes, ownedThemes]
   );
+  const lockedThemeCount = useMemo(
+    () => emojiThemes.filter((theme) => !ownedThemes[theme.id]).length,
+    [emojiThemes, ownedThemes]
+  );
+  const activeThemeDefinition = useMemo(
+    () => emojiThemes.find((theme) => theme.id === homeEmojiTheme) ?? null,
+    [emojiThemes, homeEmojiTheme]
+  );
+  const themeOverviewSubtitle = useMemo(() => {
+    if (!ownedThemeList.length) {
+      return 'Unlock orbit styles in the Upgrades tab.';
+    }
+
+    const activeLabel = activeThemeDefinition
+      ? `${activeThemeDefinition.emoji} ${activeThemeDefinition.name}`
+      : 'Circle Orbit';
+
+    return lockedThemeCount
+      ? `Active: ${activeLabel} • ${lockedThemeCount} locked`
+      : `Active: ${activeLabel}`;
+  }, [activeThemeDefinition, lockedThemeCount, ownedThemeList.length]);
   const noticeTitle = useMemo(() => {
     if (!activeNotice) {
       return '';
@@ -175,6 +196,12 @@ export default function HomeScreen() {
       setActiveNotice(resumeNotice);
     }
   }, [resumeNotice]);
+
+  useEffect(() => {
+    if (!menuOpen) {
+      setMenuPage('overview');
+    }
+  }, [menuOpen]);
 
   const handleDismissGrow = useCallback(async () => {
     setShowGrowModal(false);
@@ -487,46 +514,101 @@ export default function HomeScreen() {
                 </View>
               </View>
               <View style={styles.menuSheetContent}>
-                <Text style={styles.menuSectionTitle}>Quick actions</Text>
-                <Pressable style={styles.menuItemCard} onPress={handleNavigateProfile}>
-                  <Text style={styles.menuItemEmoji}>🌿</Text>
-                  <View style={styles.menuItemBody}>
-                    <Text style={styles.menuItemTitle}>Profile</Text>
-                    <Text style={styles.menuItemSubtitle}>Edit your gardener details</Text>
-                  </View>
-                </Pressable>
-                <Pressable
-                  style={[styles.menuItemCard, styles.menuItemHighlightCard]}
-                  onPress={handleOpenDailyBonus}
-                >
-                  <Text style={styles.menuItemEmoji}>🎁</Text>
-                  <View style={styles.menuItemBody}>
-                    <Text style={[styles.menuItemTitle, styles.menuHighlight]}>Daily Bonus</Text>
-                    <Text style={styles.menuItemSubtitle}>Spin for surprise clicks</Text>
-                  </View>
-                  <View style={styles.menuPill} pointerEvents="none">
-                    <Text style={styles.menuPillText}>{dailyMenuStatus}</Text>
-                  </View>
-                </Pressable>
-                <View style={styles.menuSectionCard}>
-                  <Text style={styles.menuSectionTitle}>Emoji themes</Text>
-                  <View style={styles.menuThemeList}>
-                    {themeOptions.map((option) => {
-                      const isActive = homeEmojiTheme === option.value;
-                      return (
-                        <Pressable
-                          key={option.value}
-                          onPress={() => handleSelectTheme(option.value)}
-                          style={[styles.themeOption, isActive && styles.themeOptionActive]}
-                        >
-                          <Text style={[styles.themeOptionText, isActive && styles.themeOptionTextActive]}>
-                            {option.label}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </View>
+                {menuPage === 'overview' ? (
+                  <>
+                    <Text style={styles.menuSectionTitle}>Quick actions</Text>
+                    <Pressable style={styles.menuItemCard} onPress={handleNavigateProfile}>
+                      <Text style={styles.menuItemEmoji}>🌿</Text>
+                      <View style={styles.menuItemBody}>
+                        <Text style={styles.menuItemTitle}>Profile</Text>
+                        <Text style={styles.menuItemSubtitle}>Edit your gardener details</Text>
+                      </View>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.menuItemCard, styles.menuItemHighlightCard]}
+                      onPress={handleOpenDailyBonus}
+                    >
+                      <Text style={styles.menuItemEmoji}>🎁</Text>
+                      <View style={styles.menuItemBody}>
+                        <Text style={[styles.menuItemTitle, styles.menuHighlight]}>Daily Bonus</Text>
+                        <Text style={styles.menuItemSubtitle}>Spin for surprise clicks</Text>
+                      </View>
+                      <View style={styles.menuPill} pointerEvents="none">
+                        <Text style={styles.menuPillText}>{dailyMenuStatus}</Text>
+                      </View>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.menuItemCard, styles.menuThemeOverviewCard]}
+                      onPress={() => setMenuPage('themes')}
+                      accessibilityRole="button"
+                    >
+                      <View style={styles.menuThemeOverviewEmojiWrap}>
+                        <Text style={styles.menuThemeOverviewEmoji}>
+                          {activeThemeDefinition?.emoji ?? '✨'}
+                        </Text>
+                      </View>
+                      <View style={styles.menuItemBody}>
+                        <Text style={[styles.menuItemTitle, styles.menuThemeOverviewTitle]}>Themes Workshop</Text>
+                        <Text style={styles.menuThemeOverviewSubtitle}>{themeOverviewSubtitle}</Text>
+                      </View>
+                      <Text style={styles.menuThemeOverviewChevron}>›</Text>
+                    </Pressable>
+                  </>
+                ) : (
+                  <>
+                    <View style={styles.menuThemeHeader}>
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => setMenuPage('overview')}
+                        style={styles.menuThemeBackButton}
+                      >
+                        <Text style={styles.menuThemeBackText}>Back</Text>
+                      </Pressable>
+                      <Text style={styles.menuSectionTitle}>Themes Workshop</Text>
+                    </View>
+                    <Text style={styles.menuThemeSubtitle}>Choose an orbit style for your garden centerpiece.</Text>
+                    <ScrollView
+                      style={styles.menuThemeScroll}
+                      contentContainerStyle={styles.menuThemeScrollContent}
+                      showsVerticalScrollIndicator
+                    >
+                      {ownedThemeList.map((theme) => {
+                        const isActive = homeEmojiTheme === theme.id;
+                        return (
+                          <Pressable
+                            key={theme.id}
+                            onPress={() => handleSelectTheme(theme.id)}
+                            style={[styles.menuThemeOptionCard, isActive && styles.menuThemeOptionCardActive]}
+                          >
+                            <View style={styles.menuThemeOptionEmojiWrap}>
+                              <Text style={styles.menuThemeOptionEmoji}>{theme.emoji}</Text>
+                            </View>
+                            <View style={styles.menuThemeOptionBody}>
+                              <Text
+                                style={[styles.menuThemeOptionName, isActive && styles.menuThemeOptionNameActive]}
+                              >
+                                {theme.name}
+                              </Text>
+                              <Text style={styles.menuThemeOptionDescription}>{theme.description}</Text>
+                            </View>
+                            {isActive ? <Text style={styles.menuThemeOptionBadge}>Active</Text> : null}
+                          </Pressable>
+                        );
+                      })}
+                      {ownedThemeList.length === 0 ? (
+                        <Text style={styles.menuThemeEmpty}>
+                          Unlock themes in the Upgrades tab to customize your orbit.
+                        </Text>
+                      ) : null}
+                    </ScrollView>
+                    {lockedThemeCount ? (
+                      <Text style={styles.menuThemeFooterNote}>
+                        {lockedThemeCount} theme{lockedThemeCount === 1 ? '' : 's'} still locked. Visit the Upgrades tab to
+                        unlock more.
+                      </Text>
+                    ) : null}
+                  </>
+                )}
               </View>
               <Pressable
                 style={styles.menuSheetCloseButton}
@@ -987,37 +1069,125 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  menuSectionCard: {
-    marginTop: 4,
-    borderRadius: 20,
-    backgroundColor: '#ffffff',
-    padding: 18,
-    gap: 14,
-    shadowColor: '#000000',
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 3,
+  menuThemeOverviewCard: {
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: 'rgba(22, 101, 52, 0.18)',
   },
-  menuThemeList: {
-    gap: 10,
+  menuThemeOverviewEmojiWrap: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: '#dcfce7',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  themeOption: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 14,
-    backgroundColor: 'rgba(31, 111, 74, 0.08)',
+  menuThemeOverviewEmoji: {
+    fontSize: 26,
   },
-  themeOptionActive: {
-    backgroundColor: '#1f6f4a',
-  },
-  themeOptionText: {
-    fontSize: 16,
-    fontWeight: '600',
+  menuThemeOverviewTitle: {
     color: '#134e32',
   },
-  themeOptionTextActive: {
-    color: '#ecfdf3',
+  menuThemeOverviewSubtitle: {
+    fontSize: 13,
+    color: '#1f2937',
+  },
+  menuThemeOverviewChevron: {
+    fontSize: 26,
+    fontWeight: '600',
+    color: '#14532d',
+  },
+  menuThemeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  menuThemeBackButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: 'rgba(20, 83, 45, 0.12)',
+  },
+  menuThemeBackText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#14532d',
+  },
+  menuThemeSubtitle: {
+    fontSize: 13,
+    color: '#1f2937',
+    lineHeight: 18,
+  },
+  menuThemeScroll: {
+    maxHeight: 320,
+    borderRadius: 18,
+  },
+  menuThemeScrollContent: {
+    gap: 12,
+    paddingBottom: 12,
+  },
+  menuThemeOptionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    borderRadius: 18,
+    backgroundColor: '#ffffff',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    shadowColor: '#000000',
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 2,
+  },
+  menuThemeOptionCardActive: {
+    borderWidth: 1,
+    borderColor: '#34d399',
+    shadowColor: '#34d399',
+    shadowOpacity: 0.25,
+  },
+  menuThemeOptionEmojiWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#f0fdf4',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuThemeOptionEmoji: {
+    fontSize: 26,
+  },
+  menuThemeOptionBody: {
+    flex: 1,
+    gap: 2,
+  },
+  menuThemeOptionName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#14532d',
+  },
+  menuThemeOptionNameActive: {
+    color: '#047857',
+  },
+  menuThemeOptionDescription: {
+    fontSize: 13,
+    color: '#1f2937',
+    lineHeight: 18,
+  },
+  menuThemeOptionBadge: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#047857',
+  },
+  menuThemeEmpty: {
+    paddingVertical: 24,
+    textAlign: 'center',
+    fontSize: 13,
+    color: '#1f2937',
+  },
+  menuThemeFooterNote: {
+    fontSize: 12,
+    color: '#14532d',
   },
   menuSheetCloseButton: {
     marginTop: 12,

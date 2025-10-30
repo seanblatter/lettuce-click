@@ -79,9 +79,14 @@ type GameContextValue = {
   profileImageUri: string | null;
   homeEmojiTheme: HomeEmojiTheme;
   resumeNotice: PassiveResumeNotice | null;
+  hasPremiumUpgrade: boolean;
+  premiumAccentColor: string;
+  customClickEmoji: string;
   registerCustomEmoji: (emoji: string) => EmojiDefinition | null;
   setProfileLifetimeTotal: (value: number) => void;
   addHarvest: () => void;
+  addHarvestAmount: (amount: number) => void;
+  spendHarvestAmount: (amount: number) => boolean;
   purchaseUpgrade: (upgradeId: string) => boolean;
   purchaseEmoji: (emojiId: string) => boolean;
   placeEmoji: (emojiId: string, position: { x: number; y: number }) => boolean;
@@ -91,6 +96,9 @@ type GameContextValue = {
   setProfileUsername: (value: string) => void;
   setProfileImageUri: (uri: string | null) => void;
   setHomeEmojiTheme: (theme: HomeEmojiTheme) => void;
+  purchasePremiumUpgrade: () => void;
+  setPremiumAccentColor: (color: string) => void;
+  setCustomClickEmoji: (emoji: string) => void;
   clearResumeNotice: () => void;
 };
 
@@ -235,6 +243,9 @@ type StoredGameState = {
   placements: Placement[];
   orbitingUpgradeEmojis: OrbitingEmoji[];
   customEmojiCatalog?: Record<string, EmojiDefinition>;
+  hasPremiumUpgrade?: boolean;
+  premiumAccentColor?: string;
+  customClickEmoji?: string;
 };
 
 const GameContext = createContext<GameContextValue | undefined>(undefined);
@@ -255,6 +266,9 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [homeEmojiTheme, setHomeEmojiTheme] = useState<HomeEmojiTheme>('circle');
   const [resumeNotice, setResumeNotice] = useState<PassiveResumeNotice | null>(null);
   const [customEmojiCatalog, setCustomEmojiCatalog] = useState<Record<string, EmojiDefinition>>({});
+  const [hasPremiumUpgrade, setHasPremiumUpgrade] = useState(false);
+  const [premiumAccentColor, setPremiumAccentColorState] = useState('#1f6f4a');
+  const [customClickEmoji, setCustomClickEmojiState] = useState('🥬');
   const initialisedRef = useRef(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const backgroundInfoRef = useRef<
@@ -476,20 +490,70 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     };
   }, []);
 
-  const spendHarvest = (amount: number) => {
-    if (harvest < amount) {
-      return false;
-    }
+  const spendHarvest = useCallback(
+    (amount: number) => {
+      if (amount <= 0) {
+        return true;
+      }
 
-    setHarvest((prev) => prev - amount);
-    return true;
-  };
+      if (harvest < amount) {
+        return false;
+      }
+
+      setHarvest((prev) => prev - amount);
+      return true;
+    },
+    [harvest]
+  );
 
   const addHarvest = () => {
     setHarvest((prev) => prev + tapValue);
     setLifetimeHarvest((prev) => prev + tapValue);
     setProfileLifetimeTotal((prev) => prev + tapValue);
   };
+
+  const addHarvestAmount = useCallback(
+    (amount: number) => {
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return;
+      }
+
+      const normalized = Math.floor(amount);
+      setHarvest((prev) => prev + normalized);
+      setLifetimeHarvest((prev) => prev + normalized);
+      setProfileLifetimeTotal((prev) => prev + normalized);
+    },
+    []
+  );
+
+  const spendHarvestAmount = useCallback((amount: number) => spendHarvest(amount), [spendHarvest]);
+
+  const purchasePremiumUpgrade = useCallback(() => {
+    setHasPremiumUpgrade(true);
+  }, []);
+
+  const setPremiumAccentColor = useCallback((color: string) => {
+    if (!color || typeof color !== 'string') {
+      return;
+    }
+    setPremiumAccentColorState(color);
+  }, []);
+
+  const setCustomClickEmoji = useCallback((emoji: string) => {
+    if (!emoji || typeof emoji !== 'string') {
+      setCustomClickEmojiState('🥬');
+      return;
+    }
+
+    const trimmed = emoji.trim();
+    if (trimmed.length === 0) {
+      setCustomClickEmojiState('🥬');
+      return;
+    }
+
+    const [first] = Array.from(trimmed);
+    setCustomClickEmojiState(first);
+  }, []);
 
   const purchaseUpgrade = (upgradeId: string) => {
     const upgrade = upgradeCatalog.find((item) => item.id === upgradeId);
@@ -617,9 +681,14 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     profileImageUri,
     homeEmojiTheme,
     resumeNotice,
+    hasPremiumUpgrade,
+    premiumAccentColor,
+    customClickEmoji,
     registerCustomEmoji,
     setProfileLifetimeTotal,
     addHarvest,
+    addHarvestAmount,
+    spendHarvestAmount,
     purchaseUpgrade,
     purchaseEmoji,
     placeEmoji,
@@ -629,6 +698,9 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     setProfileUsername,
     setProfileImageUri,
     setHomeEmojiTheme,
+    purchasePremiumUpgrade,
+    setPremiumAccentColor,
+    setCustomClickEmoji,
     clearResumeNotice: () => setResumeNotice(null),
   }), [
     harvest,
@@ -645,8 +717,16 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     profileImageUri,
     homeEmojiTheme,
     resumeNotice,
+    hasPremiumUpgrade,
+    premiumAccentColor,
+    customClickEmoji,
     combinedEmojiCatalog,
     registerCustomEmoji,
+    addHarvestAmount,
+    spendHarvestAmount,
+    purchasePremiumUpgrade,
+    setPremiumAccentColor,
+    setCustomClickEmoji,
   ]);
 
   useEffect(() => {
@@ -743,6 +823,22 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
             } else if (shouldResetSession) {
               setCustomEmojiCatalog({});
             }
+            if (!shouldResetSession && typeof parsed.hasPremiumUpgrade === 'boolean') {
+              setHasPremiumUpgrade(parsed.hasPremiumUpgrade);
+            } else if (shouldResetSession) {
+              setHasPremiumUpgrade(false);
+            }
+            if (!shouldResetSession && typeof parsed.premiumAccentColor === 'string') {
+              setPremiumAccentColorState(parsed.premiumAccentColor);
+            } else if (shouldResetSession) {
+              setPremiumAccentColorState('#1f6f4a');
+            }
+            if (!shouldResetSession && typeof parsed.customClickEmoji === 'string') {
+              const trimmed = parsed.customClickEmoji.trim();
+              setCustomClickEmojiState(trimmed.length > 0 ? Array.from(trimmed)[0] : '🥬');
+            } else if (shouldResetSession) {
+              setCustomClickEmojiState('🥬');
+            }
           } catch {
             // ignore malformed stored data
           }
@@ -813,12 +909,26 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       placements,
       orbitingUpgradeEmojis,
       customEmojiCatalog,
+      hasPremiumUpgrade,
+      premiumAccentColor,
+      customClickEmoji,
     };
 
     AsyncStorage.setItem(GAME_STORAGE_KEY, JSON.stringify(payload)).catch(() => {
       // persistence best effort only
     });
-  }, [customEmojiCatalog, emojiInventory, harvest, lifetimeHarvest, orbitingUpgradeEmojis, placements, purchasedUpgrades]);
+  }, [
+    customClickEmoji,
+    customEmojiCatalog,
+    emojiInventory,
+    harvest,
+    hasPremiumUpgrade,
+    lifetimeHarvest,
+    orbitingUpgradeEmojis,
+    placements,
+    premiumAccentColor,
+    purchasedUpgrades,
+  ]);
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
 };

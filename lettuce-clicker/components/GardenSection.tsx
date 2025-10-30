@@ -16,7 +16,15 @@ import {
 // eslint-disable-next-line import/no-unresolved
 import * as MediaLibrary from 'expo-media-library';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import Animated, {
+  cancelAnimation,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 // eslint-disable-next-line import/no-unresolved
 import { captureRef } from 'react-native-view-shot';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -446,6 +454,7 @@ export function GardenSection({
 
       setSelectedEmoji(emojiId);
       setActiveSheet(null);
+      setIsDrawingMode(false);
     },
     []
   );
@@ -653,6 +662,13 @@ export function GardenSection({
   );
   const handleCloseSheet = useCallback(() => setActiveSheet(null), []);
   const handleOpenSheet = useCallback((sheet: 'shop' | 'inventory') => setActiveSheet(sheet), []);
+  const handleChangeCategory = useCallback(
+    (category: CategoryFilter) => {
+      setActiveCategory(category);
+      endInventoryDrag();
+    },
+    [endInventoryDrag]
+  );
 
   const keyExtractor = useCallback((item: InventoryEntry) => item.id, []);
 
@@ -735,90 +751,25 @@ export function GardenSection({
     const isSelected = selectedEmoji === item.id;
     const categoryLabel = CATEGORY_LABELS[item.category];
     const isDragging = draggingInventoryId === item.id;
-
-    const longPressGesture = Gesture.LongPress()
-      .minDuration(250)
-      .onStart(() => {
-        if (!canReorderInventory) {
-          return;
-        }
-        runOnJS(beginInventoryDrag)(item.id, index);
-      })
-      .onEnd(() => {
-        if (!canReorderInventory) {
-          return;
-        }
-        runOnJS(endInventoryDrag)();
-      })
-      .onFinalize(() => {
-        if (!canReorderInventory) {
-          return;
-        }
-        runOnJS(endInventoryDrag)();
-      })
-      .enabled(canReorderInventory);
-
-    const panGesture = Gesture.Pan()
-      .onUpdate((event) => {
-        if (!canReorderInventory) {
-          return;
-        }
-        runOnJS(updateInventoryDrag)(event.translationX, event.translationY);
-      })
-      .onEnd(() => {
-        if (!canReorderInventory) {
-          return;
-        }
-        runOnJS(endInventoryDrag)();
-      })
-      .onFinalize(() => {
-        if (!canReorderInventory) {
-          return;
-        }
-        runOnJS(endInventoryDrag)();
-      })
-      .enabled(canReorderInventory);
-
-    const combinedGesture = Gesture.Simultaneous(longPressGesture, panGesture);
+    const shouldShake = Boolean(draggingInventoryId);
 
     return (
-      <GestureDetector gesture={combinedGesture}>
-        <View style={styles.sheetTileWrapper}>
-          <Pressable
-            onLayout={handleInventoryTileLayout}
-            style={[
-              styles.emojiTile,
-              isSelected && styles.emojiTileSelected,
-              isDragging && styles.emojiTileDragging,
-            ]}
-            onPress={() => {
-              if (draggingInventoryIdRef.current) {
-                return;
-              }
-              handleSelect(item.id, item.owned);
-            }}
-            accessibilityLabel={`${item.name} emoji`}
-            accessibilityHint="Select to ready this decoration.">
-            <Text style={styles.emojiGlyphLarge}>{item.emoji}</Text>
-            {item.owned > 0 ? (
-              <View style={styles.emojiTileBadge}>
-                <Text style={styles.emojiTileBadgeText}>×{item.owned}</Text>
-              </View>
-            ) : null}
-            <Text style={styles.emojiTileLabel} numberOfLines={1}>
-              {item.name}
-            </Text>
-            <View style={styles.emojiTileFooter}>
-              <Text style={[styles.emojiTileMeta, styles.emojiTileCategory]} numberOfLines={1}>
-                {categoryLabel}
-              </Text>
-              <Text style={[styles.emojiTileMeta, styles.inventoryMeta]} numberOfLines={1}>
-                {item.owned.toLocaleString()} owned
-              </Text>
-            </View>
-          </Pressable>
-        </View>
-      </GestureDetector>
+      <InventoryTileItem
+        key={item.id}
+        item={item}
+        index={index}
+        isSelected={isSelected}
+        isDragging={isDragging}
+        categoryLabel={categoryLabel}
+        canReorder={canReorderInventory}
+        onSelect={handleSelect}
+        onLayout={handleInventoryTileLayout}
+        beginDrag={beginInventoryDrag}
+        updateDrag={updateInventoryDrag}
+        endDrag={endInventoryDrag}
+        draggingIdRef={draggingInventoryIdRef}
+        shouldShake={shouldShake}
+      />
     );
   };
 
@@ -834,7 +785,8 @@ export function GardenSection({
             paddingBottom: contentBottomPadding,
           },
         ]}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        scrollEnabled={!isDrawingMode}>
         <View style={[styles.harvestBanner, { paddingTop: bannerTopPadding }]}>
           <Text style={styles.harvestTitle}>{title}</Text>
           <Text style={styles.harvestAmount}>{harvest.toLocaleString()} harvest ready</Text>
@@ -873,9 +825,22 @@ export function GardenSection({
                 Ready to place {selectedDetails.emoji} {selectedDetails.name}
               </Text>
               <Text style={styles.selectionStatusCopy}>
-                Tap anywhere on the canvas to drop it. Drag to move, pinch to resize, twist to rotate,
-                double tap to enlarge, and long press to shrink.
+                Tap the canvas to drop it. Single tap the emoji to grow it, pinch to resize, twist to rotate,
+                and long press to shrink when fine tuning.
               </Text>
+              <View style={styles.selectionStatusActions}>
+                <Text style={styles.selectionStatusMeta}>
+                  {(emojiInventory[selectedDetails.id] ?? 0).toLocaleString()} in inventory
+                </Text>
+                <Pressable
+                  onPress={() => {
+                    setSelectedEmoji(null);
+                    setIsDrawingMode(false);
+                  }}
+                  style={styles.stopPlacingButton}>
+                  <Text style={styles.stopPlacingText}>Stop placing</Text>
+                </Pressable>
+              </View>
             </>
           ) : (
             <>
@@ -1084,7 +1049,7 @@ export function GardenSection({
                     <Pressable
                       key={option.id}
                       style={[styles.categoryPill, isActive && styles.categoryPillActive]}
-                      onPress={() => setActiveCategory(option.id)}
+                      onPress={() => handleChangeCategory(option.id)}
                       accessibilityRole="button"
                       accessibilityState={{ selected: isActive }}
                       accessibilityLabel={`Filter ${option.label}`}>
@@ -1097,6 +1062,7 @@ export function GardenSection({
               </ScrollView>
             </View>
             <FlatList
+              style={styles.sheetList}
               data={filteredShopInventory}
               renderItem={renderShopItem}
               keyExtractor={keyExtractor}
@@ -1169,7 +1135,7 @@ export function GardenSection({
                     <Pressable
                       key={option.id}
                       style={[styles.categoryPill, isActive && styles.categoryPillActive]}
-                      onPress={() => setActiveCategory(option.id)}
+                      onPress={() => handleChangeCategory(option.id)}
                       accessibilityRole="button"
                       accessibilityState={{ selected: isActive }}
                       accessibilityLabel={`Filter ${option.label}`}>
@@ -1182,6 +1148,7 @@ export function GardenSection({
               </ScrollView>
             </View>
             <FlatList
+              style={styles.sheetList}
               data={filteredOwnedInventory}
               renderItem={renderInventoryItem}
               keyExtractor={keyExtractor}
@@ -1212,6 +1179,140 @@ export function GardenSection({
 const EMOJI_SIZE = 38;
 const MIN_SCALE = 0.6;
 const MAX_SCALE = 2.4;
+
+type InventoryTileItemProps = {
+  item: InventoryEntry;
+  index: number;
+  isSelected: boolean;
+  isDragging: boolean;
+  categoryLabel: string;
+  canReorder: boolean;
+  onSelect: (emojiId: string, owned: number) => void;
+  onLayout: (event: LayoutChangeEvent) => void;
+  beginDrag: (emojiId: string, index: number) => void;
+  updateDrag: (dx: number, dy: number) => void;
+  endDrag: () => void;
+  draggingIdRef: React.MutableRefObject<string | null>;
+  shouldShake: boolean;
+};
+
+function InventoryTileItem({
+  item,
+  index,
+  isSelected,
+  isDragging,
+  categoryLabel,
+  canReorder,
+  onSelect,
+  onLayout,
+  beginDrag,
+  updateDrag,
+  endDrag,
+  draggingIdRef,
+  shouldShake,
+}: InventoryTileItemProps) {
+  const wiggle = useSharedValue(0);
+  const scale = useSharedValue(isDragging ? 1.05 : 1);
+
+  useEffect(() => {
+    scale.value = withTiming(isDragging ? 1.05 : 1, { duration: 120 });
+  }, [isDragging, scale]);
+
+  useEffect(() => {
+    if (shouldShake) {
+      wiggle.value = withRepeat(withSequence(withTiming(-2.5, { duration: 120 }), withTiming(2.5, { duration: 120 })), -1, true);
+    } else {
+      cancelAnimation(wiggle);
+      wiggle.value = withTiming(0, { duration: 150 });
+    }
+  }, [shouldShake, wiggle]);
+
+  const longPressGesture = Gesture.LongPress()
+    .minDuration(250)
+    .onStart(() => {
+      if (!canReorder) {
+        return;
+      }
+      runOnJS(beginDrag)(item.id, index);
+    })
+    .onEnd(() => {
+      if (!canReorder) {
+        return;
+      }
+      runOnJS(endDrag)();
+    })
+    .onFinalize(() => {
+      if (!canReorder) {
+        return;
+      }
+      runOnJS(endDrag)();
+    })
+    .enabled(canReorder);
+
+  const panGesture = Gesture.Pan()
+    .onUpdate((event) => {
+      if (!canReorder) {
+        return;
+      }
+      runOnJS(updateDrag)(event.translationX, event.translationY);
+    })
+    .onEnd(() => {
+      if (!canReorder) {
+        return;
+      }
+      runOnJS(endDrag)();
+    })
+    .onFinalize(() => {
+      if (!canReorder) {
+        return;
+      }
+      runOnJS(endDrag)();
+    })
+    .enabled(canReorder);
+
+  const combinedGesture = Gesture.Simultaneous(longPressGesture, panGesture);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ rotateZ: `${wiggle.value}deg` }, { scale: scale.value }],
+  }));
+
+  return (
+    <GestureDetector gesture={combinedGesture}>
+      <Animated.View style={[styles.sheetTileWrapper, animatedStyle]}>
+        <Pressable
+          onLayout={onLayout}
+          style={[styles.emojiTile, isSelected && styles.emojiTileSelected, isDragging && styles.emojiTileDragging]}
+          onPress={() => {
+            if (draggingIdRef.current) {
+              return;
+            }
+            onSelect(item.id, item.owned);
+          }}
+          accessibilityLabel={`${item.name} emoji`}
+          accessibilityHint="Select to ready this decoration."
+        >
+          <Text style={styles.emojiGlyphLarge}>{item.emoji}</Text>
+          {item.owned > 0 ? (
+            <View style={styles.emojiTileBadge}>
+              <Text style={styles.emojiTileBadgeText}>×{item.owned}</Text>
+            </View>
+          ) : null}
+          <Text style={styles.emojiTileLabel} numberOfLines={1}>
+            {item.name}
+          </Text>
+          <View style={styles.emojiTileFooter}>
+            <Text style={[styles.emojiTileMeta, styles.emojiTileCategory]} numberOfLines={1}>
+              {categoryLabel}
+            </Text>
+            <Text style={[styles.emojiTileMeta, styles.inventoryMeta]} numberOfLines={1}>
+              {item.owned.toLocaleString()} owned
+            </Text>
+          </View>
+        </Pressable>
+      </Animated.View>
+    </GestureDetector>
+  );
+}
 
 type DraggablePlacementProps = {
   emoji: string;
@@ -1278,6 +1379,14 @@ function DraggablePlacement({ emoji, placement, onUpdate }: DraggablePlacementPr
     .onEnd(reportUpdate)
     .onFinalize(reportUpdate);
 
+  const singleTapGesture = Gesture.Tap()
+    .numberOfTaps(1)
+    .maxDuration(220)
+    .onEnd(() => {
+      scale.value = Math.min(scale.value * 1.12, MAX_SCALE);
+      reportUpdate();
+    });
+
   const doubleTapGesture = Gesture.Tap()
     .numberOfTaps(2)
     .onEnd(() => {
@@ -1292,11 +1401,13 @@ function DraggablePlacement({ emoji, placement, onUpdate }: DraggablePlacementPr
       reportUpdate();
     });
 
+  const tapGestures = Gesture.Exclusive(doubleTapGesture, singleTapGesture);
+
   const composedGesture = Gesture.Simultaneous(
     panGesture,
     pinchGesture,
     rotationGesture,
-    doubleTapGesture,
+    tapGestures,
     longPressGesture
   );
 
@@ -1344,7 +1455,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     shadowRadius: 12,
     elevation: 4,
-    gap: 10,
+    gap: 6,
   },
   harvestTitle: {
     fontSize: 20,
@@ -1553,6 +1664,28 @@ const styles = StyleSheet.create({
     color: '#2d3748',
     lineHeight: 19,
   },
+  selectionStatusActions: {
+    marginTop: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  selectionStatusMeta: {
+    fontSize: 12,
+    color: '#0f766e',
+    fontWeight: '600',
+  },
+  stopPlacingButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: '#0f766e',
+  },
+  stopPlacingText: {
+    color: '#f0fff4',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   canvas: {
     flex: 1,
     backgroundColor: '#ffffff',
@@ -1703,6 +1836,7 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
     gap: 16,
     maxHeight: '88%',
+    minHeight: '70%',
     width: '100%',
   },
   sheetHandle: {
@@ -1735,6 +1869,9 @@ const styles = StyleSheet.create({
   sheetColumn: {
     gap: 12,
     marginBottom: 12,
+  },
+  sheetList: {
+    flexGrow: 0,
   },
   sheetListContent: {
     paddingBottom: 24,

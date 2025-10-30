@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 
 import { useGame } from '@/context/GameContext';
+
+const PREMIUM_ACCENT_OPTIONS = ['#1f6f4a', '#047857', '#2563eb', '#a855f7', '#f97316', '#0ea5e9'];
 
 export default function ProfileScreen() {
   const {
@@ -15,11 +17,22 @@ export default function ProfileScreen() {
     setProfileName,
     setProfileUsername,
     setProfileImageUri,
+    hasPremiumUpgrade,
+    premiumAccentColor,
+    customClickEmoji,
+    purchasePremiumUpgrade,
+    setPremiumAccentColor,
+    setCustomClickEmoji,
+    emojiCatalog,
+    emojiInventory,
+    registerCustomEmoji,
   } = useGame();
   const router = useRouter();
   const [name, setName] = useState(profileName);
   const [username, setUsername] = useState(profileUsername);
   const [isSaving, setIsSaving] = useState(false);
+  const [emojiInput, setEmojiInput] = useState(customClickEmoji);
+  const [accentSelection, setAccentSelection] = useState(premiumAccentColor);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -29,6 +42,19 @@ export default function ProfileScreen() {
   useEffect(() => {
     setUsername(profileUsername);
   }, [profileUsername]);
+
+  useEffect(() => {
+    setEmojiInput(customClickEmoji);
+  }, [customClickEmoji]);
+
+  useEffect(() => {
+    setAccentSelection(premiumAccentColor);
+  }, [premiumAccentColor]);
+
+  const emojiOptions = useMemo(() => {
+    const sorted = [...emojiCatalog].sort((a, b) => (emojiInventory[b.id] ?? 0) - (emojiInventory[a.id] ?? 0));
+    return sorted.slice(0, 18);
+  }, [emojiCatalog, emojiInventory]);
 
   const persistProfile = useCallback(() => {
     setIsSaving(true);
@@ -80,6 +106,68 @@ export default function ProfileScreen() {
   const handleRemoveImage = useCallback(() => {
     setProfileImageUri(null);
   }, [setProfileImageUri]);
+
+  const handleUpgrade = useCallback(() => {
+    if (hasPremiumUpgrade) {
+      return;
+    }
+
+    Alert.alert(
+      'Upgrade to Garden Plus',
+      'Unlock custom emoji and accent colors for your clicker button and menu icon.',
+      [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Upgrade', onPress: purchasePremiumUpgrade },
+      ]
+    );
+  }, [hasPremiumUpgrade, purchasePremiumUpgrade]);
+
+  const handleSelectAccent = useCallback(
+    (color: string) => {
+      if (!hasPremiumUpgrade) {
+        Alert.alert('Upgrade required', 'Upgrade to choose custom accent colors.');
+        return;
+      }
+
+      setAccentSelection(color);
+      setPremiumAccentColor(color);
+    },
+    [hasPremiumUpgrade, setPremiumAccentColor]
+  );
+
+  const handleApplyEmoji = useCallback(() => {
+    if (!hasPremiumUpgrade) {
+      Alert.alert('Upgrade required', 'Upgrade to change your click emoji.');
+      return;
+    }
+
+    const trimmed = emojiInput.trim();
+
+    if (trimmed.length === 0) {
+      Alert.alert('Enter an emoji', 'Type or select an emoji to personalize your garden.');
+      return;
+    }
+
+    const glyph = Array.from(trimmed)[0];
+    setEmojiInput(glyph);
+    setCustomClickEmoji(glyph);
+    registerCustomEmoji(glyph);
+    Alert.alert('Emoji updated', 'Your click emoji and menu icon have been refreshed.');
+  }, [emojiInput, hasPremiumUpgrade, registerCustomEmoji, setCustomClickEmoji]);
+
+  const handleChooseEmoji = useCallback(
+    (emoji: string) => {
+      if (!hasPremiumUpgrade) {
+        Alert.alert('Upgrade required', 'Upgrade to change your click emoji.');
+        return;
+      }
+
+      setEmojiInput(emoji);
+      setCustomClickEmoji(emoji);
+      registerCustomEmoji(emoji);
+    },
+    [hasPremiumUpgrade, registerCustomEmoji, setCustomClickEmoji]
+  );
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -136,6 +224,77 @@ export default function ProfileScreen() {
             This is the sum of every harvest you’ve collected across all sessions. Keep playing to grow
             your lifetime score.
           </Text>
+        </View>
+
+        <View style={styles.upgradeCard}>
+          <Text style={styles.upgradeTitle}>Garden Plus customization</Text>
+          {hasPremiumUpgrade ? (
+            <>
+              <Text style={styles.upgradeCopy}>Choose an accent color for your click target.</Text>
+              <View style={styles.accentRow}>
+                {PREMIUM_ACCENT_OPTIONS.map((color) => {
+                  const isActive = accentSelection === color;
+                  return (
+                    <Pressable
+                      key={color}
+                      style={[styles.accentSwatch, { backgroundColor: color }, isActive && styles.accentSwatchActive]}
+                      onPress={() => handleSelectAccent(color)}
+                      accessibilityLabel={`Select accent color ${color}`}
+                      accessibilityState={{ selected: isActive }}
+                    >
+                      {isActive ? <Text style={styles.accentSwatchCheck}>✓</Text> : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <Text style={styles.upgradeCopy}>Pick the emoji that appears on the home canvas and menu.</Text>
+              {emojiOptions.length > 0 ? (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.emojiRow}>
+                  {emojiOptions.map((option) => {
+                    const isSelected = option.emoji === customClickEmoji;
+                    return (
+                      <Pressable
+                        key={option.id}
+                        style={[styles.emojiChoice, isSelected && styles.emojiChoiceActive]}
+                        onPress={() => handleChooseEmoji(option.emoji)}
+                        accessibilityLabel={`Use ${option.emoji} as your click emoji`}
+                        accessibilityState={{ selected: isSelected }}
+                      >
+                        <Text style={styles.emojiChoiceGlyph}>{option.emoji}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              ) : (
+                <Text style={styles.emojiEmptyText}>Purchase garden decorations to see suggested emoji.</Text>
+              )}
+              <TextInput
+                value={emojiInput}
+                onChangeText={setEmojiInput}
+                placeholder="Type any emoji"
+                style={styles.emojiInput}
+                maxLength={6}
+                autoCorrect={false}
+                autoCapitalize="none"
+                returnKeyType="done"
+              />
+              <Text style={styles.emojiNote}>
+                Tip: applying an emoji updates both the main click button and the lettuce menu icon.
+              </Text>
+              <Pressable style={styles.applyButton} onPress={handleApplyEmoji} accessibilityLabel="Apply custom emoji">
+                <Text style={styles.applyButtonText}>Apply emoji</Text>
+              </Pressable>
+            </>
+          ) : (
+            <>
+              <Text style={styles.upgradeCopy}>
+                Upgrade for $2.99 to unlock custom emoji choices and accent colors for your garden clicker.
+              </Text>
+              <Pressable style={styles.upgradeButton} onPress={handleUpgrade} accessibilityLabel="Upgrade to Garden Plus">
+                <Text style={styles.upgradeButtonText}>Upgrade for $2.99</Text>
+              </Pressable>
+            </>
+          )}
         </View>
 
         <Pressable style={[styles.saveButton, isSaving && styles.saveButtonDisabled]} onPress={persistProfile} disabled={isSaving}>
@@ -258,6 +417,115 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#2d3748',
     lineHeight: 20,
+  },
+  upgradeCard: {
+    backgroundColor: '#f0fff4',
+    borderRadius: 20,
+    padding: 20,
+    gap: 16,
+    shadowColor: '#0f766e',
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  upgradeTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#14532d',
+  },
+  upgradeCopy: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#1f2937',
+  },
+  accentRow: {
+    flexDirection: 'row',
+    gap: 12,
+    flexWrap: 'wrap',
+  },
+  accentSwatch: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.6)',
+  },
+  accentSwatchActive: {
+    borderColor: '#22543d',
+    shadowColor: '#22543d',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  accentSwatchCheck: {
+    color: '#f0fff4',
+    fontWeight: '800',
+  },
+  emojiRow: {
+    gap: 12,
+    paddingVertical: 4,
+  },
+  emojiChoice: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#d1fae5',
+  },
+  emojiChoiceActive: {
+    borderColor: '#22543d',
+    backgroundColor: '#dcfce7',
+  },
+  emojiChoiceGlyph: {
+    fontSize: 28,
+  },
+  emojiEmptyText: {
+    fontSize: 13,
+    color: '#2d3748',
+  },
+  emojiInput: {
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  emojiNote: {
+    fontSize: 12,
+    color: '#1f6f4a',
+    lineHeight: 18,
+  },
+  applyButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#14532d',
+    borderRadius: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  applyButtonText: {
+    color: '#f0fff4',
+    fontWeight: '700',
+  },
+  upgradeButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#047857',
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  upgradeButtonText: {
+    color: '#f0fff4',
+    fontWeight: '700',
+    fontSize: 16,
   },
   saveButton: {
     backgroundColor: '#22543d',

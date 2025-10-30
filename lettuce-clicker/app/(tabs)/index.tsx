@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
@@ -9,6 +9,35 @@ import { useGame } from '@/context/GameContext';
 import type { HomeEmojiTheme } from '@/context/GameContext';
 
 const MODAL_STORAGE_KEY = 'lettuce-click:grow-your-park-dismissed';
+const BONUS_REWARD_OPTIONS = [75, 125, 200, 325, 500, 650];
+const BONUS_ADDITIONAL_SPINS = 2;
+
+const lightenColor = (hex: string, factor: number) => {
+  const normalized = hex.replace('#', '');
+
+  if (normalized.length !== 6 && normalized.length !== 3) {
+    return hex;
+  }
+
+  const expanded = normalized.length === 3 ? normalized.split('').map((char) => char + char).join('') : normalized;
+  const value = Number.parseInt(expanded, 16);
+
+  if (!Number.isFinite(value)) {
+    return hex;
+  }
+
+  const channel = (shift: number) => (value >> shift) & 0xff;
+  const clampChannel = (channelValue: number) => {
+    const boundedFactor = Math.min(Math.max(factor, 0), 1);
+    const next = Math.round(channelValue + (255 - channelValue) * boundedFactor);
+    return Math.max(0, Math.min(255, next));
+  };
+
+  const r = clampChannel(channel(16));
+  const g = clampChannel(channel(8));
+  const b = clampChannel(channel(0));
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+};
 
 export default function HomeScreen() {
   const {
@@ -22,17 +51,35 @@ export default function HomeScreen() {
     profileName,
     resumeNotice,
     clearResumeNotice,
+    customClickEmoji,
+    premiumAccentColor,
+    addHarvestAmount,
+    spendHarvestAmount,
   } = useGame();
   const [showGrowModal, setShowGrowModal] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeNotice, setActiveNotice] = useState<typeof resumeNotice>(null);
+  const [showDailyBonus, setShowDailyBonus] = useState(false);
+  const [availableBonusSpins, setAvailableBonusSpins] = useState(1);
+  const [bonusMessage, setBonusMessage] = useState<string | null>(null);
+  const [lastBonusReward, setLastBonusReward] = useState<number | null>(null);
+  const [hasWatchedBonusAd, setHasWatchedBonusAd] = useState(false);
+  const [hasPurchasedBonusSpins, setHasPurchasedBonusSpins] = useState(false);
+  const [isSpinningBonus, setIsSpinningBonus] = useState(false);
+  const [isWatchingAd, setIsWatchingAd] = useState(false);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const headerPaddingTop = useMemo(() => Math.max(insets.top, 4), [insets.top]);
+  const contentPaddingBottom = useMemo(() => insets.bottom + 140, [insets.bottom]);
   const friendlyName = useMemo(() => {
     const trimmed = profileName.trim();
     return trimmed.length > 0 ? trimmed : 'Gardener';
   }, [profileName]);
+  const accentColor = useMemo(() => premiumAccentColor || '#1f6f4a', [premiumAccentColor]);
+  const accentSurface = useMemo(() => lightenColor(accentColor, 0.7), [accentColor]);
+  const accentRingOuter = useMemo(() => lightenColor(accentColor, 0.55), [accentColor]);
+  const accentRingMiddle = useMemo(() => lightenColor(accentColor, 0.45), [accentColor]);
+  const accentRingInner = useMemo(() => lightenColor(accentColor, 0.35), [accentColor]);
   const themeOptions = useMemo(
     () => [
       { label: '🔵 Circle', value: 'circle' as HomeEmojiTheme },
@@ -107,6 +154,72 @@ export default function HomeScreen() {
     [setHomeEmojiTheme]
   );
 
+  const handleOpenDailyBonus = useCallback(() => {
+    setMenuOpen(false);
+    setShowDailyBonus(true);
+    setAvailableBonusSpins(1);
+    setBonusMessage(null);
+    setLastBonusReward(null);
+    setHasWatchedBonusAd(false);
+    setIsSpinningBonus(false);
+    setIsWatchingAd(false);
+    setHasPurchasedBonusSpins(false);
+  }, []);
+
+  const handleCloseDailyBonus = useCallback(() => {
+    setShowDailyBonus(false);
+  }, []);
+
+  const handleSpinBonus = useCallback(() => {
+    if (availableBonusSpins <= 0 || isSpinningBonus) {
+      return;
+    }
+
+    setIsSpinningBonus(true);
+    setBonusMessage('Spinning…');
+    const reward = BONUS_REWARD_OPTIONS[Math.floor(Math.random() * BONUS_REWARD_OPTIONS.length)];
+    setTimeout(() => {
+      addHarvestAmount(reward);
+      setAvailableBonusSpins((prev) => Math.max(prev - 1, 0));
+      setLastBonusReward(reward);
+      setBonusMessage(`You earned ${reward.toLocaleString()} clicks!`);
+      setIsSpinningBonus(false);
+    }, 900);
+  }, [addHarvestAmount, availableBonusSpins, isSpinningBonus]);
+
+  const handleWatchBonusAd = useCallback(() => {
+    if (hasWatchedBonusAd || isWatchingAd) {
+      Alert.alert('Advertisement already viewed', 'Check back tomorrow for more free spins.');
+      return;
+    }
+
+    setIsWatchingAd(true);
+    setBonusMessage('Watching advertisement…');
+    setTimeout(() => {
+      setAvailableBonusSpins((prev) => prev + BONUS_ADDITIONAL_SPINS);
+      setHasWatchedBonusAd(true);
+      setIsWatchingAd(false);
+      setBonusMessage('You unlocked two more spins!');
+    }, 1200);
+  }, [hasWatchedBonusAd, isWatchingAd]);
+
+  const handlePurchaseSpinWithHarvest = useCallback(() => {
+    if (isWatchingAd || hasPurchasedBonusSpins) {
+      return;
+    }
+
+    const cost = 500;
+    const success = spendHarvestAmount(cost);
+    if (!success) {
+      Alert.alert('Not enough harvest', `You need ${cost.toLocaleString()} clicks to purchase extra spins.`);
+      return;
+    }
+
+    setAvailableBonusSpins((prev) => prev + BONUS_ADDITIONAL_SPINS);
+    setHasPurchasedBonusSpins(true);
+    setBonusMessage('Purchased two additional spins!');
+  }, [hasPurchasedBonusSpins, isWatchingAd, spendHarvestAmount]);
+
   const handleDismissNotice = useCallback(() => {
     setActiveNotice(null);
     clearResumeNotice();
@@ -124,14 +237,16 @@ export default function HomeScreen() {
               style={styles.menuButton}
               onPress={() => setMenuOpen((prev) => !prev)}
               hitSlop={8}>
-              <Text style={[styles.menuIcon, menuOpen && styles.menuIconActive]}>{menuOpen ? '✕' : '🥬'}</Text>
+              <Text style={[styles.menuIcon, menuOpen && styles.menuIconActive]}>
+                {menuOpen ? '✕' : customClickEmoji}
+              </Text>
             </Pressable>
           </View>
         </View>
 
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={[styles.content, { paddingTop: 12 }]}
+          contentContainerStyle={[styles.content, { paddingTop: 12, paddingBottom: contentPaddingBottom }]}
           showsVerticalScrollIndicator
           alwaysBounceVertical
         >
@@ -147,12 +262,22 @@ export default function HomeScreen() {
             <Pressable
               accessibilityLabel="Harvest lettuce"
               onPress={addHarvest}
-              style={({ pressed }) => [styles.lettuceButton, pressed && styles.lettucePressed]}
+              style={({ pressed }) => [
+                styles.lettuceButton,
+                { backgroundColor: accentSurface, shadowColor: accentColor },
+                pressed && styles.lettucePressed,
+              ]}
             >
-              <View style={[styles.ring, styles.ringOuter]} />
-              <View style={[styles.ring, styles.ringMiddle]} />
-              <View style={[styles.ring, styles.ringInner]} />
-              <Text style={styles.lettuceEmoji}>🥬</Text>
+              <View style={[styles.ring, styles.ringOuter, { borderColor: accentRingOuter }]} />
+              <View style={[styles.ring, styles.ringMiddle, { borderColor: accentRingMiddle }]} />
+              <View
+                style={[
+                  styles.ring,
+                  styles.ringInner,
+                  { borderColor: accentRingInner, backgroundColor: lightenColor(accentRingInner, 0.45) },
+                ]}
+              />
+              <Text style={styles.lettuceEmoji}>{customClickEmoji}</Text>
             </Pressable>
           </View>
 
@@ -190,6 +315,9 @@ export default function HomeScreen() {
               <View style={styles.menuSheetContent}>
                 <Pressable style={styles.menuItem} onPress={handleNavigateProfile}>
                   <Text style={styles.menuItemText}>Profile</Text>
+                </Pressable>
+                <Pressable style={styles.menuItem} onPress={handleOpenDailyBonus}>
+                  <Text style={[styles.menuItemText, styles.menuHighlight]}>Daily Bonus!</Text>
                 </Pressable>
                 <View style={styles.menuDivider} />
                 <Text style={styles.menuSectionTitle}>Emoji Themes</Text>
@@ -253,6 +381,62 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal visible={showDailyBonus} animationType="slide" onRequestClose={handleCloseDailyBonus}>
+        <SafeAreaView style={styles.bonusSafeArea}>
+          <View style={styles.bonusContainer}>
+            <Text style={styles.bonusTitle}>Daily Bonus</Text>
+            <Text style={styles.bonusSubtitle}>
+              Spin the garden wheel for surprise clicks. Your first spin is free every time you open the bonus.
+            </Text>
+            <View style={[styles.bonusWheel, { borderColor: accentColor }]}>
+              <Text style={styles.bonusWheelEmoji}>{customClickEmoji}</Text>
+            </View>
+            <Text style={styles.bonusSpinsLabel}>
+              {availableBonusSpins} {availableBonusSpins === 1 ? 'spin left' : 'spins left'}
+            </Text>
+            {lastBonusReward ? (
+              <Text style={styles.bonusReward}>Last reward: {lastBonusReward.toLocaleString()} clicks</Text>
+            ) : null}
+            {bonusMessage ? <Text style={styles.bonusMessage}>{bonusMessage}</Text> : null}
+            <Pressable
+              style={[styles.bonusPrimaryButton, (isSpinningBonus || availableBonusSpins <= 0) && styles.bonusButtonDisabled]}
+              onPress={handleSpinBonus}
+              disabled={isSpinningBonus || availableBonusSpins <= 0}
+              accessibilityLabel="Spin the bonus wheel"
+            >
+              <Text style={styles.bonusPrimaryText}>
+                {availableBonusSpins > 0 ? (isSpinningBonus ? 'Spinning…' : 'Spin for clicks') : 'No spins left'}
+              </Text>
+            </Pressable>
+            <View style={styles.bonusActionsRow}>
+              <Pressable
+                style={[styles.bonusSecondaryButton, isWatchingAd && styles.bonusButtonDisabled]}
+                onPress={handleWatchBonusAd}
+                disabled={isWatchingAd}
+                accessibilityLabel="Watch an advertisement for spins"
+              >
+                <Text style={styles.bonusSecondaryText}>
+                  {isWatchingAd ? 'Loading…' : hasWatchedBonusAd ? 'Ad watched' : 'Watch ad for 2 spins'}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[styles.bonusSecondaryButton, hasPurchasedBonusSpins && styles.bonusButtonDisabled]}
+                onPress={handlePurchaseSpinWithHarvest}
+                disabled={hasPurchasedBonusSpins}
+                accessibilityLabel="Buy extra spins"
+              >
+                <Text style={styles.bonusSecondaryText}>
+                  {hasPurchasedBonusSpins ? 'Spins purchased' : 'Buy 2 spins (500 clicks)'}
+                </Text>
+              </Pressable>
+            </View>
+            <Pressable style={styles.bonusCloseButton} onPress={handleCloseDailyBonus} accessibilityLabel="Close daily bonus">
+              <Text style={styles.bonusCloseText}>Back to the garden</Text>
+            </Pressable>
+          </View>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -302,7 +486,6 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 24,
-    paddingBottom: 140,
     gap: 28,
   },
   title: {
@@ -361,11 +544,9 @@ const styles = StyleSheet.create({
     width: 200,
     height: 200,
     borderRadius: 100,
-    backgroundColor: '#f9fff7',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    shadowColor: '#14532d',
     shadowOpacity: 0.3,
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 14 },
@@ -382,18 +563,14 @@ const styles = StyleSheet.create({
   ringOuter: {
     width: 200,
     height: 200,
-    borderColor: 'rgba(56, 161, 105, 0.4)',
   },
   ringMiddle: {
     width: 150,
     height: 150,
-    borderColor: 'rgba(72, 187, 120, 0.6)',
   },
   ringInner: {
     width: 108,
     height: 108,
-    borderColor: 'rgba(110, 231, 183, 0.8)',
-    backgroundColor: 'rgba(209, 250, 229, 0.6)',
   },
   lettuceEmoji: {
     fontSize: 76,
@@ -520,6 +697,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#134e32',
   },
+  menuHighlight: {
+    color: '#0f766e',
+    fontWeight: '700',
+  },
   menuDivider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: '#d1fae5',
@@ -560,6 +741,107 @@ const styles = StyleSheet.create({
     color: '#f0fff4',
     fontWeight: '700',
     fontSize: 16,
+  },
+  bonusSafeArea: {
+    flex: 1,
+    backgroundColor: '#f2f9f2',
+  },
+  bonusContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    gap: 18,
+  },
+  bonusTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#14532d',
+    textAlign: 'center',
+  },
+  bonusSubtitle: {
+    fontSize: 15,
+    color: '#1f2937',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  bonusWheel: {
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    borderWidth: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    shadowColor: '#1f2937',
+    shadowOpacity: 0.2,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 10,
+  },
+  bonusWheelEmoji: {
+    fontSize: 84,
+  },
+  bonusSpinsLabel: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#14532d',
+  },
+  bonusReward: {
+    fontSize: 16,
+    color: '#1f2937',
+  },
+  bonusMessage: {
+    fontSize: 14,
+    color: '#0f766e',
+    textAlign: 'center',
+  },
+  bonusPrimaryButton: {
+    width: '100%',
+    backgroundColor: '#14532d',
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  bonusPrimaryText: {
+    color: '#f0fff4',
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  bonusActionsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  bonusSecondaryButton: {
+    flex: 1,
+    borderRadius: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#0f766e',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bonusSecondaryText: {
+    color: '#0f766e',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  bonusButtonDisabled: {
+    opacity: 0.6,
+  },
+  bonusCloseButton: {
+    marginTop: 12,
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 28,
+    backgroundColor: '#1f6f4a',
+  },
+  bonusCloseText: {
+    color: '#f0fff4',
+    fontWeight: '700',
+    fontSize: 16,
+    textAlign: 'center',
   },
   noticeOverlay: {
     flex: 1,

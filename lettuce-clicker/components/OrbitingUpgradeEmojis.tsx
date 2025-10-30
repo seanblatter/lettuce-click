@@ -421,7 +421,7 @@ function getMatrixLeft(column: number) {
     return MATRIX_PADDING;
   }
 
-  if (MATRIX_COLUMNS === 1) {
+  if (MATRIX_COLUMNS <= 1) {
     return MATRIX_PADDING + availableWidth / 2;
   }
 
@@ -1053,8 +1053,8 @@ function StarlightHalo({ emojis, radius }: BasePatternProps) {
 
   return (
     <View pointerEvents="none" style={styles.wrapper}>
-      <Animated.View style={[styles.container, { transform: [{ rotate }] }]}> {
-        placements.map(({ id, emoji, angle, distance }) => (
+      <Animated.View style={[styles.container, { transform: [{ rotate }] }]}>
+        {placements.map(({ id, emoji, angle, distance }) => (
           <View
             key={id}
             style={[

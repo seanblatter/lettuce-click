@@ -77,7 +77,6 @@ type GameContextValue = {
   profileName: string;
   profileUsername: string;
   profileImageUri: string | null;
-  showProfileImageOnHome: boolean;
   homeEmojiTheme: HomeEmojiTheme;
   resumeNotice: PassiveResumeNotice | null;
   hasPremiumUpgrade: boolean;
@@ -96,7 +95,6 @@ type GameContextValue = {
   setProfileName: (value: string) => void;
   setProfileUsername: (value: string) => void;
   setProfileImageUri: (uri: string | null) => void;
-  setShowProfileImageOnHome: (value: boolean) => void;
   setHomeEmojiTheme: (theme: HomeEmojiTheme) => void;
   purchasePremiumUpgrade: () => void;
   setPremiumAccentColor: (color: string) => void;
@@ -265,7 +263,6 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [profileName, setProfileName] = useState('');
   const [profileUsername, setProfileUsername] = useState('');
   const [profileImageUri, setProfileImageUri] = useState<string | null>(null);
-  const [showProfileImageOnHome, setShowProfileImageOnHome] = useState(true);
   const [homeEmojiTheme, setHomeEmojiTheme] = useState<HomeEmojiTheme>('circle');
   const [resumeNotice, setResumeNotice] = useState<PassiveResumeNotice | null>(null);
   const [customEmojiCatalog, setCustomEmojiCatalog] = useState<Record<string, EmojiDefinition>>({});
@@ -693,7 +690,6 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     profileName,
     profileUsername,
     profileImageUri,
-    showProfileImageOnHome,
     homeEmojiTheme,
     resumeNotice,
     hasPremiumUpgrade,
@@ -712,7 +708,6 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     setProfileName,
     setProfileUsername,
     setProfileImageUri,
-    setShowProfileImageOnHome,
     setHomeEmojiTheme,
     purchasePremiumUpgrade,
     setPremiumAccentColor,
@@ -731,7 +726,6 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     profileName,
     profileUsername,
     profileImageUri,
-    showProfileImageOnHome,
     homeEmojiTheme,
     resumeNotice,
     hasPremiumUpgrade,
@@ -760,14 +754,10 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
               username?: string;
               imageUri?: string | null;
               lifetimeTotal?: number;
-              showProfileImageOnHome?: boolean;
             };
             setProfileName(parsed.name ?? '');
             setProfileUsername(parsed.username ?? '');
             setProfileImageUri(parsed.imageUri ?? null);
-            if (typeof parsed.showProfileImageOnHome === 'boolean') {
-              setShowProfileImageOnHome(parsed.showProfileImageOnHome);
-            }
             setProfileLifetimeTotal(parsed.lifetimeTotal ?? 0);
           } catch (error) {
             // ignore malformed stored data
@@ -894,19 +884,12 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       username: profileUsername,
       imageUri: profileImageUri,
       lifetimeTotal: profileLifetimeTotal,
-      showProfileImageOnHome,
     });
 
     AsyncStorage.setItem(PROFILE_STORAGE_KEY, payload).catch(() => {
       // persistence best effort only
     });
-  }, [
-    profileImageUri,
-    profileLifetimeTotal,
-    profileName,
-    profileUsername,
-    showProfileImageOnHome,
-  ]);
+  }, [profileImageUri, profileLifetimeTotal, profileName, profileUsername]);
 
   useEffect(() => {
     if (!initialisedRef.current) {

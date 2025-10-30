@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -17,8 +17,6 @@ export default function ProfileScreen() {
     setProfileName,
     setProfileUsername,
     setProfileImageUri,
-    showProfileImageOnHome,
-    setShowProfileImageOnHome,
     hasPremiumUpgrade,
     premiumAccentColor,
     customClickEmoji,
@@ -219,22 +217,6 @@ export default function ProfileScreen() {
           />
         </View>
 
-        <View style={styles.toggleRow}>
-          <View style={styles.toggleCopy}>
-            <Text style={styles.toggleLabel}>Show profile photo on home</Text>
-            <Text style={styles.toggleDescription}>
-              Display your avatar beside the garden menu button.
-            </Text>
-          </View>
-          <Switch
-            value={showProfileImageOnHome}
-            onValueChange={setShowProfileImageOnHome}
-            trackColor={{ false: '#bfdbfe', true: '#86efac' }}
-            thumbColor={showProfileImageOnHome ? '#166534' : '#f1f5f9'}
-            accessibilityLabel="Toggle profile photo visibility on home"
-          />
-        </View>
-
         <View style={styles.statsCard}>
           <Text style={styles.statsTitle}>Lifetime harvest</Text>
           <Text style={styles.statsValue}>{profileLifetimeTotal.toLocaleString()}</Text>
@@ -394,35 +376,6 @@ const styles = StyleSheet.create({
   },
   formSection: {
     gap: 8,
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#ffffff',
-    borderRadius: 18,
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
-  },
-  toggleCopy: {
-    flex: 1,
-    paddingRight: 12,
-    gap: 4,
-  },
-  toggleLabel: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#14532d',
-  },
-  toggleDescription: {
-    fontSize: 14,
-    color: '#4a5568',
-    lineHeight: 18,
   },
   sectionLabel: {
     fontSize: 16,

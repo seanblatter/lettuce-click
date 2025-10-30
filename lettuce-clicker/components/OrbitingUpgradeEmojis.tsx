@@ -170,7 +170,7 @@ function CircleOrbit({ emojis, radius }: BasePatternProps) {
 
   return (
     <View pointerEvents="none" style={styles.wrapper}>
-      <Animated.View style={[styles.container, { transform: [{ rotate }] }]}> {
+      <Animated.View style={[styles.container, { transform: [{ rotate }] }]}>{
         positioned.map(({ id, emoji, angle, distance }) => (
           <View
             key={id}
@@ -233,7 +233,7 @@ function SpiralOrbit({ emojis, radius }: BasePatternProps) {
 
   return (
     <View pointerEvents="none" style={styles.wrapper}>
-      <Animated.View style={[styles.container, { transform: [{ rotate }] }]}> {
+      <Animated.View style={[styles.container, { transform: [{ rotate }] }]}>{
         positioned.map(({ id, emoji, angle, distance }) => {
           const translateTransform = {
             translateX: drift.interpolate({
@@ -864,9 +864,9 @@ function LaserSweep({ emojis, radius }: BasePatternProps) {
 
   return (
     <View pointerEvents="none" style={styles.wrapper}>
-      <Animated.View style={[styles.container, { transform: [{ rotate }] }]}> {
+      <Animated.View style={[styles.container, { transform: [{ rotate }] }]}>{
         beamAssignments.map((beam, index) => (
-          <View key={`laser-beam-${index}`} style={[styles.beamContainer, { transform: [{ rotate: `${beamAngles[index]}rad` }] }]}> {
+          <View key={`laser-beam-${index}`} style={[styles.beamContainer, { transform: [{ rotate: `${beamAngles[index]}rad` }] }]}>{
             beam.map((emoji, emojiIndex) => {
               const distance = radius * (0.4 + emojiIndex * 0.35);
               return (
@@ -1099,7 +1099,7 @@ function NebulaSwirl({ emojis, radius }: BasePatternProps) {
 
   return (
     <View pointerEvents="none" style={styles.wrapper}>
-      <Animated.View style={[styles.container, { transform: [{ rotate }] }]}> {
+      <Animated.View style={[styles.container, { transform: [{ rotate }] }]}>{
         placements.map(({ id, emoji, distance, angle, layer }) => {
           const translateX = drift.interpolate({
             inputRange: [0, 0.5, 1],

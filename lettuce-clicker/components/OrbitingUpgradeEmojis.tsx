@@ -5,17 +5,19 @@ import type { HomeEmojiTheme, OrbitingEmoji } from '@/context/GameContext';
 
 const FULL_ROTATION_RADIANS = Math.PI * 2;
 const DEFAULT_RADIUS = 120;
-const SPIRAL_STEP = 12;
-const SPIRAL_BASE_RADIUS_RATIO = 0.35;
+const SPIRAL_STEP = 10;
+const SPIRAL_BASE_RADIUS_RATIO = 0.28;
 const SPIRAL_DEFAULT_ARMS = 4;
 const SPIRAL_MAX_ARMS = 6;
-const SPIRAL_ANGLE_STEP = Math.PI / 24;
-const MATRIX_MAX_EMOJIS = 18;
+const SPIRAL_ANGLE_STEP = Math.PI / 28;
+const SPIRAL_DRIFT_RANGE = 48;
+const SPIRAL_DRIFT_DURATION = 20000;
+const MATRIX_MAX_EMOJIS = 28;
 
 const WINDOW = Dimensions.get('window');
 const WINDOW_WIDTH = WINDOW.width;
 const WINDOW_HEIGHT = WINDOW.height;
-const MATRIX_EXTRA_SPREAD = 160;
+const MATRIX_EXTRA_SPREAD = 220;
 const MATRIX_WIDTH = WINDOW_WIDTH + MATRIX_EXTRA_SPREAD;
 const MATRIX_HEIGHT = WINDOW_HEIGHT * 1.6;
 const MATRIX_START_Y = -WINDOW_HEIGHT * 0.6;
@@ -48,6 +50,8 @@ type OrbitingRingProps = {
 
 function OrbitingRing({ emojis, radius, theme }: OrbitingRingProps) {
   const rotation = useRef(new Animated.Value(0)).current;
+  const spiralDrift = useRef(new Animated.Value(0)).current;
+  const spiralLoopRef = useRef<Animated.CompositeAnimation | null>(null);
 
   useEffect(() => {
     rotation.stopAnimation();
@@ -72,6 +76,40 @@ function OrbitingRing({ emojis, radius, theme }: OrbitingRingProps) {
       loop.stop();
     };
   }, [emojis.length, rotation, theme]);
+
+  useEffect(() => {
+    spiralLoopRef.current?.stop();
+
+    if (theme !== 'spiral' || emojis.length === 0) {
+      spiralDrift.setValue(0);
+      return;
+    }
+
+    spiralDrift.setValue(0);
+    const driftLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(spiralDrift, {
+          toValue: 1,
+          duration: SPIRAL_DRIFT_DURATION,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(spiralDrift, {
+          toValue: 0,
+          duration: SPIRAL_DRIFT_DURATION,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    spiralLoopRef.current = driftLoop;
+    driftLoop.start();
+
+    return () => {
+      driftLoop.stop();
+    };
+  }, [emojis.length, spiralDrift, theme]);
 
   const rotate = useMemo(
     () =>
@@ -120,22 +158,34 @@ function OrbitingRing({ emojis, radius, theme }: OrbitingRingProps) {
   return (
     <View pointerEvents="none" style={styles.wrapper}>
       <Animated.View style={[styles.container, { transform: [{ rotate }] }]}>
-        {positioned.map(({ id, emoji, angle, distance }) => (
-          <Animated.View
-            key={id}
-            style={[
-              styles.emojiWrapper,
-              {
-                transform: [
-                  { rotate: `${angle}rad` },
-                  { translateX: distance },
-                  { rotate: `${-angle}rad` },
-                ],
-              },
-            ]}>
-            <Text style={[styles.emoji, theme === 'spiral' && styles.emojiSpiral]}>{emoji}</Text>
-          </Animated.View>
-        ))}
+        {positioned.map(({ id, emoji, angle, distance }) => {
+          const translateTransform =
+            theme === 'spiral'
+              ? {
+                  translateX: spiralDrift.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [distance, distance + SPIRAL_DRIFT_RANGE],
+                  }),
+                }
+              : { translateX: distance };
+
+          return (
+            <Animated.View
+              key={id}
+              style={[
+                styles.emojiWrapper,
+                {
+                  transform: [
+                    { rotate: `${angle}rad` },
+                    translateTransform,
+                    { rotate: `${-angle}rad` },
+                  ],
+                },
+              ]}>
+              <Text style={[styles.emoji, theme === 'spiral' && styles.emojiSpiral]}>{emoji}</Text>
+            </Animated.View>
+          );
+        })}
       </Animated.View>
     </View>
   );
@@ -280,10 +330,10 @@ function createMatrixDrop(id: string, column: number, left: number): MatrixDrop 
 }
 
 const MATRIX_PADDING = 32;
-const MATRIX_COLUMNS = 6;
-const MATRIX_DURATION_BASE = 4200;
-const MATRIX_DURATION_VARIATION = 1400;
-const MATRIX_DELAY_STEP = 160;
+const MATRIX_COLUMNS = 7;
+const MATRIX_DURATION_BASE = 2800;
+const MATRIX_DURATION_VARIATION = 1200;
+const MATRIX_DELAY_STEP = 90;
 
 function getMatrixColumn(id: string) {
   let hash = 0;

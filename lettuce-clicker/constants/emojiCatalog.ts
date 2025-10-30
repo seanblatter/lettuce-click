@@ -1,5 +1,22 @@
 import type { EmojiCategory, EmojiDefinition } from '@/context/GameContext';
 
+const CATEGORY_COST_MULTIPLIER: Record<EmojiCategory, number> = {
+  plants: 1.35,
+  scenery: 1.45,
+  creatures: 1.95,
+  features: 2.05,
+  accents: 1.4,
+};
+
+const COST_ROUNDING_INCREMENT = 5;
+
+const adjustCostForCategory = (cost: number, category: EmojiCategory) => {
+  const multiplier = CATEGORY_COST_MULTIPLIER[category] ?? 1.4;
+  const adjusted = cost * multiplier;
+  const rounded = Math.ceil(adjusted / COST_ROUNDING_INCREMENT) * COST_ROUNDING_INCREMENT;
+  return Math.max(rounded, cost + COST_ROUNDING_INCREMENT);
+};
+
 const createEmoji = (
   definition: Omit<EmojiDefinition, 'tags' | 'popularity'> & {
     tags: (string | { keyword: string; aliases?: string[] })[];
@@ -19,7 +36,7 @@ const createEmoji = (
     id: definition.id,
     emoji: definition.emoji,
     name: definition.name,
-    cost: definition.cost,
+    cost: adjustCostForCategory(definition.cost, definition.category),
     category: definition.category,
     tags: Array.from(new Set(normalizedTags)),
     popularity: definition.popularity,

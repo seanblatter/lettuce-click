@@ -687,19 +687,22 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         let loadedLifetimeHarvest: number | undefined;
         let loadedHarvest: number | undefined;
         let loadedAutoPerSecond = 0;
+        const shouldResetSession = Boolean(exitEntry[1]);
 
         if (gameEntry[1]) {
           try {
             const parsed = JSON.parse(gameEntry[1]) as Partial<StoredGameState>;
-            if (typeof parsed.harvest === 'number' && Number.isFinite(parsed.harvest)) {
-              setHarvest(parsed.harvest);
-              loadedHarvest = parsed.harvest;
-            }
             if (typeof parsed.lifetimeHarvest === 'number' && Number.isFinite(parsed.lifetimeHarvest)) {
               setLifetimeHarvest(parsed.lifetimeHarvest);
               loadedLifetimeHarvest = parsed.lifetimeHarvest;
             }
-            if (parsed.purchasedUpgrades && typeof parsed.purchasedUpgrades === 'object') {
+            if (!shouldResetSession && typeof parsed.harvest === 'number' && Number.isFinite(parsed.harvest)) {
+              setHarvest(parsed.harvest);
+              loadedHarvest = parsed.harvest;
+            } else if (shouldResetSession) {
+              setHarvest(0);
+            }
+            if (parsed.purchasedUpgrades && typeof parsed.purchasedUpgrades === 'object' && !shouldResetSession) {
               setPurchasedUpgrades(parsed.purchasedUpgrades);
               const computedAuto = Object.entries(parsed.purchasedUpgrades).reduce((total, [upgradeId, count]) => {
                 const upgrade = upgradeCatalog.find((item) => item.id === upgradeId);
@@ -710,23 +713,35 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
               }, 0);
               setAutoPerSecond(computedAuto);
               loadedAutoPerSecond = computedAuto;
+            } else if (shouldResetSession) {
+              setPurchasedUpgrades({});
+              setAutoPerSecond(0);
+              loadedAutoPerSecond = 0;
             }
-            if (parsed.emojiInventory && typeof parsed.emojiInventory === 'object') {
+            if (!shouldResetSession && parsed.emojiInventory && typeof parsed.emojiInventory === 'object') {
               setEmojiInventory(parsed.emojiInventory);
+            } else if (shouldResetSession) {
+              setEmojiInventory({});
             }
-            if (Array.isArray(parsed.placements)) {
+            if (!shouldResetSession && Array.isArray(parsed.placements)) {
               setPlacements(
                 parsed.placements.map((entry) => ({
                   ...entry,
                   rotation: typeof entry.rotation === 'number' ? entry.rotation : 0,
                 }))
               );
+            } else if (shouldResetSession) {
+              setPlacements([]);
             }
-            if (Array.isArray(parsed.orbitingUpgradeEmojis)) {
+            if (!shouldResetSession && Array.isArray(parsed.orbitingUpgradeEmojis)) {
               setOrbitingUpgradeEmojis(parsed.orbitingUpgradeEmojis);
+            } else if (shouldResetSession) {
+              setOrbitingUpgradeEmojis([]);
             }
-            if (parsed.customEmojiCatalog && typeof parsed.customEmojiCatalog === 'object') {
+            if (!shouldResetSession && parsed.customEmojiCatalog && typeof parsed.customEmojiCatalog === 'object') {
               setCustomEmojiCatalog(parsed.customEmojiCatalog);
+            } else if (shouldResetSession) {
+              setCustomEmojiCatalog({});
             }
           } catch {
             // ignore malformed stored data
@@ -734,17 +749,23 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         }
 
         if (exitEntry[1]) {
-          setResumeNotice({
-            type: 'returning',
-            lifetimeHarvest: loadedLifetimeHarvest ?? lifetimeHarvestRef.current,
-            timestamp: Date.now(),
-            harvestSnapshot: loadedHarvest ?? harvestRef.current,
-            lifetimeHarvestSnapshot: loadedLifetimeHarvest ?? lifetimeHarvestRef.current,
-            autoPerSecondSnapshot: loadedAutoPerSecond || autoPerSecondRef.current,
-          });
-          AsyncStorage.removeItem(LAST_EXIT_STORAGE_KEY).catch(() => {
-            // persistence best effort only
-          });
+          if (shouldResetSession) {
+            AsyncStorage.removeItem(LAST_EXIT_STORAGE_KEY).catch(() => {
+              // persistence best effort only
+            });
+          } else {
+            setResumeNotice({
+              type: 'returning',
+              lifetimeHarvest: loadedLifetimeHarvest ?? lifetimeHarvestRef.current,
+              timestamp: Date.now(),
+              harvestSnapshot: loadedHarvest ?? harvestRef.current,
+              lifetimeHarvestSnapshot: loadedLifetimeHarvest ?? lifetimeHarvestRef.current,
+              autoPerSecondSnapshot: loadedAutoPerSecond || autoPerSecondRef.current,
+            });
+            AsyncStorage.removeItem(LAST_EXIT_STORAGE_KEY).catch(() => {
+              // persistence best effort only
+            });
+          }
         }
       })
       .finally(() => {

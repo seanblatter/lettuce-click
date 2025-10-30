@@ -97,7 +97,7 @@ export default function ProfileScreen() {
             )}
           </Pressable>
           <Text style={styles.headerTitle}>Garden Profile</Text>
-          <Text style={styles.headerSubtitle}>Personalize your gardener identity and celebrate your harvest.</Text>
+          <Text style={styles.headerSubtitle}>Personalize your profile and celebrate your harvest!</Text>
           {profileImageUri && (
             <Pressable onPress={handleRemoveImage} style={styles.removePhotoButton} accessibilityLabel="Remove profile image">
               <Text style={styles.removePhotoText}>Remove photo</Text>

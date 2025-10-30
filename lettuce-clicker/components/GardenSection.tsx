@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
+  LayoutChangeEvent,
   GestureResponderEvent,
   ListRenderItem,
   Modal,
@@ -12,9 +13,11 @@ import {
   TextInput,
   View,
 } from 'react-native';
+// eslint-disable-next-line import/no-unresolved
 import * as MediaLibrary from 'expo-media-library';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+// eslint-disable-next-line import/no-unresolved
 import { captureRef } from 'react-native-view-shot';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -75,6 +78,10 @@ const CATEGORY_OPTIONS: { id: CategoryFilter; label: string; icon: string }[] = 
   { id: 'accents', label: 'Accents', icon: '✨' },
 ];
 
+const INVENTORY_COLUMNS = 3;
+const INVENTORY_COLUMN_GAP = 12;
+const INVENTORY_ROW_GAP = 12;
+
 type InventoryEntry = EmojiDefinition & {
   owned: number;
   searchBlob: string;
@@ -111,7 +118,14 @@ export function GardenSection({
   const [penHiddenForSave, setPenHiddenForSave] = useState(false);
   const [isSavingSnapshot, setIsSavingSnapshot] = useState(false);
   const [activeCategory, setActiveCategory] = useState<CategoryFilter>('all');
+  const [inventoryOrder, setInventoryOrder] = useState<string[]>([]);
+  const [draggingInventoryId, setDraggingInventoryId] = useState<string | null>(null);
   const canvasRef = useRef<View | null>(null);
+  const filteredOwnedInventoryRef = useRef<InventoryEntry[]>([]);
+  const draggingInventoryIdRef = useRef<string | null>(null);
+  const dragStartIndexRef = useRef(0);
+  const dragCurrentIndexRef = useRef(0);
+  const tileSizeRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
 
   const inventoryList = useMemo(
     () =>
@@ -240,16 +254,157 @@ export function GardenSection({
   const filteredOwnedInventory = useMemo(() => {
     const filtered = ownedInventory.filter((item) => matchesCategory(item) && matchesFilter(item));
 
+    const applyOrder = (items: InventoryEntry[]) => {
+      return [...items].sort((a, b) => {
+        const orderA = inventoryOrder.indexOf(a.id);
+        const orderB = inventoryOrder.indexOf(b.id);
+
+        if (orderA === -1 && orderB === -1) {
+          return 0;
+        }
+
+        if (orderA === -1) {
+          return 1;
+        }
+
+        if (orderB === -1) {
+          return -1;
+        }
+
+        return orderA - orderB;
+      });
+    };
+
     if (filtered.length === 0 && normalizedFilter && ownedInventory.length > 0) {
-      return ownedInventory.filter((item) => matchesCategory(item));
+      return applyOrder(ownedInventory.filter((item) => matchesCategory(item)));
     }
 
-    return filtered;
-  }, [matchesCategory, matchesFilter, normalizedFilter, ownedInventory]);
+    return applyOrder(filtered);
+  }, [inventoryOrder, matchesCategory, matchesFilter, normalizedFilter, ownedInventory]);
   const selectedDetails = useMemo(
     () => inventoryList.find((item) => item.id === selectedEmoji) ?? null,
     [inventoryList, selectedEmoji]
   );
+
+  useEffect(() => {
+    if (ownedInventory.length === 0) {
+      setInventoryOrder([]);
+      return;
+    }
+
+    setInventoryOrder((prev) => {
+      const retained = prev.filter((id) => ownedInventory.some((entry) => entry.id === id));
+      const missing = ownedInventory
+        .map((entry) => entry.id)
+        .filter((id) => !retained.includes(id));
+      return [...retained, ...missing];
+    });
+  }, [ownedInventory]);
+
+  useEffect(() => {
+    filteredOwnedInventoryRef.current = filteredOwnedInventory;
+  }, [filteredOwnedInventory]);
+
+  useEffect(() => {
+    draggingInventoryIdRef.current = draggingInventoryId;
+  }, [draggingInventoryId]);
+
+  const canReorderInventory = useMemo(
+    () =>
+      activeCategory === 'all' &&
+      normalizedFilter.length === 0 &&
+      normalizedEmojiTokens.length === 0 &&
+      ownedInventory.length > 0,
+    [activeCategory, normalizedEmojiTokens.length, normalizedFilter.length, ownedInventory.length]
+  );
+
+  const handleInventoryTileLayout = useCallback((event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+
+    if (width > 0 && height > 0) {
+      tileSizeRef.current = { width, height };
+    }
+  }, []);
+
+  const commitInventoryReorder = useCallback((emojiId: string, targetIndex: number) => {
+    const list = filteredOwnedInventoryRef.current;
+
+    if (list.length === 0) {
+      return;
+    }
+
+    const ids = list.map((entry) => entry.id);
+    const boundedIndex = Math.max(0, Math.min(ids.length - 1, targetIndex));
+    const baseOrder = ids.filter((id, index) => ids.indexOf(id) === index);
+    const currentIndex = baseOrder.indexOf(emojiId);
+
+    if (currentIndex !== -1) {
+      baseOrder.splice(currentIndex, 1);
+    }
+
+    baseOrder.splice(boundedIndex, 0, emojiId);
+
+    setInventoryOrder((prev) => {
+      const remaining = prev.filter((id) => !baseOrder.includes(id));
+      return [...baseOrder, ...remaining];
+    });
+  }, []);
+
+  const beginInventoryDrag = useCallback((emojiId: string, index: number) => {
+    dragStartIndexRef.current = index;
+    dragCurrentIndexRef.current = index;
+    draggingInventoryIdRef.current = emojiId;
+    setDraggingInventoryId(emojiId);
+  }, []);
+
+  const updateInventoryDrag = useCallback(
+    (translationX: number, translationY: number) => {
+      const activeId = draggingInventoryIdRef.current;
+
+      if (!activeId) {
+        return;
+      }
+
+      const { width, height } = tileSizeRef.current;
+
+      if (width <= 0 || height <= 0) {
+        return;
+      }
+
+      const effectiveWidth = width + INVENTORY_COLUMN_GAP;
+      const effectiveHeight = height + INVENTORY_ROW_GAP;
+      const columnShift = Math.round(translationX / effectiveWidth);
+      const rowShift = Math.round(translationY / effectiveHeight);
+      const nextIndex =
+        dragStartIndexRef.current + columnShift + rowShift * INVENTORY_COLUMNS;
+      const listLength = filteredOwnedInventoryRef.current.length;
+
+      if (listLength === 0) {
+        return;
+      }
+
+      const boundedIndex = Math.max(0, Math.min(listLength - 1, nextIndex));
+
+      if (boundedIndex === dragCurrentIndexRef.current) {
+        return;
+      }
+
+      dragCurrentIndexRef.current = boundedIndex;
+      commitInventoryReorder(activeId, boundedIndex);
+    },
+    [commitInventoryReorder]
+  );
+
+  const endInventoryDrag = useCallback(() => {
+    if (!draggingInventoryIdRef.current) {
+      return;
+    }
+
+    draggingInventoryIdRef.current = null;
+    dragStartIndexRef.current = 0;
+    dragCurrentIndexRef.current = 0;
+    setDraggingInventoryId(null);
+  }, []);
 
   const handleCanvasPress = (event: GestureResponderEvent) => {
     if (isDrawingMode) {
@@ -576,36 +731,94 @@ export function GardenSection({
     );
   };
 
-  const renderInventoryItem: ListRenderItem<InventoryEntry> = ({ item }) => {
+  const renderInventoryItem: ListRenderItem<InventoryEntry> = ({ item, index }) => {
     const isSelected = selectedEmoji === item.id;
     const categoryLabel = CATEGORY_LABELS[item.category];
+    const isDragging = draggingInventoryId === item.id;
+
+    const longPressGesture = Gesture.LongPress()
+      .minDuration(250)
+      .onStart(() => {
+        if (!canReorderInventory) {
+          return;
+        }
+        runOnJS(beginInventoryDrag)(item.id, index);
+      })
+      .onEnd(() => {
+        if (!canReorderInventory) {
+          return;
+        }
+        runOnJS(endInventoryDrag)();
+      })
+      .onFinalize(() => {
+        if (!canReorderInventory) {
+          return;
+        }
+        runOnJS(endInventoryDrag)();
+      })
+      .enabled(canReorderInventory);
+
+    const panGesture = Gesture.Pan()
+      .onUpdate((event) => {
+        if (!canReorderInventory) {
+          return;
+        }
+        runOnJS(updateInventoryDrag)(event.translationX, event.translationY);
+      })
+      .onEnd(() => {
+        if (!canReorderInventory) {
+          return;
+        }
+        runOnJS(endInventoryDrag)();
+      })
+      .onFinalize(() => {
+        if (!canReorderInventory) {
+          return;
+        }
+        runOnJS(endInventoryDrag)();
+      })
+      .enabled(canReorderInventory);
+
+    const combinedGesture = Gesture.Simultaneous(longPressGesture, panGesture);
 
     return (
-      <View style={styles.sheetTileWrapper}>
-        <Pressable
-          style={[styles.emojiTile, isSelected && styles.emojiTileSelected]}
-          onPress={() => handleSelect(item.id, item.owned)}
-          accessibilityLabel={`${item.name} emoji`}
-          accessibilityHint="Select to ready this decoration.">
-          <Text style={styles.emojiGlyphLarge}>{item.emoji}</Text>
-          {item.owned > 0 ? (
-            <View style={styles.emojiTileBadge}>
-              <Text style={styles.emojiTileBadgeText}>×{item.owned}</Text>
+      <GestureDetector gesture={combinedGesture}>
+        <View style={styles.sheetTileWrapper}>
+          <Pressable
+            onLayout={handleInventoryTileLayout}
+            style={[
+              styles.emojiTile,
+              isSelected && styles.emojiTileSelected,
+              isDragging && styles.emojiTileDragging,
+            ]}
+            onPress={() => {
+              if (draggingInventoryIdRef.current) {
+                return;
+              }
+              handleSelect(item.id, item.owned);
+            }}
+            accessibilityLabel={`${item.name} emoji`}
+            accessibilityHint="Select to ready this decoration.">
+            <Text style={styles.emojiGlyphLarge}>{item.emoji}</Text>
+            {item.owned > 0 ? (
+              <View style={styles.emojiTileBadge}>
+                <Text style={styles.emojiTileBadgeText}>×{item.owned}</Text>
+              </View>
+            ) : null}
+            <Text style={styles.emojiTileLabel} numberOfLines={1}>
+              {item.name}
+            </Text>
+            <View style={styles.emojiTileFooter}>
+              <Text style={[styles.emojiTileMeta, styles.emojiTileCategory]} numberOfLines={1}>
+                {categoryLabel}
+              </Text>
+              <Text style={[styles.emojiTileMeta, styles.inventoryMeta]} numberOfLines={1}>
+                {item.owned.toLocaleString()} owned
+              </Text>
             </View>
-          ) : null}
-          <Text style={styles.emojiTileLabel} numberOfLines={1}>
-            {item.name}
-          </Text>
-          <View style={styles.emojiTileFooter}>
-            <Text style={[styles.emojiTileMeta, styles.emojiTileCategory]} numberOfLines={1}>
-              {categoryLabel}
-            </Text>
-            <Text style={[styles.emojiTileMeta, styles.inventoryMeta]} numberOfLines={1}>
-              Owned ×{item.owned}
-            </Text>
-          </View>
-        </Pressable>
-      </View>
+          </Pressable>
+        </View>
+      </GestureDetector>
     );
   };
 
@@ -919,6 +1132,7 @@ export function GardenSection({
             <Text style={styles.sheetTitle}>Inventory</Text>
             <Text style={styles.sheetSubtitle}>
               Filter by category or tags to find the perfect decorations to ready for placement.
+              Long-press in All favorites to rearrange your go-to emojis.
             </Text>
             <View style={styles.sheetSearchBlock}>
               <View style={styles.searchRow}>
@@ -975,6 +1189,7 @@ export function GardenSection({
               columnWrapperStyle={styles.sheetColumn}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.sheetListContent}
+              scrollEnabled={!draggingInventoryId}
               ListEmptyComponent={
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyStateTitle}>Inventory is empty</Text>
@@ -1254,6 +1469,13 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 8 },
     elevation: 4,
+  },
+  emojiTileDragging: {
+    transform: [{ scale: 1.05 }],
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 6,
   },
   emojiTileDisabled: {
     opacity: 0.55,

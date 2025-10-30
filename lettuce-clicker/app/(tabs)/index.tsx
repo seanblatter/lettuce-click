@@ -59,6 +59,8 @@ export default function HomeScreen() {
     orbitingUpgradeEmojis,
     homeEmojiTheme,
     setHomeEmojiTheme,
+    themes,
+    purchasedThemes,
     profileName,
     resumeNotice,
     clearResumeNotice,
@@ -118,15 +120,28 @@ export default function HomeScreen() {
 
     return dailyCountdown;
   }, [dailyCountdown, isDailySpinAvailable]);
-  const themeOptions = useMemo(
-    () => [
-      { label: '🔵 Circle', value: 'circle' as HomeEmojiTheme },
-      { label: '🌀 Spiral', value: 'spiral' as HomeEmojiTheme },
-      { label: '🟩 Matrix', value: 'matrix' as HomeEmojiTheme },
-      { label: '🌫️ Clear', value: 'clear' as HomeEmojiTheme },
-    ],
-    []
-  );
+  const themeOptions = useMemo(() => {
+    const ownedThemes = themes
+      .filter((theme) => purchasedThemes[theme.id])
+      .sort((a, b) => {
+        const aStarter = a.isStarter ? 0 : 1;
+        const bStarter = b.isStarter ? 0 : 1;
+        if (aStarter !== bStarter) {
+          return aStarter - bStarter;
+        }
+
+        if (a.cost !== b.cost) {
+          return a.cost - b.cost;
+        }
+
+        return a.name.localeCompare(b.name);
+      });
+
+    return ownedThemes.map((theme) => ({
+      label: `${theme.emoji} ${theme.name}`,
+      value: theme.id,
+    }));
+  }, [purchasedThemes, themes]);
   const noticeTitle = useMemo(() => {
     if (!activeNotice) {
       return '';
@@ -186,10 +201,13 @@ export default function HomeScreen() {
 
   const handleSelectTheme = useCallback(
     (theme: HomeEmojiTheme) => {
+      if (!purchasedThemes[theme]) {
+        return;
+      }
       setHomeEmojiTheme(theme);
       setMenuOpen(false);
     },
-    [setHomeEmojiTheme]
+    [purchasedThemes, setHomeEmojiTheme]
   );
 
   const handleOpenDailyBonus = useCallback(() => {

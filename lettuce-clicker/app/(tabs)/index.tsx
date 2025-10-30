@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Animated, Easing, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
@@ -66,8 +66,6 @@ export default function HomeScreen() {
     premiumAccentColor,
     addHarvestAmount,
     spendHarvestAmount,
-    profileImageUri,
-    showProfileImageOnHome,
   } = useGame();
   const [showGrowModal, setShowGrowModal] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -400,14 +398,9 @@ export default function HomeScreen() {
               style={styles.menuButton}
               onPress={() => setMenuOpen((prev) => !prev)}
               hitSlop={8}>
-              <View style={styles.menuContent}>
-                <Text style={[styles.menuIcon, menuOpen && styles.menuIconActive]}>
-                  {menuOpen ? '✕' : customClickEmoji}
-                </Text>
-                {showProfileImageOnHome && profileImageUri ? (
-                  <Image source={{ uri: profileImageUri }} style={styles.menuAvatarImage} />
-                ) : null}
-              </View>
+              <Text style={[styles.menuIcon, menuOpen && styles.menuIconActive]}>
+                {menuOpen ? '✕' : customClickEmoji}
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -688,10 +681,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 6,
   },
-  menuContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
   menuIcon: {
     fontSize: 24,
     color: '#f7fbea',
@@ -699,14 +688,6 @@ const styles = StyleSheet.create({
   },
   menuIconActive: {
     color: '#fefce8',
-  },
-  menuAvatarImage: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    marginLeft: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.6)',
   },
   scroll: {
     flex: 1,

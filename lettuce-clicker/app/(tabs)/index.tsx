@@ -60,11 +60,11 @@ export default function HomeScreen() {
     }
 
     if (activeNotice.type === 'returning') {
-      return `Your lifetime harvest has been ${activeNotice.lifetimeHarvest.toLocaleString()}. Tap to keep cultivating at ${autoPerSecond.toLocaleString()} auto clicks each second.`;
+      return `When you signed back in you had ${activeNotice.harvestSnapshot.toLocaleString()} harvest with lifetime totals at ${activeNotice.lifetimeHarvestSnapshot.toLocaleString()}. Auto clicks continue at ${activeNotice.autoPerSecondSnapshot.toLocaleString()} per second.`;
     }
 
-    return `You have harvested ${activeNotice.passiveHarvest.toLocaleString()} since you last tended to the Garden! Your stores now hold ${harvest.toLocaleString()} harvest with lifetime totals at ${lifetimeHarvest.toLocaleString()}. Auto clicks continue humming at ${autoPerSecond.toLocaleString()} per second.`;
-  }, [activeNotice, autoPerSecond, harvest, lifetimeHarvest]);
+    return `You gathered ${activeNotice.passiveHarvest.toLocaleString()} harvest while away. Your stores now hold ${activeNotice.harvestSnapshot.toLocaleString()} harvest with lifetime totals at ${activeNotice.lifetimeHarvestSnapshot.toLocaleString()}. Auto clicks continue humming at ${activeNotice.autoPerSecondSnapshot.toLocaleString()} per second.`;
+  }, [activeNotice]);
 
   useEffect(() => {
     AsyncStorage.getItem(MODAL_STORAGE_KEY)
@@ -117,14 +117,14 @@ export default function HomeScreen() {
       <View style={styles.container}>
         <View style={[styles.headerWrapper, { paddingTop: headerPaddingTop }]}>
           <View style={styles.headerShelf}>
-            <Text style={styles.headerText}>🥬 Lettuce Park Gardens</Text>
+            <Text style={styles.headerText}>Lettuce Park Gardens</Text>
             <Pressable
               accessibilityLabel={menuOpen ? 'Close garden menu' : 'Open garden menu'}
               accessibilityHint={menuOpen ? undefined : 'Opens actions and emoji theme options'}
               style={styles.menuButton}
               onPress={() => setMenuOpen((prev) => !prev)}
               hitSlop={8}>
-              <Text style={[styles.menuIcon, menuOpen && styles.menuIconActive]}>{menuOpen ? '✕' : '☰'}</Text>
+              <Text style={[styles.menuIcon, menuOpen && styles.menuIconActive]}>{menuOpen ? '✕' : '🥬'}</Text>
             </Pressable>
           </View>
         </View>
@@ -268,21 +268,14 @@ const styles = StyleSheet.create({
   },
   headerWrapper: {
     paddingHorizontal: 20,
-    paddingBottom: 14,
-    backgroundColor: '#f2f9f2',
+    paddingBottom: 18,
+    backgroundColor: '#14532d',
   },
   headerShelf: {
-    backgroundColor: '#1f6f4a',
-    borderRadius: 28,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingVertical: 12,
   },
   headerText: {
     fontSize: 20,

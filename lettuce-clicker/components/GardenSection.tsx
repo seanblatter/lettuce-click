@@ -30,6 +30,7 @@ type Props = {
   placeEmoji: (emojiId: string, position: { x: number; y: number }) => boolean;
   updatePlacement: (placementId: string, updates: Partial<Placement>) => void;
   clearGarden: () => void;
+  registerCustomEmoji: (emoji: string) => EmojiDefinition | null;
   title?: string;
 };
 
@@ -46,6 +47,7 @@ type Stroke = {
 };
 
 const VARIATION_SELECTOR_REGEX = /[\uFE0E\uFE0F]/g;
+const EMOJI_SEQUENCE_REGEX = /\p{Extended_Pictographic}(?:\u200d\p{Extended_Pictographic})*/gu;
 
 const stripVariationSelectors = (value: string) => value.replace(VARIATION_SELECTOR_REGEX, '');
 
@@ -79,6 +81,11 @@ type InventoryEntry = EmojiDefinition & {
   normalizedEmoji: string;
 };
 
+type EmojiToken = {
+  original: string;
+  normalized: string;
+};
+
 export function GardenSection({
   harvest,
   emojiCatalog,
@@ -88,6 +95,7 @@ export function GardenSection({
   placeEmoji,
   updatePlacement,
   clearGarden,
+  registerCustomEmoji,
   title = 'Garden Atelier',
 }: Props) {
   const insets = useSafeAreaInsets();
@@ -154,12 +162,25 @@ export function GardenSection({
   const ownedInventory = useMemo(() => inventoryList.filter((item) => item.owned > 0), [inventoryList]);
   const normalizedFilter = shopFilter.trim().toLowerCase();
   const normalizedFilterEmoji = useMemo(() => stripVariationSelectors(normalizedFilter), [normalizedFilter]);
-  const emojiFilterTokens = useMemo(
-    () =>
-      normalizedFilterEmoji
-        ? Array.from(normalizedFilterEmoji).filter((glyph) => glyph.trim().length > 0)
-        : [],
-    [normalizedFilterEmoji]
+  const emojiTokens = useMemo<EmojiToken[]>(() => {
+    const matches = shopFilter.match(EMOJI_SEQUENCE_REGEX);
+
+    if (!matches) {
+      return [];
+    }
+
+    return matches
+      .map((glyph) => glyph.trim())
+      .filter((glyph) => glyph.length > 0)
+      .map((glyph) => {
+        const normalized = stripVariationSelectors(glyph).toLowerCase();
+        return normalized.length > 0 ? { original: glyph, normalized } : null;
+      })
+      .filter((token): token is EmojiToken => Boolean(token));
+  }, [shopFilter]);
+  const normalizedEmojiTokens = useMemo(
+    () => emojiTokens.map((token) => token.normalized),
+    [emojiTokens]
   );
   const normalizedFilterWords = useMemo(
     () => (normalizedFilter ? normalizedFilter.split(/\s+/).filter(Boolean) : []),
@@ -183,23 +204,39 @@ export function GardenSection({
         return true;
       }
 
-      return emojiFilterTokens.some((glyph) => item.normalizedEmoji.includes(glyph));
+      return normalizedEmojiTokens.some((glyph) => item.normalizedEmoji.includes(glyph));
     },
-    [emojiFilterTokens, normalizedFilter, normalizedFilterEmoji, normalizedFilterWords]
+    [normalizedEmojiTokens, normalizedFilter, normalizedFilterEmoji, normalizedFilterWords]
   );
   const matchesCategory = useCallback(
     (item: InventoryEntry) => (activeCategory === 'all' ? true : item.category === activeCategory),
     [activeCategory]
   );
+
+  useEffect(() => {
+    if (emojiTokens.length === 0) {
+      return;
+    }
+
+    const seen = new Set<string>();
+    emojiTokens.forEach((token) => {
+      if (seen.has(token.original)) {
+        return;
+      }
+      seen.add(token.original);
+      registerCustomEmoji(token.original);
+    });
+  }, [emojiTokens, registerCustomEmoji]);
+
   const filteredShopInventory = useMemo(() => {
     const filtered = inventoryList.filter((item) => matchesCategory(item) && matchesFilter(item));
 
-    if (filtered.length === 0 && normalizedFilter) {
+    if (filtered.length === 0 && normalizedFilter && normalizedEmojiTokens.length === 0) {
       return inventoryList.filter((item) => matchesCategory(item));
     }
 
     return filtered;
-  }, [inventoryList, matchesCategory, matchesFilter, normalizedFilter]);
+  }, [inventoryList, matchesCategory, matchesFilter, normalizedEmojiTokens, normalizedFilter]);
   const filteredOwnedInventory = useMemo(() => {
     const filtered = ownedInventory.filter((item) => matchesCategory(item) && matchesFilter(item));
 
@@ -263,23 +300,7 @@ export function GardenSection({
 
     if (!success) {
       Alert.alert('Not enough harvest', 'Gather more lettuce to purchase this decoration.');
-      return;
     }
-
-    Alert.alert(
-      'Purchased!',
-      'Your new decoration is ready in your inventory to be selected.',
-      [
-        {
-          text: 'Go to inventory',
-          onPress: () => handleOpenSheet('inventory'),
-        },
-        {
-          text: 'Keep shopping',
-          style: 'cancel',
-        },
-      ]
-    );
   };
 
   const handleClearGarden = useCallback(() => {
@@ -488,7 +509,6 @@ export function GardenSection({
     const owned = item.owned;
     const isSelected = selectedEmoji === item.id;
     const canAfford = harvest >= item.cost;
-    const categoryLabel = CATEGORY_LABELS[item.category];
 
     const handleTilePress = () => {
       if (owned > 0) {
@@ -533,9 +553,6 @@ export function GardenSection({
             {item.name}
           </Text>
           <View style={styles.emojiTileFooter}>
-            <Text style={[styles.emojiTileMeta, styles.emojiTileCategory]} numberOfLines={1}>
-              {categoryLabel}
-            </Text>
             <Text style={[styles.emojiTileMeta, styles.emojiTileCostText]} numberOfLines={1}>
               {item.cost.toLocaleString()} harvest
             </Text>

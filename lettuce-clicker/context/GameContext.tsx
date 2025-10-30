@@ -1,5 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { gardenEmojiCatalog } from '@/constants/emojiCatalog';
 import { AppState, AppStateStatus } from 'react-native';
@@ -36,18 +44,23 @@ export type Placement = {
   rotation: number;
 };
 
+type ResumeNoticeBase = {
+  timestamp: number;
+  harvestSnapshot: number;
+  lifetimeHarvestSnapshot: number;
+  autoPerSecondSnapshot: number;
+};
+
 type PassiveResumeNotice =
-  | {
+  | (ResumeNoticeBase & {
       type: 'returning';
       lifetimeHarvest: number;
-      timestamp: number;
-    }
-  | {
+    })
+  | (ResumeNoticeBase & {
       type: 'background';
       passiveHarvest: number;
       greeting: string;
-      timestamp: number;
-    };
+    });
 
 type GameContextValue = {
   harvest: number;
@@ -66,6 +79,7 @@ type GameContextValue = {
   profileImageUri: string | null;
   homeEmojiTheme: HomeEmojiTheme;
   resumeNotice: PassiveResumeNotice | null;
+  registerCustomEmoji: (emoji: string) => EmojiDefinition | null;
   setProfileLifetimeTotal: (value: number) => void;
   addHarvest: () => void;
   purchaseUpgrade: (upgradeId: string) => boolean;
@@ -220,6 +234,7 @@ type StoredGameState = {
   emojiInventory: Record<string, number>;
   placements: Placement[];
   orbitingUpgradeEmojis: OrbitingEmoji[];
+  customEmojiCatalog?: Record<string, EmojiDefinition>;
 };
 
 const GameContext = createContext<GameContextValue | undefined>(undefined);
@@ -239,6 +254,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [profileImageUri, setProfileImageUri] = useState<string | null>(null);
   const [homeEmojiTheme, setHomeEmojiTheme] = useState<HomeEmojiTheme>('circle');
   const [resumeNotice, setResumeNotice] = useState<PassiveResumeNotice | null>(null);
+  const [customEmojiCatalog, setCustomEmojiCatalog] = useState<Record<string, EmojiDefinition>>({});
   const initialisedRef = useRef(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const backgroundInfoRef = useRef<
@@ -255,6 +271,106 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const lifetimeHarvestRef = useRef(lifetimeHarvest);
   const profileLifetimeTotalRef = useRef(profileLifetimeTotal);
   const autoPerSecondRef = useRef(autoPerSecond);
+  const VARIATION_SELECTOR_REGEX = /[\uFE0E\uFE0F]/g;
+
+  const stripVariationSelectors = useCallback(
+    (value: string) => value.replace(VARIATION_SELECTOR_REGEX, ''),
+    []
+  );
+
+  const computeCustomEmojiCost = useCallback((emojiValue: string) => {
+    const codePoints = Array.from(emojiValue).map((char) => char.codePointAt(0) ?? 0);
+
+    if (codePoints.length === 0) {
+      return 120;
+    }
+
+    const total = codePoints.reduce((sum, point) => sum + point, 0);
+    const base = 90;
+    const spread = 360;
+    return base + (total % spread);
+  }, []);
+
+  const pickCustomCategory = useCallback((emojiValue: string): EmojiCategory => {
+    const categories: EmojiCategory[] = ['plants', 'scenery', 'creatures', 'features', 'accents'];
+    const codePoints = Array.from(emojiValue).map((char) => char.codePointAt(0) ?? 0);
+
+    if (codePoints.length === 0) {
+      return 'accents';
+    }
+
+    const total = codePoints.reduce((sum, point) => sum + point, 0);
+    return categories[total % categories.length];
+  }, []);
+
+  const registerCustomEmoji = useCallback(
+    (emoji: string): EmojiDefinition | null => {
+      const trimmed = emoji.trim();
+
+      if (trimmed.length === 0) {
+        return null;
+      }
+
+      const normalized = stripVariationSelectors(trimmed);
+
+      if (normalized.length === 0) {
+        return null;
+      }
+
+      const idFragment = Array.from(normalized)
+        .map((char) => {
+          const codePoint = char.codePointAt(0);
+          return codePoint ? codePoint.toString(16) : null;
+        })
+        .filter((value): value is string => Boolean(value))
+        .join('-');
+
+      if (!idFragment) {
+        return null;
+      }
+
+      const customId = `custom-${idFragment}`;
+
+      if (customEmojiCatalog[customId]) {
+        return customEmojiCatalog[customId];
+      }
+
+      let createdDefinition: EmojiDefinition | null = null;
+
+      setCustomEmojiCatalog((prev) => {
+        if (prev[customId]) {
+          createdDefinition = prev[customId];
+          return prev;
+        }
+
+        const nextDefinition: EmojiDefinition = {
+          id: customId,
+          emoji: trimmed,
+          name: `Garden Emoji ${trimmed}`,
+          cost: computeCustomEmojiCost(normalized),
+          category: pickCustomCategory(normalized),
+          tags: [trimmed.toLowerCase(), normalized.toLowerCase(), 'custom emoji'],
+          popularity: 1000 + Object.keys(prev).length,
+        };
+
+        createdDefinition = nextDefinition;
+        return { ...prev, [customId]: nextDefinition };
+      });
+
+      return createdDefinition;
+    },
+    [computeCustomEmojiCost, customEmojiCatalog, pickCustomCategory, stripVariationSelectors]
+  );
+
+  const combinedEmojiCatalog = useMemo(
+    () => [...gardenEmojiCatalog, ...Object.values(customEmojiCatalog)],
+    [customEmojiCatalog]
+  );
+
+  const findEmojiDefinition = useCallback(
+    (emojiId: string) => combinedEmojiCatalog.find((item) => item.id === emojiId) ?? null,
+    [combinedEmojiCatalog]
+  );
 
   useEffect(() => {
     if (autoPerSecond <= 0) {
@@ -332,6 +448,9 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         const greetings = ['Hi', 'Howdy', "What's Up", 'Hello'] as const;
         const greeting = greetings[Math.floor(Math.random() * greetings.length) % greetings.length];
 
+        const harvestSnapshot = info.harvest + passiveHarvest;
+        const lifetimeSnapshot = info.lifetimeHarvest + passiveHarvest;
+
         if (passiveHarvest > 0) {
           setHarvest((prev) => prev + passiveHarvest);
           setLifetimeHarvest((prev) => prev + passiveHarvest);
@@ -343,6 +462,9 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
           passiveHarvest,
           greeting,
           timestamp: Date.now(),
+          harvestSnapshot,
+          lifetimeHarvestSnapshot: lifetimeSnapshot,
+          autoPerSecondSnapshot: info.autoPerSecond,
         });
       }
     };
@@ -402,7 +524,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   };
 
   const purchaseEmoji = (emojiId: string) => {
-    const emoji = gardenEmojiCatalog.find((item) => item.id === emojiId);
+    const emoji = findEmojiDefinition(emojiId);
 
     if (!emoji) {
       return false;
@@ -487,7 +609,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     upgrades: upgradeCatalog,
     purchasedUpgrades,
     orbitingUpgradeEmojis,
-    emojiCatalog: gardenEmojiCatalog,
+    emojiCatalog: combinedEmojiCatalog,
     emojiInventory,
     placements,
     profileName,
@@ -495,6 +617,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     profileImageUri,
     homeEmojiTheme,
     resumeNotice,
+    registerCustomEmoji,
     setProfileLifetimeTotal,
     addHarvest,
     purchaseUpgrade,
@@ -522,7 +645,8 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     profileImageUri,
     homeEmojiTheme,
     resumeNotice,
-    setProfileLifetimeTotal,
+    combinedEmojiCatalog,
+    registerCustomEmoji,
   ]);
 
   useEffect(() => {
@@ -561,12 +685,15 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         }
 
         let loadedLifetimeHarvest: number | undefined;
+        let loadedHarvest: number | undefined;
+        let loadedAutoPerSecond = 0;
 
         if (gameEntry[1]) {
           try {
             const parsed = JSON.parse(gameEntry[1]) as Partial<StoredGameState>;
             if (typeof parsed.harvest === 'number' && Number.isFinite(parsed.harvest)) {
               setHarvest(parsed.harvest);
+              loadedHarvest = parsed.harvest;
             }
             if (typeof parsed.lifetimeHarvest === 'number' && Number.isFinite(parsed.lifetimeHarvest)) {
               setLifetimeHarvest(parsed.lifetimeHarvest);
@@ -582,6 +709,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
                 return total + upgrade.increment * count;
               }, 0);
               setAutoPerSecond(computedAuto);
+              loadedAutoPerSecond = computedAuto;
             }
             if (parsed.emojiInventory && typeof parsed.emojiInventory === 'object') {
               setEmojiInventory(parsed.emojiInventory);
@@ -597,6 +725,9 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
             if (Array.isArray(parsed.orbitingUpgradeEmojis)) {
               setOrbitingUpgradeEmojis(parsed.orbitingUpgradeEmojis);
             }
+            if (parsed.customEmojiCatalog && typeof parsed.customEmojiCatalog === 'object') {
+              setCustomEmojiCatalog(parsed.customEmojiCatalog);
+            }
           } catch {
             // ignore malformed stored data
           }
@@ -607,6 +738,9 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
             type: 'returning',
             lifetimeHarvest: loadedLifetimeHarvest ?? lifetimeHarvestRef.current,
             timestamp: Date.now(),
+            harvestSnapshot: loadedHarvest ?? harvestRef.current,
+            lifetimeHarvestSnapshot: loadedLifetimeHarvest ?? lifetimeHarvestRef.current,
+            autoPerSecondSnapshot: loadedAutoPerSecond || autoPerSecondRef.current,
           });
           AsyncStorage.removeItem(LAST_EXIT_STORAGE_KEY).catch(() => {
             // persistence best effort only
@@ -657,12 +791,13 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       emojiInventory,
       placements,
       orbitingUpgradeEmojis,
+      customEmojiCatalog,
     };
 
     AsyncStorage.setItem(GAME_STORAGE_KEY, JSON.stringify(payload)).catch(() => {
       // persistence best effort only
     });
-  }, [emojiInventory, harvest, lifetimeHarvest, orbitingUpgradeEmojis, placements, purchasedUpgrades]);
+  }, [customEmojiCatalog, emojiInventory, harvest, lifetimeHarvest, orbitingUpgradeEmojis, placements, purchasedUpgrades]);
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
 };

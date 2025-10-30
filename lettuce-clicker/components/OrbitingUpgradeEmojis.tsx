@@ -6,6 +6,10 @@ import type { HomeEmojiTheme, OrbitingEmoji } from '@/context/GameContext';
 const FULL_ROTATION_RADIANS = Math.PI * 2;
 const DEFAULT_RADIUS = 120;
 const SPIRAL_STEP = 12;
+const SPIRAL_BASE_RADIUS_RATIO = 0.35;
+const SPIRAL_DEFAULT_ARMS = 4;
+const SPIRAL_MAX_ARMS = 6;
+const SPIRAL_ANGLE_STEP = Math.PI / 24;
 const MATRIX_MAX_EMOJIS = 18;
 
 const WINDOW = Dimensions.get('window');
@@ -83,12 +87,29 @@ function OrbitingRing({ emojis, radius, theme }: OrbitingRingProps) {
       return [];
     }
 
-    const limit = emojis.slice(0, 48);
+    const limit = emojis.slice(0, theme === 'spiral' ? 72 : 48);
+
+    if (theme === 'spiral') {
+      const maxPossibleArms = Math.max(1, Math.min(limit.length, SPIRAL_MAX_ARMS));
+      const desiredArms = Math.max(SPIRAL_DEFAULT_ARMS, Math.ceil(limit.length / 6));
+      const arms = Math.max(1, Math.min(maxPossibleArms, desiredArms));
+
+      return limit.map((item, index) => {
+        const armIndex = index % arms;
+        const stepIndex = Math.floor(index / arms);
+        const baseDistance = radius * SPIRAL_BASE_RADIUS_RATIO + stepIndex * SPIRAL_STEP;
+        const armOffset = armIndex * (SPIRAL_STEP * 0.4);
+        const distance = baseDistance + armOffset;
+        const angle =
+          (FULL_ROTATION_RADIANS / arms) * armIndex + stepIndex * SPIRAL_ANGLE_STEP;
+
+        return { ...item, angle, distance };
+      });
+    }
+
     return limit.map((item, index) => {
       const angle = (FULL_ROTATION_RADIANS * index) / limit.length;
-      const distance = theme === 'spiral' ? radius * 0.45 + index * SPIRAL_STEP : radius;
-
-      return { ...item, angle, distance };
+      return { ...item, angle, distance: radius };
     });
   }, [emojis, radius, theme]);
 

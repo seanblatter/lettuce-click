@@ -1011,9 +1011,6 @@ export function GardenSection({
           <View style={styles.sheetCard}>
             <View style={styles.sheetHandle} />
             <Text style={styles.sheetTitle}>Garden shop</Text>
-            <Text style={styles.sheetSubtitle}>
-              Curated categories make it easy to build cozy garden scenes with the essentials on top.
-            </Text>
             <View style={styles.sheetSearchBlock}>
               <View style={styles.searchRow}>
                 <TextInput
@@ -1096,10 +1093,6 @@ export function GardenSection({
           <View style={styles.sheetCard}>
             <View style={styles.sheetHandle} />
             <Text style={styles.sheetTitle}>Inventory</Text>
-            <Text style={styles.sheetSubtitle}>
-              Filter by category or tags to find the perfect decorations to ready for placement.
-              Long-press in All favorites to rearrange your go-to emojis.
-            </Text>
             <View style={styles.sheetSearchBlock}>
               <View style={styles.searchRow}>
                 <TextInput
@@ -1851,12 +1844,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#134e32',
     textAlign: 'center',
-  },
-  sheetSubtitle: {
-    fontSize: 13,
-    color: '#2d3748',
-    textAlign: 'center',
-    lineHeight: 18,
   },
   sheetSearchBlock: {
     gap: 8,

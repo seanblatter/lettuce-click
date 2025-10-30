@@ -106,6 +106,7 @@ const PROFILE_STORAGE_KEY = 'lettuce-click:profile';
 const THEME_STORAGE_KEY = 'lettuce-click:emoji-theme';
 const GAME_STORAGE_KEY = 'lettuce-click:game';
 const LAST_EXIT_STORAGE_KEY = 'lettuce-click:last-exit';
+const PREMIUM_UPGRADE_STORAGE_KEY = 'lettuce-click:premium-upgrade';
 
 const upgradeCatalog: UpgradeDefinition[] = [
   {
@@ -254,7 +255,10 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [harvest, setHarvest] = useState(0);
   const [lifetimeHarvest, setLifetimeHarvest] = useState(0);
   const [profileLifetimeTotal, setProfileLifetimeTotal] = useState(0);
-  const [tapValue] = useState(1);
+  const tapValue = useMemo(() => {
+    const normalized = Math.floor(autoPerSecond);
+    return Math.max(1, Number.isFinite(normalized) ? normalized : 1);
+  }, [autoPerSecond]);
   const [autoPerSecond, setAutoPerSecond] = useState(0);
   const [purchasedUpgrades, setPurchasedUpgrades] = useState<Record<string, number>>({});
   const [orbitingUpgradeEmojis, setOrbitingUpgradeEmojis] = useState<OrbitingEmoji[]>([]);
@@ -530,6 +534,9 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
 
   const purchasePremiumUpgrade = useCallback(() => {
     setHasPremiumUpgrade(true);
+    AsyncStorage.setItem(PREMIUM_UPGRADE_STORAGE_KEY, 'true').catch(() => {
+      // persistence best effort only
+    });
   }, []);
 
   const setPremiumAccentColor = useCallback((color: string) => {
@@ -734,8 +741,14 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       return;
     }
 
-    AsyncStorage.multiGet([PROFILE_STORAGE_KEY, THEME_STORAGE_KEY, GAME_STORAGE_KEY, LAST_EXIT_STORAGE_KEY])
-      .then(([profileEntry, themeEntry, gameEntry, exitEntry]) => {
+    AsyncStorage.multiGet([
+      PROFILE_STORAGE_KEY,
+      THEME_STORAGE_KEY,
+      GAME_STORAGE_KEY,
+      LAST_EXIT_STORAGE_KEY,
+      PREMIUM_UPGRADE_STORAGE_KEY,
+    ])
+      .then(([profileEntry, themeEntry, gameEntry, exitEntry, premiumEntry]) => {
         if (profileEntry[1]) {
           try {
             const parsed = JSON.parse(profileEntry[1]) as {
@@ -842,6 +855,10 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
           } catch {
             // ignore malformed stored data
           }
+        }
+
+        if (premiumEntry && premiumEntry[1] === 'true') {
+          setHasPremiumUpgrade(true);
         }
 
         if (exitEntry[1]) {

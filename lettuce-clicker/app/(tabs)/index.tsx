@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
@@ -9,8 +9,10 @@ import { useGame } from '@/context/GameContext';
 import type { HomeEmojiTheme } from '@/context/GameContext';
 
 const MODAL_STORAGE_KEY = 'lettuce-click:grow-your-park-dismissed';
+const DAILY_BONUS_LAST_CLAIM_KEY = 'lettuce-click:daily-bonus-last-claim';
 const BONUS_REWARD_OPTIONS = [75, 125, 200, 325, 500, 650];
 const BONUS_ADDITIONAL_SPINS = 2;
+const DAILY_BONUS_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 const lightenColor = (hex: string, factor: number) => {
   const normalized = hex.replace('#', '');
@@ -39,6 +41,15 @@ const lightenColor = (hex: string, factor: number) => {
   return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
 };
 
+const formatDuration = (milliseconds: number) => {
+  const totalSeconds = Math.max(Math.floor(milliseconds / 1000), 0);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const segments = [hours, minutes, seconds].map((segment) => segment.toString().padStart(2, '0'));
+  return segments.join(':');
+};
+
 export default function HomeScreen() {
   const {
     harvest,
@@ -60,15 +71,19 @@ export default function HomeScreen() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeNotice, setActiveNotice] = useState<typeof resumeNotice>(null);
   const [showDailyBonus, setShowDailyBonus] = useState(false);
-  const [availableBonusSpins, setAvailableBonusSpins] = useState(1);
+  const [availableBonusSpins, setAvailableBonusSpins] = useState(0);
   const [bonusMessage, setBonusMessage] = useState<string | null>(null);
   const [lastBonusReward, setLastBonusReward] = useState<number | null>(null);
   const [hasWatchedBonusAd, setHasWatchedBonusAd] = useState(false);
   const [hasPurchasedBonusSpins, setHasPurchasedBonusSpins] = useState(false);
   const [isSpinningBonus, setIsSpinningBonus] = useState(false);
   const [isWatchingAd, setIsWatchingAd] = useState(false);
+  const [isDailySpinAvailable, setIsDailySpinAvailable] = useState(false);
+  const [dailyBonusAvailableAt, setDailyBonusAvailableAt] = useState<number | null>(null);
+  const [dailyCountdown, setDailyCountdown] = useState('');
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const flipAnimation = useRef(new Animated.Value(0)).current;
   const headerPaddingTop = useMemo(() => Math.max(insets.top, 4), [insets.top]);
   const contentPaddingBottom = useMemo(() => insets.bottom + 140, [insets.bottom]);
   const friendlyName = useMemo(() => {
@@ -80,6 +95,29 @@ export default function HomeScreen() {
   const accentRingOuter = useMemo(() => lightenColor(accentColor, 0.55), [accentColor]);
   const accentRingMiddle = useMemo(() => lightenColor(accentColor, 0.45), [accentColor]);
   const accentRingInner = useMemo(() => lightenColor(accentColor, 0.35), [accentColor]);
+  const bonusFlipRotation = useMemo(
+    () =>
+      flipAnimation.interpolate({
+        inputRange: [0, 1],
+        outputRange: ['0deg', '1440deg'],
+      }),
+    [flipAnimation]
+  );
+  const dailyMenuStatus = useMemo(() => {
+    if (isDailySpinAvailable) {
+      return 'Ready!';
+    }
+
+    if (!dailyCountdown || dailyCountdown === 'Loading…') {
+      return 'Loading…';
+    }
+
+    if (dailyCountdown.toLowerCase().includes('ready')) {
+      return 'Ready!';
+    }
+
+    return dailyCountdown;
+  }, [dailyCountdown, isDailySpinAvailable]);
   const themeOptions = useMemo(
     () => [
       { label: '🔵 Circle', value: 'circle' as HomeEmojiTheme },
@@ -157,18 +195,115 @@ export default function HomeScreen() {
   const handleOpenDailyBonus = useCallback(() => {
     setMenuOpen(false);
     setShowDailyBonus(true);
-    setAvailableBonusSpins(1);
+    setAvailableBonusSpins(0);
     setBonusMessage(null);
     setLastBonusReward(null);
     setHasWatchedBonusAd(false);
     setIsSpinningBonus(false);
     setIsWatchingAd(false);
     setHasPurchasedBonusSpins(false);
+    setIsDailySpinAvailable(false);
+    setDailyBonusAvailableAt(null);
+    setDailyCountdown('');
   }, []);
 
   const handleCloseDailyBonus = useCallback(() => {
     setShowDailyBonus(false);
   }, []);
+
+  useEffect(() => {
+    if (!showDailyBonus) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadDailyBonusState = async () => {
+      try {
+        const stored = await AsyncStorage.getItem(DAILY_BONUS_LAST_CLAIM_KEY);
+        if (!isMounted) {
+          return;
+        }
+
+        const now = Date.now();
+        const lastClaim = stored ? Number.parseInt(stored, 10) : Number.NaN;
+
+        if (!Number.isFinite(lastClaim)) {
+          setIsDailySpinAvailable(true);
+          setDailyBonusAvailableAt(null);
+          setAvailableBonusSpins((prev) => (prev > 0 ? prev : 1));
+          return;
+        }
+
+        const nextAvailable = lastClaim + DAILY_BONUS_INTERVAL_MS;
+
+        if (now >= nextAvailable) {
+          setIsDailySpinAvailable(true);
+          setDailyBonusAvailableAt(null);
+          setAvailableBonusSpins((prev) => (prev > 0 ? prev : 1));
+          return;
+        }
+
+        setIsDailySpinAvailable(false);
+        setDailyBonusAvailableAt(nextAvailable);
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+
+        setIsDailySpinAvailable(true);
+        setDailyBonusAvailableAt(null);
+        setAvailableBonusSpins((prev) => (prev > 0 ? prev : 1));
+      }
+    };
+
+    loadDailyBonusState();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [showDailyBonus]);
+
+  useEffect(() => {
+    if (!showDailyBonus) {
+      return;
+    }
+
+    const updateCountdown = () => {
+      if (isDailySpinAvailable) {
+        setDailyCountdown('Ready to spin!');
+        return;
+      }
+
+      if (!dailyBonusAvailableAt) {
+        setDailyCountdown('Loading…');
+        return;
+      }
+
+      const remaining = dailyBonusAvailableAt - Date.now();
+
+      if (remaining <= 0) {
+        setDailyCountdown('Ready to spin!');
+        setIsDailySpinAvailable((prev) => {
+          if (!prev) {
+            setAvailableBonusSpins((spins) => spins + 1);
+          }
+          return true;
+        });
+        setDailyBonusAvailableAt(null);
+        return;
+      }
+
+      setDailyCountdown(formatDuration(remaining));
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [showDailyBonus, dailyBonusAvailableAt, isDailySpinAvailable]);
 
   const handleSpinBonus = useCallback(() => {
     if (availableBonusSpins <= 0 || isSpinningBonus) {
@@ -177,15 +312,41 @@ export default function HomeScreen() {
 
     setIsSpinningBonus(true);
     setBonusMessage('Spinning…');
+    flipAnimation.stopAnimation();
+    flipAnimation.setValue(0);
+    Animated.timing(flipAnimation, {
+      toValue: 1,
+      duration: 900,
+      easing: Easing.linear,
+      useNativeDriver: true,
+    }).start(() => {
+      flipAnimation.setValue(0);
+    });
     const reward = BONUS_REWARD_OPTIONS[Math.floor(Math.random() * BONUS_REWARD_OPTIONS.length)];
     setTimeout(() => {
       addHarvestAmount(reward);
       setAvailableBonusSpins((prev) => Math.max(prev - 1, 0));
+      if (isDailySpinAvailable) {
+        const now = Date.now();
+        const nextAvailable = now + DAILY_BONUS_INTERVAL_MS;
+        setIsDailySpinAvailable(false);
+        setDailyBonusAvailableAt(nextAvailable);
+        setDailyCountdown(formatDuration(DAILY_BONUS_INTERVAL_MS));
+        AsyncStorage.setItem(DAILY_BONUS_LAST_CLAIM_KEY, now.toString()).catch(() => {
+          // persistence best effort only
+        });
+      }
       setLastBonusReward(reward);
       setBonusMessage(`You earned ${reward.toLocaleString()} clicks!`);
       setIsSpinningBonus(false);
     }, 900);
-  }, [addHarvestAmount, availableBonusSpins, isSpinningBonus]);
+  }, [
+    addHarvestAmount,
+    availableBonusSpins,
+    flipAnimation,
+    isDailySpinAvailable,
+    isSpinningBonus,
+  ]);
 
   const handleWatchBonusAd = useCallback(() => {
     if (hasWatchedBonusAd || isWatchingAd) {
@@ -308,30 +469,58 @@ export default function HomeScreen() {
             <Pressable style={styles.menuSheetBackdrop} onPress={() => setMenuOpen(false)} />
             <View style={styles.menuSheetCard}>
               <View style={styles.menuSheetHandle} />
-              <Text style={styles.menuSheetTitle}>Garden menu</Text>
-              <Text style={styles.menuSheetSubtitle}>
-                Update your profile or refresh your home’s emoji theme.
-              </Text>
+              <View style={[styles.menuHero, { backgroundColor: accentSurface, shadowColor: accentColor }]}>
+                <View style={[styles.menuHeroBadge, { backgroundColor: accentColor }]}>
+                  <Text style={styles.menuHeroEmoji}>{customClickEmoji}</Text>
+                </View>
+                <View style={styles.menuHeroTextBlock}>
+                  <Text style={styles.menuHeroTitle}>Garden menu</Text>
+                  <Text style={styles.menuHeroCopy}>
+                    Welcome back, {friendlyName}! Tend your profile, grab bonuses, and refresh your theme.
+                  </Text>
+                </View>
+              </View>
               <View style={styles.menuSheetContent}>
-                <Pressable style={styles.menuItem} onPress={handleNavigateProfile}>
-                  <Text style={styles.menuItemText}>Profile</Text>
+                <Text style={styles.menuSectionTitle}>Quick actions</Text>
+                <Pressable style={styles.menuItemCard} onPress={handleNavigateProfile}>
+                  <Text style={styles.menuItemEmoji}>🌿</Text>
+                  <View style={styles.menuItemBody}>
+                    <Text style={styles.menuItemTitle}>Profile</Text>
+                    <Text style={styles.menuItemSubtitle}>Edit your gardener details</Text>
+                  </View>
                 </Pressable>
-                <Pressable style={styles.menuItem} onPress={handleOpenDailyBonus}>
-                  <Text style={[styles.menuItemText, styles.menuHighlight]}>Daily Bonus!</Text>
+                <Pressable
+                  style={[styles.menuItemCard, styles.menuItemHighlightCard]}
+                  onPress={handleOpenDailyBonus}
+                >
+                  <Text style={styles.menuItemEmoji}>🎁</Text>
+                  <View style={styles.menuItemBody}>
+                    <Text style={[styles.menuItemTitle, styles.menuHighlight]}>Daily Bonus</Text>
+                    <Text style={styles.menuItemSubtitle}>Spin for surprise clicks</Text>
+                  </View>
+                  <View style={styles.menuPill} pointerEvents="none">
+                    <Text style={styles.menuPillText}>{dailyMenuStatus}</Text>
+                  </View>
                 </Pressable>
-                <View style={styles.menuDivider} />
-                <Text style={styles.menuSectionTitle}>Emoji Themes</Text>
-                {themeOptions.map((option) => {
-                  const isActive = homeEmojiTheme === option.value;
-                  return (
-                    <Pressable
-                      key={option.value}
-                      onPress={() => handleSelectTheme(option.value)}
-                      style={[styles.themeOption, isActive && styles.themeOptionActive]}>
-                      <Text style={[styles.themeOptionText, isActive && styles.themeOptionTextActive]}>{option.label}</Text>
-                    </Pressable>
-                  );
-                })}
+                <View style={styles.menuSectionCard}>
+                  <Text style={styles.menuSectionTitle}>Emoji themes</Text>
+                  <View style={styles.menuThemeList}>
+                    {themeOptions.map((option) => {
+                      const isActive = homeEmojiTheme === option.value;
+                      return (
+                        <Pressable
+                          key={option.value}
+                          onPress={() => handleSelectTheme(option.value)}
+                          style={[styles.themeOption, isActive && styles.themeOptionActive]}
+                        >
+                          <Text style={[styles.themeOptionText, isActive && styles.themeOptionTextActive]}>
+                            {option.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
               </View>
               <Pressable
                 style={styles.menuSheetCloseButton}
@@ -387,14 +576,33 @@ export default function HomeScreen() {
           <View style={styles.bonusContainer}>
             <Text style={styles.bonusTitle}>Daily Bonus</Text>
             <Text style={styles.bonusSubtitle}>
-              Spin the garden wheel for surprise clicks. Your first spin is free every time you open the bonus.
+              Spin the garden wheel for surprise clicks. Claim one free spin every 24 hours!
             </Text>
-            <View style={[styles.bonusWheel, { borderColor: accentColor }]}>
+            <Animated.View
+              style={[
+                styles.bonusWheel,
+                { borderColor: accentColor },
+                {
+                  transform: [
+                    { perspective: 1200 },
+                    { rotateY: bonusFlipRotation },
+                  ],
+                },
+              ]}
+            >
               <Text style={styles.bonusWheelEmoji}>{customClickEmoji}</Text>
-            </View>
+            </Animated.View>
             <Text style={styles.bonusSpinsLabel}>
               {availableBonusSpins} {availableBonusSpins === 1 ? 'spin left' : 'spins left'}
             </Text>
+            <View style={styles.bonusCountdownBlock}>
+              <Text style={styles.bonusCountdownLabel}>Next free spin</Text>
+              <Text
+                style={[styles.bonusCountdownValue, isDailySpinAvailable && styles.bonusCountdownReady]}
+              >
+                {dailyCountdown || 'Loading…'}
+              </Text>
+            </View>
             {lastBonusReward ? (
               <Text style={styles.bonusReward}>Last reward: {lastBonusReward.toLocaleString()} clicks</Text>
             ) : null}
@@ -661,7 +869,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 16,
     paddingBottom: 28,
-    gap: 16,
+    gap: 20,
     shadowColor: '#0f2e20',
     shadowOpacity: 0.18,
     shadowRadius: 16,
@@ -674,37 +882,47 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: '#bbf7d0',
   },
-  menuSheetTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#134e32',
-    textAlign: 'center',
-  },
-  menuSheetSubtitle: {
-    fontSize: 13,
-    color: '#2d3748',
-    textAlign: 'center',
-    lineHeight: 18,
-  },
   menuSheetContent: {
-    gap: 14,
+    gap: 18,
   },
-  menuItem: {
-    paddingVertical: 10,
+  menuHero: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 24,
+    padding: 18,
+    gap: 16,
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
   },
-  menuItemText: {
-    fontSize: 16,
-    fontWeight: '600',
+  menuHeroBadge: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  menuHeroEmoji: {
+    fontSize: 32,
+  },
+  menuHeroTextBlock: {
+    flex: 1,
+    gap: 6,
+  },
+  menuHeroTitle: {
+    fontSize: 20,
+    fontWeight: '800',
     color: '#134e32',
   },
-  menuHighlight: {
-    color: '#0f766e',
-    fontWeight: '700',
-  },
-  menuDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: '#d1fae5',
-    marginVertical: 6,
+  menuHeroCopy: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#166534',
   },
   menuSectionTitle: {
     fontSize: 13,
@@ -713,10 +931,76 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
+  menuItemCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    borderRadius: 20,
+    backgroundColor: '#ffffff',
+    shadowColor: '#000000',
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+  },
+  menuItemEmoji: {
+    fontSize: 28,
+  },
+  menuItemBody: {
+    flex: 1,
+    gap: 2,
+  },
+  menuItemTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#134e32',
+  },
+  menuItemSubtitle: {
+    fontSize: 13,
+    color: '#1f2937',
+  },
+  menuItemHighlightCard: {
+    backgroundColor: 'rgba(15, 118, 110, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(15, 118, 110, 0.35)',
+  },
+  menuHighlight: {
+    color: '#0f766e',
+    fontWeight: '700',
+  },
+  menuPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#14532d',
+  },
+  menuPillText: {
+    color: '#f0fff4',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  menuSectionCard: {
+    marginTop: 4,
+    borderRadius: 20,
+    backgroundColor: '#ffffff',
+    padding: 18,
+    gap: 14,
+    shadowColor: '#000000',
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+  },
+  menuThemeList: {
+    gap: 10,
+  },
   themeOption: {
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 14,
+    backgroundColor: 'rgba(31, 111, 74, 0.08)',
   },
   themeOptionActive: {
     backgroundColor: '#1f6f4a',
@@ -786,6 +1070,25 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#14532d',
+  },
+  bonusCountdownBlock: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  bonusCountdownLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#065f46',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  bonusCountdownValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  bonusCountdownReady: {
+    color: '#0f766e',
   },
   bonusReward: {
     fontSize: 16,

@@ -1011,9 +1011,6 @@ export function GardenSection({
           <View style={styles.sheetCard}>
             <View style={styles.sheetHandle} />
             <Text style={styles.sheetTitle}>Garden shop</Text>
-            <Text style={styles.sheetSubtitle}>
-              Curated categories make it easy to build cozy garden scenes with the essentials on top.
-            </Text>
             <View style={styles.sheetSearchBlock}>
               <View style={styles.searchRow}>
                 <TextInput
@@ -1035,7 +1032,6 @@ export function GardenSection({
                   </Pressable>
                 ) : null}
               </View>
-              <Text style={styles.sheetHint}>Search by name, tags, or drop emoji characters directly.</Text>
             </View>
             <View style={styles.categoryFilterBlock}>
               <ScrollView
@@ -1096,10 +1092,6 @@ export function GardenSection({
           <View style={styles.sheetCard}>
             <View style={styles.sheetHandle} />
             <Text style={styles.sheetTitle}>Inventory</Text>
-            <Text style={styles.sheetSubtitle}>
-              Filter by category or tags to find the perfect decorations to ready for placement.
-              Long-press in All favorites to rearrange your go-to emojis.
-            </Text>
             <View style={styles.sheetSearchBlock}>
               <View style={styles.searchRow}>
                 <TextInput
@@ -1121,7 +1113,6 @@ export function GardenSection({
                   </Pressable>
                 ) : null}
               </View>
-              <Text style={styles.sheetHint}>Filtering applies to both your inventory and the shop.</Text>
             </View>
             <View style={styles.categoryFilterBlock}>
               <ScrollView
@@ -1852,19 +1843,8 @@ const styles = StyleSheet.create({
     color: '#134e32',
     textAlign: 'center',
   },
-  sheetSubtitle: {
-    fontSize: 13,
-    color: '#2d3748',
-    textAlign: 'center',
-    lineHeight: 18,
-  },
   sheetSearchBlock: {
     gap: 8,
-  },
-  sheetHint: {
-    fontSize: 12,
-    color: '#0f766e',
-    textAlign: 'center',
   },
   sheetColumn: {
     gap: 12,

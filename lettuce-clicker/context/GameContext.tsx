@@ -254,7 +254,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [harvest, setHarvest] = useState(0);
   const [lifetimeHarvest, setLifetimeHarvest] = useState(0);
   const [profileLifetimeTotal, setProfileLifetimeTotal] = useState(0);
-  const [tapValue] = useState(1);
+  const [tapValue, setTapValue] = useState(1);
   const [autoPerSecond, setAutoPerSecond] = useState(0);
   const [purchasedUpgrades, setPurchasedUpgrades] = useState<Record<string, number>>({});
   const [orbitingUpgradeEmojis, setOrbitingUpgradeEmojis] = useState<OrbitingEmoji[]>([]);
@@ -284,6 +284,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const harvestRef = useRef(harvest);
   const lifetimeHarvestRef = useRef(lifetimeHarvest);
   const profileLifetimeTotalRef = useRef(profileLifetimeTotal);
+  const tapValueRef = useRef(tapValue);
   const autoPerSecondRef = useRef(autoPerSecond);
   const VARIATION_SELECTOR_REGEX = /[\uFE0E\uFE0F]/g;
 
@@ -417,6 +418,15 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   }, [autoPerSecond]);
 
   useEffect(() => {
+    const nextTapValue = Math.max(autoPerSecond, 1);
+    setTapValue(nextTapValue);
+  }, [autoPerSecond]);
+
+  useEffect(() => {
+    tapValueRef.current = tapValue;
+  }, [tapValue]);
+
+  useEffect(() => {
     const backgroundStates: AppStateStatus[] = ['inactive', 'background'];
 
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
@@ -506,11 +516,12 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     [harvest]
   );
 
-  const addHarvest = () => {
-    setHarvest((prev) => prev + tapValue);
-    setLifetimeHarvest((prev) => prev + tapValue);
-    setProfileLifetimeTotal((prev) => prev + tapValue);
-  };
+  const addHarvest = useCallback(() => {
+    const manualGain = Math.max(tapValueRef.current, 1);
+    setHarvest((prev) => prev + manualGain);
+    setLifetimeHarvest((prev) => prev + manualGain);
+    setProfileLifetimeTotal((prev) => prev + manualGain);
+  }, []);
 
   const addHarvestAmount = useCallback(
     (amount: number) => {
@@ -823,21 +834,15 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
             } else if (shouldResetSession) {
               setCustomEmojiCatalog({});
             }
-            if (!shouldResetSession && typeof parsed.hasPremiumUpgrade === 'boolean') {
+            if (typeof parsed.hasPremiumUpgrade === 'boolean') {
               setHasPremiumUpgrade(parsed.hasPremiumUpgrade);
-            } else if (shouldResetSession) {
-              setHasPremiumUpgrade(false);
             }
-            if (!shouldResetSession && typeof parsed.premiumAccentColor === 'string') {
+            if (typeof parsed.premiumAccentColor === 'string') {
               setPremiumAccentColorState(parsed.premiumAccentColor);
-            } else if (shouldResetSession) {
-              setPremiumAccentColorState('#1f6f4a');
             }
-            if (!shouldResetSession && typeof parsed.customClickEmoji === 'string') {
+            if (typeof parsed.customClickEmoji === 'string') {
               const trimmed = parsed.customClickEmoji.trim();
               setCustomClickEmojiState(trimmed.length > 0 ? Array.from(trimmed)[0] : '🥬');
-            } else if (shouldResetSession) {
-              setCustomClickEmojiState('🥬');
             }
           } catch {
             // ignore malformed stored data

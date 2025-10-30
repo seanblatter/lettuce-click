@@ -9,12 +9,14 @@ export default function GardenScreen() {
     harvest,
     emojiCatalog,
     emojiInventory,
+    inventoryOrder,
     placements,
     purchaseEmoji,
     placeEmoji,
     updatePlacement,
     clearGarden,
     registerCustomEmoji,
+    reorderInventory,
   } = useGame();
 
   return (
@@ -23,12 +25,14 @@ export default function GardenScreen() {
         harvest={harvest}
         emojiCatalog={emojiCatalog}
         emojiInventory={emojiInventory}
+        inventoryOrder={inventoryOrder}
         placements={placements}
         purchaseEmoji={purchaseEmoji}
         placeEmoji={placeEmoji}
         updatePlacement={updatePlacement}
         clearGarden={clearGarden}
         registerCustomEmoji={registerCustomEmoji}
+        reorderInventory={reorderInventory}
       />
     </SafeAreaView>
   );

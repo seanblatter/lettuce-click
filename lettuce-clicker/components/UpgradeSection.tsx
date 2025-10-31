@@ -97,11 +97,11 @@ export function UpgradeSection({
           <View style={[styles.heroBubble, styles.heroBubbleThree]} />
         </View>
         <View style={styles.heroContent}>
-          <Text style={styles.heroOverline}>Workshop Pavilion</Text>
+          <Text style={styles.heroOverline}>Lettuce Park</Text>
           <Text style={styles.heroTitle}>{title}</Text>
-          <Text style={styles.heroHarvest}>{harvest.toLocaleString()} harvest on hand</Text>
+          <Text style={styles.heroHarvest}>{harvest.toLocaleString()} harvest of clicks</Text>
           <Text style={styles.heroHint}>
-            Invest your harvest to expand automation, then bring fresh ambience to your garden centerpiece.
+            Invest your harvest to expand automation, and bring fresh ambience to your garden centerpiece.
           </Text>
           <View style={styles.heroStatsRow}>
             {heroStats.map((stat, index) => (

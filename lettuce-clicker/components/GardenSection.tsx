@@ -140,7 +140,7 @@ export function GardenSection({
   updatePlacement,
   clearGarden,
   registerCustomEmoji,
-  title = 'Lettuce Gardens',
+  title = '🥬 Welcome to the Lettuce Gardens',
 }: Props) {
   const insets = useSafeAreaInsets();
   const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null);
@@ -852,9 +852,9 @@ export function GardenSection({
         scrollEnabled={!isDrawingMode}>
         <View style={[styles.harvestBanner, { paddingTop: bannerTopPadding }]}>
           <Text style={styles.harvestTitle}>{title}</Text>
-          <Text style={styles.harvestAmount}>{harvest.toLocaleString()} harvest ready</Text>
+          <Text style={styles.harvestAmount}>🌱 Your current Harvest is {harvest.toLocaleString()} clicks</Text>
           <Text style={styles.harvestHint}>
-            Your harvest bankroll is ready—shop curated emoji sets and paint the garden to life.
+            🎨 Your harvest bankroll is ready—shop curated emoji sets and paint the garden to life.
           </Text>
         </View>
 

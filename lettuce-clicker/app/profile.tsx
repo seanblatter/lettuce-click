@@ -183,8 +183,12 @@ export default function ProfileScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator
+        contentInsetAdjustmentBehavior="never"
+      >
         <Pressable onPress={() => router.back()} style={styles.backButton} accessibilityLabel="Go back">
           <Text style={styles.backLabel}>← Back</Text>
         </Pressable>

@@ -74,8 +74,12 @@ export default function MusicScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator
+        contentInsetAdjustmentBehavior="never"
+      >
         <View style={styles.headerRow}>
           <Pressable
             onPress={() => router.back()}

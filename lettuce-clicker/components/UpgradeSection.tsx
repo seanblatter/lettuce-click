@@ -99,7 +99,7 @@ export function UpgradeSection({
         <View style={styles.heroContent}>
           <Text style={styles.heroOverline}>Lettuce Park</Text>
           <Text style={styles.heroTitle}>{title}</Text>
-          <Text style={styles.heroHarvest}>{harvest.toLocaleString()} clicks harvested</Text>
+          <Text style={styles.heroHarvest}>{harvest.toLocaleString()} harvest of clicks</Text>
           <Text style={styles.heroHint}>
             Invest your harvest to expand automation, and bring fresh ambience to your garden centerpiece.
           </Text>
@@ -145,7 +145,7 @@ export function UpgradeSection({
           style={[styles.workshopToggleCard, activeWorkshop === 'themes' && styles.workshopToggleActive]}
         >
           <Text style={[styles.workshopToggleLabel, activeWorkshop === 'themes' && styles.workshopToggleLabelActive]}>
-            Themes
+            Themes Workshop
           </Text>
           <Text style={[styles.workshopToggleHint, activeWorkshop === 'themes' && styles.workshopToggleHintActive]}>
             {themeToggleHint}

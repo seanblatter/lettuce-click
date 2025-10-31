@@ -4,7 +4,7 @@ import { Animated, Dimensions, Easing, StyleSheet, Text, View } from 'react-nati
 import type { HomeEmojiTheme, OrbitingEmoji } from '@/context/GameContext';
 
 const FULL_ROTATION_RADIANS = Math.PI * 2;
-const DEFAULT_RADIUS = 120;
+const DEFAULT_RADIUS = Math.min(WINDOW_WIDTH, WINDOW_HEIGHT) * 0.38;
 const WINDOW = Dimensions.get('window');
 const WINDOW_WIDTH = WINDOW.width;
 const WINDOW_HEIGHT = WINDOW.height;
@@ -31,15 +31,28 @@ const FIRELY_ALPHA_VARIATION = 2200;
 const SUPER_NOVA_DURATION = 3600;
 
 const SPIRAL_STEP = 10;
-const SPIRAL_BASE_RADIUS_RATIO = 0.28;
+const SPIRAL_BASE_RADIUS_RATIO = 0.36;
 const SPIRAL_DEFAULT_ARMS = 4;
 const SPIRAL_MAX_ARMS = 6;
 const SPIRAL_ANGLE_STEP = Math.PI / 28;
-const SPIRAL_DRIFT_RANGE = 48;
+const SPIRAL_DRIFT_RANGE = 64;
 const SPIRAL_DRIFT_DURATION = 20000;
 
 const WAVE_DURATION = 16000;
 const WAVE_AMPLITUDE_RATIO = 0.32;
+
+const LAKE_DROP_DURATION_BASE = 2400;
+const LAKE_DROP_VARIATION = 1600;
+const LAKE_FLOAT_DURATION_BASE = 3400;
+const LAKE_FLOAT_VARIATION = 1600;
+const LAKE_SWAY_DURATION_BASE = 4200;
+const LAKE_SWAY_VARIATION = 2200;
+const LAKE_HORIZONTAL_SPAN = 1.4;
+const LAKE_DEPTH_MIN_RATIO = 0.75;
+const LAKE_DEPTH_VARIATION_RATIO = 0.45;
+const LAKE_FLOAT_AMPLITUDE_BASE = 10;
+const LAKE_FLOAT_AMPLITUDE_VARIATION = 16;
+const LAKE_SWAY_RANGE_RATIO = 0.08;
 
 const AURORA_DURATION = 12000;
 const AURORA_SHIFT = 42;
@@ -90,6 +103,8 @@ export function OrbitingUpgradeEmojis({
       return <BubblePopBurst emojis={limited} radius={radius} />;
     case 'wave':
       return <WaveRibbon emojis={limited} radius={radius} />;
+    case 'lake':
+      return <LakePool emojis={limited} radius={radius} />;
     case 'echo':
       return <EchoPulse emojis={limited} radius={radius} />;
     case 'confetti':
@@ -261,6 +276,188 @@ function SpiralOrbit({ emojis, radius }: BasePatternProps) {
           );
         })
       }</Animated.View>
+    </View>
+  );
+}
+
+type LakeParticle = {
+  id: string;
+  emoji: string;
+  drop: Animated.Value;
+  bob: Animated.Value;
+  sway: Animated.Value;
+  startX: number;
+  depth: number;
+  dropDelay: number;
+  dropDuration: number;
+  bobDuration: number;
+  swayDuration: number;
+  bobAmplitude: number;
+  swayRange: number;
+};
+
+function LakePool({ emojis, radius }: BasePatternProps) {
+  const limit = useMemo(() => emojis.slice(0, 50), [emojis]);
+  const particles = useMemo<LakeParticle[]>(
+    () =>
+      limit.map((item, index) => {
+        const drop = new Animated.Value(0);
+        const bob = new Animated.Value(0);
+        const sway = new Animated.Value(0);
+        const dropDelay = Math.floor(randomForKey(item.id, index + 26) * 1400);
+        const dropDuration =
+          LAKE_DROP_DURATION_BASE + Math.floor(randomForKey(item.id, index + 27) * LAKE_DROP_VARIATION);
+        const bobDuration =
+          LAKE_FLOAT_DURATION_BASE + Math.floor(randomForKey(item.id, index + 28) * LAKE_FLOAT_VARIATION);
+        const swayDuration =
+          LAKE_SWAY_DURATION_BASE + Math.floor(randomForKey(item.id, index + 29) * LAKE_SWAY_VARIATION);
+        const startX =
+          radius * (randomForKey(item.id, index + 30) * LAKE_HORIZONTAL_SPAN - LAKE_HORIZONTAL_SPAN / 2);
+        const depth =
+          radius * (LAKE_DEPTH_MIN_RATIO + randomForKey(item.id, index + 31) * LAKE_DEPTH_VARIATION_RATIO);
+        const bobAmplitude =
+          LAKE_FLOAT_AMPLITUDE_BASE + randomForKey(item.id, index + 32) * LAKE_FLOAT_AMPLITUDE_VARIATION;
+        const swayRange = radius * (LAKE_SWAY_RANGE_RATIO + randomForKey(item.id, index + 33) * 0.06);
+
+        return {
+          id: item.id,
+          emoji: item.emoji,
+          drop,
+          bob,
+          sway,
+          startX,
+          depth,
+          dropDelay,
+          dropDuration,
+          bobDuration,
+          swayDuration,
+          bobAmplitude,
+          swayRange,
+        };
+      }),
+    [limit, radius]
+  );
+
+  const dropRefs = useRef<Animated.CompositeAnimation[]>([]);
+  const loopRefs = useRef<Animated.CompositeAnimation[]>([]);
+
+  useEffect(() => {
+    dropRefs.current.forEach((anim) => anim.stop());
+    loopRefs.current.forEach((loop) => loop.stop());
+    dropRefs.current = [];
+    loopRefs.current = [];
+
+    let cancelled = false;
+
+    particles.forEach((particle) => {
+      particle.drop.setValue(0);
+      particle.bob.setValue(0);
+      particle.sway.setValue(0);
+
+      const dropAnim = Animated.sequence([
+        Animated.delay(particle.dropDelay),
+        Animated.timing(particle.drop, {
+          toValue: 1,
+          duration: particle.dropDuration,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]);
+
+      dropRefs.current.push(dropAnim);
+      dropAnim.start(() => {
+        if (cancelled) {
+          return;
+        }
+
+        const bobLoop = Animated.loop(
+          Animated.sequence([
+            Animated.timing(particle.bob, {
+              toValue: 1,
+              duration: particle.bobDuration,
+              easing: Easing.inOut(Easing.sin),
+              useNativeDriver: true,
+            }),
+            Animated.timing(particle.bob, {
+              toValue: -1,
+              duration: particle.bobDuration,
+              easing: Easing.inOut(Easing.sin),
+              useNativeDriver: true,
+            }),
+          ])
+        );
+
+        const swayLoop = Animated.loop(
+          Animated.sequence([
+            Animated.timing(particle.sway, {
+              toValue: 1,
+              duration: particle.swayDuration,
+              easing: Easing.inOut(Easing.sin),
+              useNativeDriver: true,
+            }),
+            Animated.timing(particle.sway, {
+              toValue: -1,
+              duration: particle.swayDuration,
+              easing: Easing.inOut(Easing.sin),
+              useNativeDriver: true,
+            }),
+          ])
+        );
+
+        bobLoop.start();
+        swayLoop.start();
+        loopRefs.current.push(bobLoop, swayLoop);
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      dropRefs.current.forEach((anim) => anim.stop());
+      loopRefs.current.forEach((loop) => loop.stop());
+      dropRefs.current = [];
+      loopRefs.current = [];
+    };
+  }, [particles]);
+
+  if (particles.length === 0) {
+    return null;
+  }
+
+  return (
+    <View pointerEvents="none" style={styles.wrapper}>
+      {particles.map((particle) => {
+        const dropTranslate = particle.drop.interpolate({
+          inputRange: [0, 1],
+          outputRange: [-radius * 1.1, particle.depth],
+        });
+        const bobTranslate = particle.bob.interpolate({
+          inputRange: [-1, 1],
+          outputRange: [-particle.bobAmplitude, particle.bobAmplitude],
+        });
+        const swayTranslate = particle.sway.interpolate({
+          inputRange: [-1, 1],
+          outputRange: [-particle.swayRange, particle.swayRange],
+        });
+
+        return (
+          <Animated.View
+            key={particle.id}
+            style={[
+              styles.emojiWrapper,
+              {
+                transform: [
+                  { translateX: particle.startX },
+                  { translateX: swayTranslate },
+                  { translateY: dropTranslate },
+                  { translateY: bobTranslate },
+                ],
+              },
+            ]}
+          >
+            <Text style={[styles.emoji, styles.emojiLake]}>{particle.emoji}</Text>
+          </Animated.View>
+        );
+      })}
     </View>
   );
 }
@@ -1193,10 +1390,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   emoji: {
-    fontSize: 26,
+    fontSize: 28,
   },
   emojiSpiral: {
-    fontSize: 22,
+    fontSize: 24,
   },
   emojiBubble: {
     textShadowColor: '#bae6fd',
@@ -1212,6 +1409,11 @@ const styles = StyleSheet.create({
     textShadowColor: '#38bdf8',
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 9,
+  },
+  emojiLake: {
+    textShadowColor: '#38bdf8',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 8,
   },
   emojiEcho: {
     textShadowColor: '#38bdf8',

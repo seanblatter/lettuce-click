@@ -83,6 +83,9 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
     }
   }, [onRequestClose]);
 
+  const headerBackText = mode === 'screen' ? '← Back' : 'Back';
+  const headerBackAccessibility = mode === 'screen' ? 'Go back' : 'Close music lounge';
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <ScrollView
@@ -91,31 +94,16 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
         contentInsetAdjustmentBehavior="never"
       >
         <View style={styles.headerRow}>
-          {mode === 'screen' ? (
-            <Pressable
-              onPress={handleClose}
-              style={styles.headerBackButton}
-              accessibilityRole="button"
-              accessibilityLabel="Go back"
-            >
-              <Text style={styles.headerBackText}>Back</Text>
-            </Pressable>
-          ) : (
-            <View style={styles.headerButtonPlaceholder} />
-          )}
+          <Pressable
+            onPress={handleClose}
+            style={styles.headerBackButton}
+            accessibilityRole="button"
+            accessibilityLabel={headerBackAccessibility}
+          >
+            <Text style={styles.headerBackText}>{headerBackText}</Text>
+          </Pressable>
           <Text style={styles.headerTitle}>Music Lounge</Text>
-          {mode === 'modal' ? (
-            <Pressable
-              onPress={handleClose}
-              style={styles.modalHeaderButton}
-              accessibilityRole="button"
-              accessibilityLabel="Close music lounge"
-            >
-              <Text style={styles.modalHeaderText}>Done</Text>
-            </Pressable>
-          ) : (
-            <View style={styles.headerButtonPlaceholder} />
-          )}
+          <View style={styles.headerButtonPlaceholder} />
         </View>
         <Text style={styles.headerSubtitle}>
           Choose a white or grey music blend to match the mood of your lettuce garden.
@@ -198,19 +186,6 @@ const styles = StyleSheet.create({
   },
   headerButtonPlaceholder: {
     width: 72,
-  },
-  modalHeaderButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 16,
-    backgroundColor: 'rgba(22, 101, 52, 0.14)',
-    alignItems: 'center',
-    minWidth: 72,
-  },
-  modalHeaderText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#14532d',
   },
   headerTitle: {
     fontSize: 24,

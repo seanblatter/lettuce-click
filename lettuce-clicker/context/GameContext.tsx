@@ -20,6 +20,7 @@ export type HomeEmojiTheme =
   | 'bubble'
   | 'bubble-pop'
   | 'wave'
+  | 'lake'
   | 'echo'
   | 'confetti'
   | 'laser'
@@ -371,10 +372,17 @@ const emojiThemeCatalog: EmojiThemeDefinition[] = [
   },
   {
     id: 'wave',
-    name: 'Wave Motion',
-    description: 'A tidal sweep carries emojis in rhythmic wave formations.',
+    name: 'The Force',
+    description: 'Emojis glide along an invisible current that sways like telekinesis.',
     cost: 5200,
     emoji: '🌊',
+  },
+  {
+    id: 'lake',
+    name: 'Lake Drift',
+    description: 'Emojis dive to the waterline and bob together like floating keepsakes.',
+    cost: 6400,
+    emoji: '💧',
   },
   {
     id: 'echo',

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
@@ -133,13 +133,13 @@ const MUSIC_OPTIONS = [
 ] as const;
 
 const MUSIC_GROUPS = [
-  { id: 'white', label: 'White Noise', intro: 'Bright, energetic mixes to keep the garden lively.' },
-  { id: 'grey', label: 'Grey Noise', intro: 'Softly balanced sounds that settle the senses.' },
-  { id: 'rain', label: 'Rainfall Retreats', intro: 'Falling drops and distant thunder for gentle nights.' },
-  { id: 'ocean', label: 'Ocean Drift', intro: 'Coastal hush and tidal sways for breezy focus.' },
   { id: 'forest', label: 'Forest Echoes', intro: 'Leaves, birds, and twilight breezes between the vines.' },
   { id: 'static', label: 'Static & Signal', intro: 'Analog textures tuned for deep concentration.' },
   { id: 'keys', label: 'Keys & Chords', intro: 'Piano and plucked harmonies to soften the mood.' },
+  { id: 'ocean', label: 'Ocean Waves', intro: 'Coastal hush and tidal sways for breezy focus.' },
+  { id: 'white', label: 'White Noise', intro: 'Bright, energetic mixes to keep the garden lively.' },
+  { id: 'grey', label: 'Grey Noise', intro: 'Softly balanced sounds that settle the senses.' },
+  { id: 'rain', label: 'Rainfall Retreats', intro: 'Falling drops and distant thunder for gentle nights.' },
   { id: 'night', label: 'Night Sky', intro: 'Synth swells and starlit drones for restorative sleep.' },
 ] as const;
 
@@ -175,6 +175,38 @@ const SLEEP_TIMER_PRESETS = [
   { id: '120', label: '120 min', minutes: 120 },
 ] as const;
 
+const ALARM_MINUTE_OPTIONS = Array.from({ length: 240 }, (_, index) => index + 1);
+
+const PRIORITIZED_GROUP_IDS = new Set(['forest', 'static', 'keys', 'ocean']);
+
+const formatDurationLong = (minutes: number) => {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  const parts: string[] = [];
+  if (hours > 0) {
+    parts.push(`${hours} ${hours === 1 ? 'hour' : 'hours'}`);
+  }
+  if (mins > 0) {
+    parts.push(`${mins} ${mins === 1 ? 'minute' : 'minutes'}`);
+  }
+  if (parts.length === 0) {
+    return '0 minutes';
+  }
+  return parts.join(' ');
+};
+
+const formatDurationCompact = (minutes: number) => {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (hours === 0) {
+    return `${mins}m`;
+  }
+  if (mins === 0) {
+    return `${hours}h`;
+  }
+  return `${hours}h ${mins}m`;
+};
+
 type MusicOption = (typeof MUSIC_OPTIONS)[number];
 type MusicServiceId = (typeof MUSIC_SERVICES)[number]['id'];
 type MusicSource = 'mix' | MusicServiceId;
@@ -198,6 +230,7 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
   const [sleepMode, setSleepMode] = useState<SleepMode>('timer');
   const [sleepDuration, setSleepDuration] = useState<number>(30);
   const [sleepCircle, setSleepCircle] = useState<SleepCircleState>(null);
+  const [showAllGroups, setShowAllGroups] = useState(false);
 
   const groupedOptions = useMemo(
     () =>
@@ -207,6 +240,22 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
       })),
     []
   );
+
+  const primaryGroups = useMemo(
+    () => groupedOptions.filter((group) => PRIORITIZED_GROUP_IDS.has(group.id) && group.options.length > 0),
+    [groupedOptions]
+  );
+
+  const secondaryGroups = useMemo(
+    () => groupedOptions.filter((group) => !PRIORITIZED_GROUP_IDS.has(group.id) && group.options.length > 0),
+    [groupedOptions]
+  );
+
+  useEffect(() => {
+    if (secondaryGroups.length === 0 && showAllGroups) {
+      setShowAllGroups(false);
+    }
+  }, [secondaryGroups.length, showAllGroups]);
 
   const selectedTrack = useMemo(
     () => MUSIC_OPTIONS.find((option) => option.id === selectedTrackId) ?? MUSIC_OPTIONS[0],
@@ -251,14 +300,24 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
 
   const sleepSummary = useMemo(() => {
     if (!sleepCircle) {
-      return 'Sleep circle off';
+      return {
+        headline: 'Timer off',
+        detail: 'No timer or alarm set',
+      };
     }
 
-    const suffix = sleepCircle.minutes === 1 ? 'minute' : 'minutes';
+    const compact = formatDurationCompact(sleepCircle.minutes);
+    const long = formatDurationLong(sleepCircle.minutes);
     if (sleepCircle.mode === 'timer') {
-      return `Sleep circle: stops in ${sleepCircle.minutes} ${suffix}`;
+      return {
+        headline: `Timer · ${compact}`,
+        detail: `Stops after ${long}`,
+      };
     }
-    return `Sleep circle: alarm in ${sleepCircle.minutes} ${suffix}`;
+    return {
+      headline: `Alarm · ${compact}`,
+      detail: `Chimes after ${long}`,
+    };
   }, [sleepCircle]);
 
   const handleSelectTrack = useCallback((trackId: MusicOption['id']) => {
@@ -336,15 +395,22 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
             accessibilityRole="button"
             accessibilityLabel="Open sleep circle timer"
           >
-            <Text style={styles.sleepButtonIcon}>🌙</Text>
-            <Text style={styles.sleepButtonLabel}>Sleep</Text>
+            <View style={styles.sleepButtonIconWrap}>
+              <Text style={styles.sleepButtonIcon}>🌙</Text>
+            </View>
+            <View style={styles.sleepButtonBody}>
+              <Text style={styles.sleepButtonLabel}>Sleep circle</Text>
+              <Text style={styles.sleepButtonStatus} numberOfLines={1}>
+                {sleepSummary.headline}
+              </Text>
+            </View>
           </Pressable>
         </View>
 
         <View style={styles.nowPlayingCard}>
           <View style={styles.nowPlayingHeader}>
             <Text style={styles.nowPlayingLabel}>Now playing</Text>
-            <Text style={styles.nowPlayingStatus}>{sleepSummary}</Text>
+            <Text style={styles.nowPlayingStatus}>{sleepSummary.detail}</Text>
           </View>
           <View style={styles.nowPlayingRow}>
             <View style={styles.nowPlayingEmojiWrap}>
@@ -414,7 +480,7 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
           </View>
         </View>
 
-        {groupedOptions.map((group) => (
+        {primaryGroups.map((group) => (
           <View key={group.id} style={styles.groupSection}>
             <Text style={styles.groupTitle}>{group.label}</Text>
             <Text style={styles.groupDescription}>{group.intro}</Text>
@@ -443,6 +509,50 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
             </View>
           </View>
         ))}
+
+        {secondaryGroups.length > 0 ? (
+          <View style={styles.groupSection}>
+            <Pressable
+              style={styles.groupToggle}
+              onPress={() => setShowAllGroups((prev) => !prev)}
+              accessibilityRole="button"
+              accessibilityLabel={showAllGroups ? 'Hide additional mixes' : 'Show more mixes'}
+            >
+              <Text style={styles.groupToggleText}>{showAllGroups ? 'Hide more mixes' : 'Show more mixes'}</Text>
+            </Pressable>
+            {showAllGroups
+              ? secondaryGroups.map((group) => (
+                  <View key={group.id} style={styles.secondaryGroup}>
+                    <Text style={styles.groupTitle}>{group.label}</Text>
+                    <Text style={styles.groupDescription}>{group.intro}</Text>
+                    <View style={styles.optionList}>
+                      {group.options.map((option) => {
+                        const isActive = option.id === selectedTrackId && nowPlayingSource === 'mix';
+                        return (
+                          <Pressable
+                            key={option.id}
+                            style={[styles.optionRow, isActive && styles.optionRowActive]}
+                            onPress={() => handleSelectTrack(option.id)}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: isActive }}
+                          >
+                            <View style={[styles.optionEmojiWrap, isActive && styles.optionEmojiWrapActive]}>
+                              <Text style={[styles.optionEmoji, isActive && styles.optionEmojiActive]}>{option.emoji}</Text>
+                            </View>
+                            <View style={styles.optionBody}>
+                              <Text style={[styles.optionName, isActive && styles.optionNameActive]}>{option.name}</Text>
+                              <Text style={styles.optionDescription}>{option.description}</Text>
+                            </View>
+                            {isActive ? <Text style={styles.optionBadge}>Playing</Text> : null}
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+                ))
+              : null}
+          </View>
+        ) : null}
       </ScrollView>
 
       <Modal
@@ -479,31 +589,59 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
               })}
             </View>
             <Text style={styles.sleepSectionLabel}>
-              {sleepMode === 'timer' ? 'Timer length' : 'Alarm delay'}
+              {sleepMode === 'timer' ? 'Timer length' : 'Alarm'}
             </Text>
-            <View style={styles.sleepTimerGrid}>
-              {SLEEP_TIMER_PRESETS.map((preset) => {
-                const isActive = sleepDuration === preset.minutes;
-                return (
-                  <Pressable
-                    key={preset.id}
-                    style={[styles.sleepTimerButton, isActive && styles.sleepTimerButtonActive]}
-                    onPress={() => setSleepDuration(preset.minutes)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: isActive }}
-                  >
-                    <Text style={[styles.sleepTimerText, isActive && styles.sleepTimerTextActive]}>
-                      {preset.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            <Text style={styles.sleepActiveSummary}>
-              {sleepMode === 'timer'
-                ? `Playback will end after ${sleepDuration} minutes.`
-                : `A gentle alarm will play after ${sleepDuration} minutes.`}
-            </Text>
+            {sleepMode === 'timer' ? (
+              <View style={styles.sleepTimerGrid}>
+                {SLEEP_TIMER_PRESETS.map((preset) => {
+                  const isActive = sleepDuration === preset.minutes;
+                  return (
+                    <Pressable
+                      key={preset.id}
+                      style={[styles.sleepTimerButton, isActive && styles.sleepTimerButtonActive]}
+                      onPress={() => setSleepDuration(preset.minutes)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: isActive }}
+                    >
+                      <Text style={[styles.sleepTimerText, isActive && styles.sleepTimerTextActive]}>
+                        {preset.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : (
+              <FlatList
+                style={styles.sleepAlarmList}
+                contentContainerStyle={styles.sleepAlarmListContent}
+                data={ALARM_MINUTE_OPTIONS}
+                keyExtractor={(item) => item.toString()}
+                renderItem={({ item }) => {
+                  const isActive = sleepDuration === item;
+                  return (
+                    <Pressable
+                      style={[styles.sleepAlarmButton, isActive && styles.sleepAlarmButtonActive]}
+                      onPress={() => setSleepDuration(item)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: isActive }}
+                    >
+                      <Text style={[styles.sleepAlarmText, isActive && styles.sleepAlarmTextActive]}>
+                        {formatDurationCompact(item)}
+                      </Text>
+                    </Pressable>
+                  );
+                }}
+                numColumns={4}
+                columnWrapperStyle={styles.sleepAlarmColumn}
+                showsVerticalScrollIndicator
+                initialNumToRender={32}
+                getItemLayout={(_, index) => {
+                  const rowHeight = 52;
+                  return { length: rowHeight, offset: Math.floor(index / 4) * rowHeight, index };
+                }}
+              />
+            )}
+            <Text style={styles.sleepActiveSummary}>{sleepSummary.detail}</Text>
             <View style={styles.sleepActions}>
               <Pressable
                 style={styles.sleepClearButton}
@@ -543,8 +681,8 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 24,
-    paddingBottom: 48,
-    gap: 28,
+    paddingBottom: 36,
+    gap: 22,
   },
   headerRow: {
     flexDirection: 'row',
@@ -583,30 +721,47 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   sleepButton: {
-    minWidth: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#134e32',
+    minWidth: 120,
+    borderRadius: 20,
+    backgroundColor: '#0f5132',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    gap: 12,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 5,
+  },
+  sleepButtonIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#14532d',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    gap: 4,
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
   },
   sleepButtonIcon: {
     fontSize: 24,
   },
+  sleepButtonBody: {
+    flex: 1,
+    gap: 2,
+  },
   sleepButtonLabel: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
-    color: '#f7fee7',
+    color: '#ecfdf5',
     textTransform: 'uppercase',
     letterSpacing: 0.6,
+  },
+  sleepButtonStatus: {
+    fontSize: 13,
+    color: '#bbf7d0',
+    fontWeight: '600',
   },
   nowPlayingCard: {
     backgroundColor: '#ecfdf5',
@@ -701,7 +856,7 @@ const styles = StyleSheet.create({
     color: '#ecfdf5',
   },
   serviceSection: {
-    gap: 12,
+    gap: 10,
   },
   sectionTitle: {
     fontSize: 18,
@@ -714,16 +869,16 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   serviceList: {
-    gap: 12,
+    gap: 10,
   },
   serviceCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 12,
     backgroundColor: '#ffffff',
     borderRadius: 20,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     borderWidth: 1,
     borderColor: 'rgba(20, 83, 45, 0.12)',
     shadowColor: '#0f172a',
@@ -778,7 +933,24 @@ const styles = StyleSheet.create({
     color: '#047857',
   },
   groupSection: {
-    gap: 12,
+    gap: 10,
+  },
+  groupToggle: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#e0f2f1',
+  },
+  groupToggleText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0f766e',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  secondaryGroup: {
+    gap: 10,
   },
   groupTitle: {
     fontSize: 18,
@@ -790,16 +962,16 @@ const styles = StyleSheet.create({
     color: '#1f2937',
   },
   optionList: {
-    gap: 12,
+    gap: 10,
   },
   optionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 12,
     backgroundColor: '#ffffff',
     borderRadius: 18,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     borderWidth: 1,
     borderColor: 'rgba(20, 83, 45, 0.12)',
     shadowColor: '#0f172a',
@@ -814,9 +986,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.22,
   },
   optionEmojiWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: '#ecfdf5',
     alignItems: 'center',
     justifyContent: 'center',
@@ -825,7 +997,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#bbf7d0',
   },
   optionEmoji: {
-    fontSize: 28,
+    fontSize: 26,
   },
   optionEmojiActive: {
     transform: [{ scale: 1.08 }],
@@ -843,8 +1015,8 @@ const styles = StyleSheet.create({
     color: '#0f766e',
   },
   optionDescription: {
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 12,
+    lineHeight: 16,
     color: '#1f2937',
   },
   optionBadge: {
@@ -889,7 +1061,7 @@ const styles = StyleSheet.create({
   },
   sleepModeRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
   },
   sleepModeButton: {
     flex: 1,
@@ -931,10 +1103,10 @@ const styles = StyleSheet.create({
   sleepTimerGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
   },
   sleepTimerButton: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
@@ -946,11 +1118,44 @@ const styles = StyleSheet.create({
     borderColor: '#0f766e',
   },
   sleepTimerText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: '#14532d',
   },
   sleepTimerTextActive: {
+    color: '#ecfdf5',
+  },
+  sleepAlarmList: {
+    maxHeight: 220,
+  },
+  sleepAlarmListContent: {
+    paddingVertical: 4,
+  },
+  sleepAlarmColumn: {
+    gap: 8,
+    marginBottom: 8,
+  },
+  sleepAlarmButton: {
+    flex: 1,
+    minWidth: 60,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(20, 83, 45, 0.2)',
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+  },
+  sleepAlarmButtonActive: {
+    backgroundColor: '#10b981',
+    borderColor: '#0f766e',
+  },
+  sleepAlarmText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#14532d',
+  },
+  sleepAlarmTextActive: {
     color: '#ecfdf5',
   },
   sleepActiveSummary: {

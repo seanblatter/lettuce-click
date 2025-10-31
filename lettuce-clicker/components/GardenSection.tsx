@@ -13,7 +13,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-// eslint-disable-next-line import/no-unresolved
 import * as MediaLibrary from 'expo-media-library';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -25,7 +24,6 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
-// eslint-disable-next-line import/no-unresolved
 import { captureRef } from 'react-native-view-shot';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -851,8 +849,10 @@ export function GardenSection({
         showsVerticalScrollIndicator={false}
         scrollEnabled={!isDrawingMode}>
         <View style={[styles.harvestBanner, { paddingTop: bannerTopPadding }]}>
-          <Text style={styles.harvestTitle}>{title}</Text>
-          <Text style={styles.harvestAmount}>{harvest.toLocaleString()} harvest ready</Text>
+          <Text style={styles.harvestTitle}>Welcome to Lettuce Garden</Text>
+          <Text style={styles.harvestAmount}>
+            You have harvested {harvest.toLocaleString()} clicks.
+          </Text>
           <Text style={styles.harvestHint}>
             Your harvest bankroll is ready—shop curated emoji sets and paint the garden to life.
           </Text>

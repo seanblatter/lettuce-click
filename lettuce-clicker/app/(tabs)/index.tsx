@@ -101,6 +101,9 @@ export default function HomeScreen() {
   const flipAnimation = useRef(new Animated.Value(0)).current;
   const rippleValue = useRef(new Animated.Value(0)).current;
   const rippleLoopRef = useRef<Animated.CompositeAnimation | null>(null);
+  const swipeRippleValue = useRef(new Animated.Value(0)).current;
+  const ringTiltValue = useRef(new Animated.Value(0)).current;
+  const swipeThrottleRef = useRef(0);
   const headerPaddingTop = useMemo(() => Math.max(insets.top - 6, 0) + 2, [insets.top]);
   const contentPaddingBottom = useMemo(() => insets.bottom + 140, [insets.bottom]);
   const friendlyName = useMemo(() => {
@@ -151,6 +154,38 @@ export default function HomeScreen() {
         outputRange: [0, 0.28, 0],
       }),
     [rippleValue]
+  );
+  const swipeRippleScale = useMemo(
+    () =>
+      swipeRippleValue.interpolate({
+        inputRange: [0, 1],
+        outputRange: [1, 1.35],
+      }),
+    [swipeRippleValue]
+  );
+  const swipeRippleOpacity = useMemo(
+    () =>
+      swipeRippleValue.interpolate({
+        inputRange: [0, 0.4, 1],
+        outputRange: [0, 0.24, 0],
+      }),
+    [swipeRippleValue]
+  );
+  const ringTiltRotation = useMemo(
+    () =>
+      ringTiltValue.interpolate({
+        inputRange: [0, 1],
+        outputRange: ['10deg', '28deg'],
+      }),
+    [ringTiltValue]
+  );
+  const ringTiltTranslate = useMemo(
+    () =>
+      ringTiltValue.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0, -8],
+      }),
+    [ringTiltValue]
   );
   const dailyMenuStatus = useMemo(() => {
     if (isDailySpinAvailable) {
@@ -239,6 +274,43 @@ export default function HomeScreen() {
       useNativeDriver: true,
     }).start();
   }, [rippleValue]);
+
+  const handlePressIn = useCallback(() => {
+    startRipple();
+    Animated.timing(ringTiltValue, {
+      toValue: 1,
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [ringTiltValue, startRipple]);
+
+  const handlePressOut = useCallback(() => {
+    stopRipple();
+    Animated.timing(ringTiltValue, {
+      toValue: 0,
+      duration: 260,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [ringTiltValue, stopRipple]);
+
+  const handleRingSwipe = useCallback(() => {
+    const now = Date.now();
+    if (now - swipeThrottleRef.current < 180) {
+      return;
+    }
+
+    swipeThrottleRef.current = now;
+    swipeRippleValue.stopAnimation();
+    swipeRippleValue.setValue(0);
+    Animated.timing(swipeRippleValue, {
+      toValue: 1,
+      duration: 420,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [swipeRippleValue]);
 
   const noticeTitle = useMemo(() => {
     if (!activeNotice) {
@@ -590,64 +662,91 @@ export default function HomeScreen() {
             <Pressable
               accessibilityLabel="Harvest lettuce"
               onPress={addHarvest}
-              onPressIn={startRipple}
-              onPressOut={stopRipple}
-              onTouchMove={startRipple}
+              onPressIn={handlePressIn}
+              onPressOut={handlePressOut}
+              onTouchMove={handleRingSwipe}
               style={({ pressed }) => [
                 styles.lettuceButton,
                 { backgroundColor: accentSurface, shadowColor: accentColor },
                 pressed && styles.lettucePressed,
               ]}
             >
-              <View style={[styles.ring, styles.ringOuter, { borderColor: accentRingOuter }]} />
-              <View style={[styles.ring, styles.ringMiddle, { borderColor: accentRingMiddle }]} />
-              <View
-                style={[
-                  styles.ring,
-                  styles.ringInner,
-                  { borderColor: accentRingInner, backgroundColor: lightenColor(accentRingInner, 0.45) },
-                ]}
-              />
               <Animated.View
                 pointerEvents="none"
                 style={[
-                  styles.ring,
-                  styles.ringOuter,
-                  styles.ringRipple,
+                  styles.ringStack,
                   {
-                    borderColor: accentRingOuter,
-                    opacity: rippleOpacity,
-                    transform: [{ scale: rippleOuterScale }],
+                    transform: [
+                      { perspective: 900 },
+                      { rotateX: ringTiltRotation },
+                      { translateY: ringTiltTranslate },
+                    ],
                   },
                 ]}
-              />
-              <Animated.View
-                pointerEvents="none"
-                style={[
-                  styles.ring,
-                  styles.ringMiddle,
-                  styles.ringRipple,
-                  {
-                    borderColor: accentRingMiddle,
-                    opacity: rippleOpacity,
-                    transform: [{ scale: rippleMiddleScale }],
-                  },
-                ]}
-              />
-              <Animated.View
-                pointerEvents="none"
-                style={[
-                  styles.ring,
-                  styles.ringInner,
-                  styles.ringRipple,
-                  {
-                    borderColor: accentRingInner,
-                    opacity: rippleOpacity,
-                    backgroundColor: lightenColor(accentRingInner, 0.45),
-                    transform: [{ scale: rippleInnerScale }],
-                  },
-                ]}
-              />
+              >
+                <View style={[styles.ring, styles.ringOuter, { borderColor: accentRingOuter }]} />
+                <View style={[styles.ring, styles.ringMiddle, { borderColor: accentRingMiddle }]} />
+                <View
+                  style={[
+                    styles.ring,
+                    styles.ringInner,
+                    { borderColor: accentRingInner, backgroundColor: lightenColor(accentRingInner, 0.45) },
+                  ]}
+                />
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    styles.ring,
+                    styles.ringOuter,
+                    styles.ringRipple,
+                    {
+                      borderColor: accentRingOuter,
+                      opacity: rippleOpacity,
+                      transform: [{ scale: rippleOuterScale }],
+                    },
+                  ]}
+                />
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    styles.ring,
+                    styles.ringMiddle,
+                    styles.ringRipple,
+                    {
+                      borderColor: accentRingMiddle,
+                      opacity: rippleOpacity,
+                      transform: [{ scale: rippleMiddleScale }],
+                    },
+                  ]}
+                />
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    styles.ring,
+                    styles.ringInner,
+                    styles.ringRipple,
+                    {
+                      borderColor: accentRingInner,
+                      opacity: rippleOpacity,
+                      backgroundColor: lightenColor(accentRingInner, 0.45),
+                      transform: [{ scale: rippleInnerScale }],
+                    },
+                  ]}
+                />
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    styles.ring,
+                    styles.ringOuter,
+                    styles.ringSwipeRipple,
+                    {
+                      borderColor: accentRingOuter,
+                      opacity: swipeRippleOpacity,
+                      transform: [{ scale: swipeRippleScale }],
+                    },
+                  ]}
+                />
+              </Animated.View>
               <Text style={styles.lettuceEmoji}>{customClickEmoji}</Text>
             </Pressable>
           </View>
@@ -1115,7 +1214,7 @@ const styles = StyleSheet.create({
     borderRadius: 100,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
+    overflow: 'visible',
     shadowOpacity: 0.3,
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 14 },
@@ -1165,8 +1264,18 @@ const styles = StyleSheet.create({
     width: 108,
     height: 108,
   },
+  ringStack: {
+    position: 'absolute',
+    width: 200,
+    height: 200,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   ringRipple: {
     borderWidth: 2.4,
+  },
+  ringSwipeRipple: {
+    borderWidth: 3,
   },
   lettuceEmoji: {
     fontSize: 76,

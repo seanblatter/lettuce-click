@@ -58,14 +58,32 @@ export type EmojiDefinition = {
   popularity: number;
 };
 
-export type Placement = {
+type PlacementBase = {
   id: string;
-  emojiId: string;
+  kind: 'emoji' | 'photo' | 'text';
   x: number;
   y: number;
   scale: number;
   rotation: number;
 };
+
+export type EmojiPlacement = PlacementBase & {
+  kind: 'emoji';
+  emojiId: string;
+};
+
+export type PhotoPlacement = PlacementBase & {
+  kind: 'photo';
+  imageUri: string;
+};
+
+export type TextPlacement = PlacementBase & {
+  kind: 'text';
+  text: string;
+  color: string;
+};
+
+export type Placement = EmojiPlacement | PhotoPlacement | TextPlacement;
 
 type ResumeNoticeBase = {
   timestamp: number;
@@ -116,6 +134,8 @@ type GameContextValue = {
   purchaseEmojiTheme: (themeId: HomeEmojiTheme) => boolean;
   purchaseEmoji: (emojiId: string) => boolean;
   placeEmoji: (emojiId: string, position: { x: number; y: number }) => boolean;
+  addPhotoPlacement: (imageUri: string, position: { x: number; y: number }) => boolean;
+  addTextPlacement: (text: string, position: { x: number; y: number }, color?: string) => boolean;
   updatePlacement: (placementId: string, updates: Partial<Placement>) => void;
   clearGarden: () => void;
   setProfileName: (value: string) => void;
@@ -415,6 +435,67 @@ const isHomeEmojiTheme = (value: string): value is HomeEmojiTheme =>
 export type OrbitingEmoji = {
   id: string;
   emoji: string;
+};
+
+const createPlacementId = (prefix: string) =>
+  `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+const DEFAULT_TEXT_COLOR = '#14532d';
+
+const normalizePlacement = (entry: unknown): Placement | null => {
+  if (!entry || typeof entry !== 'object') {
+    return null;
+  }
+
+  const record = entry as Record<string, unknown>;
+  const baseId = typeof record.id === 'string' ? record.id : createPlacementId('placement');
+  const x = typeof record.x === 'number' ? record.x : 0;
+  const y = typeof record.y === 'number' ? record.y : 0;
+  const scale = typeof record.scale === 'number' ? record.scale : 1;
+  const rotation = typeof record.rotation === 'number' ? record.rotation : 0;
+  const kind = record.kind;
+
+  if (kind === 'photo' && typeof record.imageUri === 'string') {
+    return {
+      id: baseId,
+      kind: 'photo',
+      imageUri: record.imageUri,
+      x,
+      y,
+      scale,
+      rotation,
+    };
+  }
+
+  if (kind === 'text' && typeof record.text === 'string') {
+    const color = typeof record.color === 'string' ? record.color : DEFAULT_TEXT_COLOR;
+    return {
+      id: baseId,
+      kind: 'text',
+      text: record.text,
+      color,
+      x,
+      y,
+      scale,
+      rotation,
+    };
+  }
+
+  const emojiId = typeof record.emojiId === 'string' ? record.emojiId : null;
+
+  if (!emojiId) {
+    return null;
+  }
+
+  return {
+    id: baseId,
+    kind: 'emoji',
+    emojiId,
+    x,
+    y,
+    scale,
+    rotation,
+  };
 };
 
 type StoredGameState = {
@@ -856,8 +937,60 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     setPlacements((prev) => [
       ...prev,
       {
-        id: `${emojiId}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        id: createPlacementId(emojiId),
+        kind: 'emoji',
         emojiId,
+        x: position.x,
+        y: position.y,
+        scale: 1,
+        rotation: 0,
+      },
+    ]);
+
+    return true;
+  };
+
+  const addPhotoPlacement = (imageUri: string, position: { x: number; y: number }) => {
+    if (!imageUri) {
+      return false;
+    }
+
+    setPlacements((prev) => [
+      ...prev,
+      {
+        id: createPlacementId('photo'),
+        kind: 'photo',
+        imageUri,
+        x: position.x,
+        y: position.y,
+        scale: 1,
+        rotation: 0,
+      },
+    ]);
+
+    return true;
+  };
+
+  const addTextPlacement = (
+    text: string,
+    position: { x: number; y: number },
+    color = DEFAULT_TEXT_COLOR
+  ) => {
+    const trimmed = text.trim();
+
+    if (!trimmed) {
+      return false;
+    }
+
+    const appliedColor = color && color.trim().length > 0 ? color : DEFAULT_TEXT_COLOR;
+
+    setPlacements((prev) => [
+      ...prev,
+      {
+        id: createPlacementId('text'),
+        kind: 'text',
+        text: trimmed,
+        color: appliedColor,
         x: position.x,
         y: position.y,
         scale: 1,
@@ -889,8 +1022,11 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
 
       setEmojiInventory((prevInventory) => {
         const restored = { ...prevInventory };
-        prevPlacements.forEach(({ emojiId }) => {
-          restored[emojiId] = (restored[emojiId] ?? 0) + 1;
+        prevPlacements.forEach((placement) => {
+          if (placement.kind !== 'emoji') {
+            return;
+          }
+          restored[placement.emojiId] = (restored[placement.emojiId] ?? 0) + 1;
         });
         return restored;
       });
@@ -943,6 +1079,8 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     purchaseEmojiTheme,
     purchaseEmoji,
     placeEmoji,
+    addPhotoPlacement,
+    addTextPlacement,
     updatePlacement,
     clearGarden,
     setProfileName,
@@ -976,6 +1114,8 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     registerCustomEmoji,
     addHarvestAmount,
     spendHarvestAmount,
+    addPhotoPlacement,
+    addTextPlacement,
     purchasePremiumUpgrade,
     purchaseEmojiTheme,
     setPremiumAccentColor,
@@ -1066,10 +1206,9 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
             }
             if (!shouldResetSession && Array.isArray(parsed.placements)) {
               setPlacements(
-                parsed.placements.map((entry) => ({
-                  ...entry,
-                  rotation: typeof entry.rotation === 'number' ? entry.rotation : 0,
-                }))
+                parsed.placements
+                  .map((entry) => normalizePlacement(entry))
+                  .filter((placement): placement is Placement => Boolean(placement))
               );
             } else if (shouldResetSession) {
               setPlacements([]);

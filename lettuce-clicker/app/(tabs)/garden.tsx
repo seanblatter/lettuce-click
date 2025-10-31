@@ -12,6 +12,8 @@ export default function GardenScreen() {
     placements,
     purchaseEmoji,
     placeEmoji,
+    addPhotoPlacement,
+    addTextPlacement,
     updatePlacement,
     clearGarden,
     registerCustomEmoji,
@@ -26,6 +28,8 @@ export default function GardenScreen() {
         placements={placements}
         purchaseEmoji={purchaseEmoji}
         placeEmoji={placeEmoji}
+        addPhotoPlacement={addPhotoPlacement}
+        addTextPlacement={addTextPlacement}
         updatePlacement={updatePlacement}
         clearGarden={clearGarden}
         registerCustomEmoji={registerCustomEmoji}

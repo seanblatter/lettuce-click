@@ -83,7 +83,7 @@ export default function HomeScreen() {
   const [isWatchingAd, setIsWatchingAd] = useState(false);
   const [isDailySpinAvailable, setIsDailySpinAvailable] = useState(false);
   const [dailyBonusAvailableAt, setDailyBonusAvailableAt] = useState<number | null>(null);
-  const [dailyCountdown, setDailyCountdown] = useState('');
+  const [dailyCountdown, setDailyCountdown] = useState<string | null>(null);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const flipAnimation = useRef(new Animated.Value(0)).current;
@@ -111,8 +111,8 @@ export default function HomeScreen() {
       return 'Ready!';
     }
 
-    if (!dailyCountdown || dailyCountdown === 'Loading…') {
-      return 'Loading…';
+    if (!dailyCountdown) {
+      return '—';
     }
 
     if (dailyCountdown.toLowerCase().includes('ready')) {
@@ -237,7 +237,7 @@ export default function HomeScreen() {
     setHasPurchasedBonusSpins(false);
     setIsDailySpinAvailable(false);
     setDailyBonusAvailableAt(null);
-    setDailyCountdown('');
+    setDailyCountdown(null);
   }, []);
 
   const handleCloseDailyBonus = useCallback(() => {
@@ -309,7 +309,7 @@ export default function HomeScreen() {
       }
 
       if (!dailyBonusAvailableAt) {
-        setDailyCountdown('Loading…');
+        setDailyCountdown(null);
         return;
       }
 
@@ -518,23 +518,32 @@ export default function HomeScreen() {
                   <>
                     <Text style={styles.menuSectionTitle}>Quick actions</Text>
                     <Pressable style={styles.menuItemCard} onPress={handleNavigateProfile}>
-                      <Text style={styles.menuItemEmoji}>🌿</Text>
+                      <View style={styles.menuItemIconWrap} pointerEvents="none">
+                        <Text style={styles.menuItemIcon}>🌿</Text>
+                      </View>
                       <View style={styles.menuItemBody}>
                         <Text style={styles.menuItemTitle}>Profile</Text>
                         <Text style={styles.menuItemSubtitle}>Edit your gardener details</Text>
+                      </View>
+                      <View style={styles.menuItemMeta} pointerEvents="none">
+                        <Text style={styles.menuItemChevron}>›</Text>
                       </View>
                     </Pressable>
                     <Pressable
                       style={[styles.menuItemCard, styles.menuItemHighlightCard]}
                       onPress={handleOpenDailyBonus}
                     >
-                      <Text style={styles.menuItemEmoji}>🎁</Text>
+                      <View style={[styles.menuItemIconWrap, styles.menuItemIconWrapHighlight]} pointerEvents="none">
+                        <Text style={[styles.menuItemIcon, styles.menuItemIconHighlight]}>🎁</Text>
+                      </View>
                       <View style={styles.menuItemBody}>
                         <Text style={[styles.menuItemTitle, styles.menuHighlight]}>Daily Bonus</Text>
                         <Text style={styles.menuItemSubtitle}>Spin for surprise clicks</Text>
                       </View>
-                      <View style={styles.menuPill} pointerEvents="none">
-                        <Text style={styles.menuPillText}>{dailyMenuStatus}</Text>
+                      <View style={styles.menuItemMeta} pointerEvents="none">
+                        <View style={styles.menuPill}>
+                          <Text style={styles.menuPillText}>{dailyMenuStatus}</Text>
+                        </View>
                       </View>
                     </Pressable>
                     <Pressable
@@ -688,7 +697,7 @@ export default function HomeScreen() {
               <Text
                 style={[styles.bonusCountdownValue, isDailySpinAvailable && styles.bonusCountdownReady]}
               >
-                {dailyCountdown || 'Loading…'}
+                {dailyCountdown ?? '—'}
               </Text>
             </View>
             {lastBonusReward ? (
@@ -1022,23 +1031,48 @@ const styles = StyleSheet.create({
   menuItemCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-    borderRadius: 20,
+    gap: 16,
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+    borderRadius: 22,
     backgroundColor: '#ffffff',
-    shadowColor: '#000000',
+    borderWidth: 1,
+    borderColor: 'rgba(20, 83, 45, 0.18)',
+    shadowColor: '#0f172a',
     shadowOpacity: 0.05,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
     elevation: 3,
   },
-  menuItemEmoji: {
-    fontSize: 28,
+  menuItemIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 18,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: 'rgba(20, 83, 45, 0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuItemIconWrapHighlight: {
+    backgroundColor: '#14532d',
+    borderColor: '#0b3d2c',
+    shadowColor: '#0b3d2c',
+    shadowOpacity: 0.28,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  menuItemIcon: {
+    fontSize: 26,
+    color: '#134e32',
+  },
+  menuItemIconHighlight: {
+    color: '#f0fff4',
   },
   menuItemBody: {
     flex: 1,
-    gap: 2,
+    gap: 4,
   },
   menuItemTitle: {
     fontSize: 16,
@@ -1049,10 +1083,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#1f2937',
   },
+  menuItemMeta: {
+    marginLeft: 'auto',
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  menuItemChevron: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
   menuItemHighlightCard: {
-    backgroundColor: 'rgba(15, 118, 110, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(15, 118, 110, 0.35)',
+    backgroundColor: 'rgba(15, 118, 110, 0.08)',
+    borderColor: 'rgba(15, 118, 110, 0.38)',
   },
   menuHighlight: {
     color: '#0f766e',

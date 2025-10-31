@@ -148,7 +148,7 @@ const upgradeCatalog: UpgradeDefinition[] = [
     description: 'Adds +5 clicks per second with a leaf-soft, steady grip.',
     cost: 100,
     increment: 5,
-    emoji: '🤖',
+    emoji: '🧤',
   },
   {
     id: 'sun-soaker',

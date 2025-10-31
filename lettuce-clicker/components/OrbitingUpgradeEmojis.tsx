@@ -35,6 +35,7 @@ const SPIRAL_BASE_RADIUS_RATIO = 0.36;
 const SPIRAL_DEFAULT_ARMS = 4;
 const SPIRAL_MAX_ARMS = 6;
 const SPIRAL_ANGLE_STEP = Math.PI / 28;
+const SPIRAL_TWIST = Math.PI / 36;
 const SPIRAL_DRIFT_RANGE = 64;
 const SPIRAL_DRIFT_DURATION = 20000;
 
@@ -47,12 +48,12 @@ const LAKE_FLOAT_DURATION_BASE = 3400;
 const LAKE_FLOAT_VARIATION = 1600;
 const LAKE_SWAY_DURATION_BASE = 4200;
 const LAKE_SWAY_VARIATION = 2200;
-const LAKE_HORIZONTAL_SPAN = 1.4;
-const LAKE_DEPTH_MIN_RATIO = 0.75;
-const LAKE_DEPTH_VARIATION_RATIO = 0.45;
-const LAKE_FLOAT_AMPLITUDE_BASE = 10;
-const LAKE_FLOAT_AMPLITUDE_VARIATION = 16;
-const LAKE_SWAY_RANGE_RATIO = 0.08;
+const LAKE_HORIZONTAL_SPAN = 1.1;
+const LAKE_DEPTH_MIN_RATIO = 0.95;
+const LAKE_DEPTH_VARIATION_RATIO = 0.55;
+const LAKE_FLOAT_AMPLITUDE_BASE = 4;
+const LAKE_FLOAT_AMPLITUDE_VARIATION = 6;
+const LAKE_SWAY_RANGE_RATIO = 0.04;
 
 const AURORA_DURATION = 12000;
 const AURORA_SHIFT = 42;
@@ -208,9 +209,15 @@ function CircleOrbit({ emojis, radius }: BasePatternProps) {
   );
 }
 
+type SpiralPlacement = OrbitingEmoji & {
+  angle: number;
+  distance: number;
+  armIndex: number;
+  stepIndex: number;
+};
+
 function SpiralOrbit({ emojis, radius }: BasePatternProps) {
   const rotation = useLoopingValue(16000);
-  const drift = useLoopingValue(SPIRAL_DRIFT_DURATION, 0, Easing.inOut(Easing.quad));
 
   const rotate = useMemo(
     () =>
@@ -221,41 +228,107 @@ function SpiralOrbit({ emojis, radius }: BasePatternProps) {
     [rotation]
   );
 
-  const positioned = useMemo(() => {
+  const { placements, arms } = useMemo(() => {
     const limit = emojis.slice(0, 72);
     if (limit.length === 0) {
-      return [];
+      return { placements: [] as SpiralPlacement[], arms: 1 };
     }
 
     const maxPossibleArms = Math.max(1, Math.min(limit.length, SPIRAL_MAX_ARMS));
     const desiredArms = Math.max(SPIRAL_DEFAULT_ARMS, Math.ceil(limit.length / 6));
-    const arms = Math.max(1, Math.min(maxPossibleArms, desiredArms));
+    const armCount = Math.max(1, Math.min(maxPossibleArms, desiredArms));
 
-    return limit.map((item, index) => {
-      const armIndex = index % arms;
-      const stepIndex = Math.floor(index / arms);
+    const placementsList = limit.map((item, index) => {
+      const armIndex = index % armCount;
+      const stepIndex = Math.floor(index / armCount);
       const baseDistance = radius * SPIRAL_BASE_RADIUS_RATIO + stepIndex * SPIRAL_STEP;
       const armOffset = armIndex * (SPIRAL_STEP * 0.4);
       const distance = baseDistance + armOffset;
-      const angle = (FULL_ROTATION_RADIANS / arms) * armIndex + stepIndex * SPIRAL_ANGLE_STEP;
-      return { ...item, angle, distance };
+      const angle = (FULL_ROTATION_RADIANS / armCount) * armIndex + stepIndex * SPIRAL_ANGLE_STEP;
+      return { ...item, angle, distance, armIndex, stepIndex };
     });
+
+    return { placements: placementsList, arms: armCount };
   }, [emojis, radius]);
 
-  if (positioned.length === 0) {
+  const driftValues = useMemo(() => placements.map(() => new Animated.Value(0)), [placements]);
+  const driftLoops = useRef<Animated.CompositeAnimation[]>([]);
+
+  useEffect(() => {
+    driftLoops.current.forEach((loop) => loop.stop());
+    driftLoops.current = [];
+
+    placements.forEach((placement, index) => {
+      const value = driftValues[index];
+      if (!value) {
+        return;
+      }
+
+      value.setValue(0);
+      const delay = placement.stepIndex * 180 + placement.armIndex * 120;
+      const duration = SPIRAL_DRIFT_DURATION / Math.max(1, arms) + placement.stepIndex * 220;
+
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(value, {
+            toValue: 1,
+            duration,
+            easing: Easing.inOut(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.timing(value, {
+            toValue: 0,
+            duration,
+            easing: Easing.inOut(Easing.cubic),
+            useNativeDriver: true,
+          }),
+        ])
+      );
+
+      loop.start();
+      driftLoops.current.push(loop);
+    });
+
+    return () => {
+      driftLoops.current.forEach((loop) => loop.stop());
+      driftLoops.current = [];
+    };
+  }, [arms, driftValues, placements]);
+
+  if (placements.length === 0) {
     return null;
   }
 
   return (
     <View pointerEvents="none" style={styles.wrapper}>
-      <Animated.View style={[styles.container, { transform: [{ rotate }] }]}>{
-        positioned.map(({ id, emoji, angle, distance }) => {
-          const translateTransform = {
-            translateX: drift.interpolate({
-              inputRange: [0, 1],
-              outputRange: [distance, distance + SPIRAL_DRIFT_RANGE],
-            }),
-          };
+      <Animated.View style={[styles.container, { transform: [{ rotate }] }]}>
+        {placements.map(({ id, emoji, angle, distance }, index) => {
+          const drift = driftValues[index];
+          const translateX = drift
+            ? drift.interpolate({
+                inputRange: [0, 0.5, 1],
+                outputRange: [distance * 0.92, distance + SPIRAL_DRIFT_RANGE, distance * 0.92],
+              })
+            : distance;
+          const rotateOut = drift
+            ? drift.interpolate({
+                inputRange: [0, 0.5, 1],
+                outputRange: [`${angle - SPIRAL_TWIST}rad`, `${angle + SPIRAL_TWIST}rad`, `${angle - SPIRAL_TWIST}rad`],
+              })
+            : `${angle}rad`;
+          const rotateBack = drift
+            ? drift.interpolate({
+                inputRange: [0, 0.5, 1],
+                outputRange: [`${-(angle - SPIRAL_TWIST)}rad`, `${-(angle + SPIRAL_TWIST)}rad`, `${-(angle - SPIRAL_TWIST)}rad`],
+              })
+            : `${-angle}rad`;
+          const scale = drift
+            ? drift.interpolate({
+                inputRange: [0, 0.5, 1],
+                outputRange: [0.88, 1.08, 0.92],
+              })
+            : 1;
 
           return (
             <Animated.View
@@ -264,9 +337,10 @@ function SpiralOrbit({ emojis, radius }: BasePatternProps) {
                 styles.emojiWrapper,
                 {
                   transform: [
-                    { rotate: `${angle}rad` },
-                    translateTransform,
-                    { rotate: `${-angle}rad` },
+                    { rotate: rotateOut },
+                    { translateX },
+                    { rotate: rotateBack },
+                    { scale },
                   ],
                 },
               ]}
@@ -274,8 +348,8 @@ function SpiralOrbit({ emojis, radius }: BasePatternProps) {
               <Text style={[styles.emoji, styles.emojiSpiral]}>{emoji}</Text>
             </Animated.View>
           );
-        })
-      }</Animated.View>
+        })}
+      </Animated.View>
     </View>
   );
 }
@@ -419,16 +493,21 @@ function LakePool({ emojis, radius }: BasePatternProps) {
     };
   }, [particles]);
 
-  if (particles.length === 0) {
+  const sortedParticles = useMemo(
+    () => [...particles].sort((a, b) => a.depth - b.depth),
+    [particles]
+  );
+
+  if (sortedParticles.length === 0) {
     return null;
   }
 
   return (
     <View pointerEvents="none" style={styles.wrapper}>
-      {particles.map((particle) => {
+      {sortedParticles.map((particle) => {
         const dropTranslate = particle.drop.interpolate({
-          inputRange: [0, 1],
-          outputRange: [-radius * 1.1, particle.depth],
+          inputRange: [0, 0.7, 1],
+          outputRange: [-radius * 1.3, radius * 0.35, particle.depth],
         });
         const bobTranslate = particle.bob.interpolate({
           inputRange: [-1, 1],
@@ -437,6 +516,10 @@ function LakePool({ emojis, radius }: BasePatternProps) {
         const swayTranslate = particle.sway.interpolate({
           inputRange: [-1, 1],
           outputRange: [-particle.swayRange, particle.swayRange],
+        });
+        const scale = particle.bob.interpolate({
+          inputRange: [-1, 0, 1],
+          outputRange: [0.96, 1, 0.96],
         });
 
         return (
@@ -450,6 +533,7 @@ function LakePool({ emojis, radius }: BasePatternProps) {
                   { translateX: swayTranslate },
                   { translateY: dropTranslate },
                   { translateY: bobTranslate },
+                  { scale },
                 ],
               },
             ]}

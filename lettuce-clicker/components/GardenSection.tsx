@@ -64,7 +64,36 @@ const stripVariationSelectors = (value: string) => value.replace(VARIATION_SELEC
 
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-const DRAW_COLORS = ['#1f6f4a', '#15803d', '#0ea5e9', '#ec4899', '#f59e0b', '#7c3aed', '#0f172a', '#f97316'];
+const CANVAS_BACKGROUND = '#ffffff';
+const ERASER_COLOR = 'eraser';
+const QUICK_DRAW_COLORS = [
+  '#1f6f4a',
+  '#15803d',
+  '#ef4444',
+  '#0ea5e9',
+  '#ec4899',
+  '#f59e0b',
+  '#7c3aed',
+  '#0f172a',
+  '#f97316',
+];
+const COLOR_WHEEL_COLORS = [
+  '#ef4444',
+  '#f97316',
+  '#facc15',
+  '#22c55e',
+  '#0ea5e9',
+  '#38bdf8',
+  '#6366f1',
+  '#a855f7',
+  '#ec4899',
+  '#f472b6',
+  '#94a3b8',
+  '#0f172a',
+];
+const COLOR_WHEEL_DIAMETER = 160;
+const COLOR_WHEEL_RADIUS = 64;
+const COLOR_WHEEL_SWATCH_SIZE = 34;
 const PEN_SIZES = [3, 5, 8, 12];
 
 const CATEGORY_LABELS: Record<EmojiDefinition['category'], string> = {
@@ -118,8 +147,9 @@ export function GardenSection({
   const [activeSheet, setActiveSheet] = useState<'shop' | 'inventory' | null>(null);
   const [shopFilter, setShopFilter] = useState('');
   const [showPalette, setShowPalette] = useState(false);
+  const [showExtendedPalette, setShowExtendedPalette] = useState(false);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
-  const [penColor, setPenColor] = useState(DRAW_COLORS[0]);
+  const [penColor, setPenColor] = useState<string>(QUICK_DRAW_COLORS[0]);
   const [penSize, setPenSize] = useState(PEN_SIZES[1]);
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [currentStroke, setCurrentStroke] = useState<Stroke | null>(null);
@@ -134,6 +164,18 @@ export function GardenSection({
   const dragStartIndexRef = useRef(0);
   const dragCurrentIndexRef = useRef(0);
   const tileSizeRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
+  const colorWheelPositions = useMemo(
+    () =>
+      COLOR_WHEEL_COLORS.map((color, index) => {
+        const angle = (index / COLOR_WHEEL_COLORS.length) * 2 * Math.PI - Math.PI / 2;
+        const center = COLOR_WHEEL_DIAMETER / 2;
+        const offset = COLOR_WHEEL_SWATCH_SIZE / 2;
+        const left = center + Math.cos(angle) * COLOR_WHEEL_RADIUS - offset;
+        const top = center + Math.sin(angle) * COLOR_WHEEL_RADIUS - offset;
+        return { color, left, top };
+      }),
+    []
+  );
 
   const inventoryList = useMemo(
     () =>
@@ -467,6 +509,15 @@ export function GardenSection({
     }
   };
 
+  const handleSelectPenColor = useCallback(
+    (color: string) => {
+      setPenColor(color);
+      setShowExtendedPalette(false);
+      setIsDrawingMode(true);
+    },
+    [setIsDrawingMode, setShowExtendedPalette]
+  );
+
   const handleClearGarden = useCallback(() => {
     if (placements.length > 0) {
       clearGarden();
@@ -575,9 +626,10 @@ export function GardenSection({
 
   const beginStroke = useCallback(
     (x: number, y: number) => {
+      const strokeColor = penColor === ERASER_COLOR ? CANVAS_BACKGROUND : penColor;
       const stroke: Stroke = {
         id: `stroke-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-        color: penColor,
+        color: strokeColor,
         size: penSize,
         points: [{ x, y }],
       };
@@ -656,9 +708,15 @@ export function GardenSection({
     }
   }, [isDrawingMode]);
 
+  useEffect(() => {
+    if (!showPalette) {
+      setShowExtendedPalette(false);
+    }
+  }, [showPalette]);
+
   const shouldShowCanvasEmptyState = useMemo(
-    () => placements.length === 0 && strokes.length === 0 && !selectedEmoji && !isDrawingMode,
-    [placements.length, strokes.length, selectedEmoji, isDrawingMode]
+    () => placements.length === 0 && strokes.length === 0 && !selectedEmoji,
+    [placements.length, strokes.length, selectedEmoji]
   );
   const handleCloseSheet = useCallback(() => setActiveSheet(null), []);
   const handleOpenSheet = useCallback((sheet: 'shop' | 'inventory') => setActiveSheet(sheet), []);
@@ -896,8 +954,13 @@ export function GardenSection({
               <Pressable
                 style={styles.penButton}
                 accessibilityLabel="Open drawing palette"
-                accessibilityHint="Opens options to pick colors and stroke sizes"
-                onPress={() => setShowPalette(true)}>
+                accessibilityHint="Opens options to pick colors and stroke sizes. Long press to exit drawing mode."
+                onPress={() => {
+                  setIsDrawingMode(true);
+                  setShowExtendedPalette(false);
+                  setShowPalette(true);
+                }}
+                onLongPress={() => setIsDrawingMode(false)}>
                 <View style={[styles.penButtonCircle, isDrawingMode && styles.penButtonCircleActive]}>
                   <Text style={[styles.penButtonIcon, isDrawingMode && styles.penButtonIconActive]}>✏️</Text>
                 </View>
@@ -935,20 +998,63 @@ export function GardenSection({
             <View style={styles.paletteHandle} />
             <Text style={styles.paletteTitle}>Garden sketchbook</Text>
             <Text style={styles.paletteSubtitle}>
-              Choose a pen color and stroke size, then toggle drawing mode to sketch directly on your garden canvas.
+              Pick a pen color, explore the color wheel for more shades, and adjust your stroke size before sketching on your
+              garden canvas.
             </Text>
             <View style={styles.paletteSection}>
               <Text style={styles.paletteLabel}>Pen color</Text>
               <View style={styles.paletteColorRow}>
-                {DRAW_COLORS.map((color) => (
-                  <Pressable
-                    key={color}
-                    style={[styles.colorSwatch, { backgroundColor: color }, penColor === color && styles.colorSwatchActive]}
-                    onPress={() => setPenColor(color)}
-                    accessibilityLabel={`Set pen color to ${color}`}
-                  />
-                ))}
+                {QUICK_DRAW_COLORS.map((color) => {
+                  const isActive = penColor === color;
+                  return (
+                    <Pressable
+                      key={color}
+                      style={[styles.colorSwatch, { backgroundColor: color }, isActive && styles.colorSwatchActive]}
+                      onPress={() => handleSelectPenColor(color)}
+                      accessibilityLabel={`Set pen color to ${color}`}
+                    />
+                  );
+                })}
+                <Pressable
+                  key="eraser"
+                  style={[styles.eraserSwatch, penColor === ERASER_COLOR && styles.colorSwatchActive]}
+                  onPress={() => handleSelectPenColor(ERASER_COLOR)}
+                  accessibilityLabel="Use eraser"
+                >
+                  <Text style={styles.eraserIcon}>⌫</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.colorWheelButton, showExtendedPalette && styles.colorWheelButtonActive]}
+                  onPress={() => setShowExtendedPalette((prev) => !prev)}
+                  accessibilityLabel={showExtendedPalette ? 'Hide color wheel' : 'Show color wheel'}
+                >
+                  <Text style={styles.colorWheelIcon}>🎨</Text>
+                </Pressable>
               </View>
+              {showExtendedPalette ? (
+                <View style={styles.colorWheelWrap}>
+                  <View style={styles.colorWheel}>
+                    {colorWheelPositions.map(({ color, left, top }) => {
+                      const isActive = penColor === color;
+                      return (
+                        <Pressable
+                          key={color}
+                          style={[styles.colorWheelSwatch, { backgroundColor: color, left, top }, isActive && styles.colorWheelSwatchActive]}
+                          onPress={() => handleSelectPenColor(color)}
+                          accessibilityLabel={`Set pen color to ${color}`}
+                        />
+                      );
+                    })}
+                    <Pressable
+                      style={styles.colorWheelClose}
+                      onPress={() => setShowExtendedPalette(false)}
+                      accessibilityLabel="Collapse color wheel"
+                    >
+                      <Text style={styles.colorWheelCloseText}>Close</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ) : null}
             </View>
             <View style={styles.paletteSection}>
               <Text style={styles.paletteLabel}>Pen size</Text>
@@ -962,7 +1068,13 @@ export function GardenSection({
                     <View
                       style={[
                         styles.sizeOptionPreview,
-                        { width: size * 2, height: size * 2, borderRadius: size, backgroundColor: penColor },
+                        {
+                          width: size * 2,
+                          height: size * 2,
+                          borderRadius: size,
+                          backgroundColor: penColor === ERASER_COLOR ? '#f1f5f9' : penColor,
+                          borderColor: penColor === ERASER_COLOR ? '#94a3b8' : 'transparent',
+                        },
                       ]}
                     />
                     <Text style={styles.sizeOptionLabel}>{size}px</Text>
@@ -970,21 +1082,6 @@ export function GardenSection({
                 ))}
               </View>
             </View>
-            <Pressable
-              style={[styles.drawingToggle, isDrawingMode && styles.drawingToggleActive]}
-              onPress={() => setIsDrawingMode((prev) => !prev)}
-              accessibilityLabel={isDrawingMode ? 'Disable drawing mode' : 'Enable drawing mode'}>
-              <Text style={[styles.drawingToggleText, isDrawingMode && styles.drawingToggleTextActive]}>
-                {isDrawingMode ? 'Drawing mode is on' : 'Enable drawing mode'}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[styles.clearDrawingButton, strokes.length === 0 && styles.disabledSecondary]}
-              onPress={handleClearDrawings}
-              disabled={strokes.length === 0}
-              accessibilityLabel="Clear all drawings">
-              <Text style={[styles.clearDrawingText, strokes.length === 0 && styles.disabledText]}>Clear drawings</Text>
-            </Pressable>
             <Pressable
               style={styles.paletteCloseButton}
               onPress={() => setShowPalette(false)}
@@ -1966,12 +2063,13 @@ const styles = StyleSheet.create({
   paletteColorRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    columnGap: 12,
+    rowGap: 12,
   },
   colorSwatch: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: COLOR_WHEEL_SWATCH_SIZE,
+    height: COLOR_WHEEL_SWATCH_SIZE,
+    borderRadius: COLOR_WHEEL_SWATCH_SIZE / 2,
     borderWidth: 2,
     borderColor: 'transparent',
   },
@@ -1982,6 +2080,96 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
     elevation: 3,
+  },
+  eraserSwatch: {
+    width: COLOR_WHEEL_SWATCH_SIZE,
+    height: COLOR_WHEEL_SWATCH_SIZE,
+    borderRadius: COLOR_WHEEL_SWATCH_SIZE / 2,
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  eraserIcon: {
+    fontSize: 18,
+    color: '#1f2937',
+    fontWeight: '700',
+  },
+  colorWheelButton: {
+    width: COLOR_WHEEL_SWATCH_SIZE,
+    height: COLOR_WHEEL_SWATCH_SIZE,
+    borderRadius: COLOR_WHEEL_SWATCH_SIZE / 2,
+    borderWidth: 2,
+    borderColor: '#1f6f4a',
+    backgroundColor: '#fef9c3',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#facc15',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  colorWheelButtonActive: {
+    borderColor: '#0f766e',
+    backgroundColor: '#fef3c7',
+  },
+  colorWheelIcon: {
+    fontSize: 20,
+  },
+  colorWheelWrap: {
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  colorWheel: {
+    width: COLOR_WHEEL_DIAMETER,
+    height: COLOR_WHEEL_DIAMETER,
+    borderRadius: COLOR_WHEEL_DIAMETER / 2,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+    shadowColor: '#0f2e20',
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  colorWheelSwatch: {
+    position: 'absolute',
+    width: COLOR_WHEEL_SWATCH_SIZE,
+    height: COLOR_WHEEL_SWATCH_SIZE,
+    borderRadius: COLOR_WHEEL_SWATCH_SIZE / 2,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  colorWheelSwatchActive: {
+    borderColor: '#1f6f4a',
+    shadowColor: '#1f6f4a',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  colorWheelClose: {
+    position: 'absolute',
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#94a3b8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  colorWheelCloseText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0f172a',
   },
   paletteSizeRow: {
     flexDirection: 'row',
@@ -2005,43 +2193,12 @@ const styles = StyleSheet.create({
   },
   sizeOptionPreview: {
     borderRadius: 999,
+    borderWidth: 2,
   },
   sizeOptionLabel: {
     fontSize: 12,
     color: '#134e32',
     fontWeight: '600',
-  },
-  drawingToggle: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#1f6f4a',
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  drawingToggleActive: {
-    backgroundColor: '#22543d',
-  },
-  drawingToggleText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1f6f4a',
-  },
-  drawingToggleTextActive: {
-    color: '#f0fff4',
-  },
-  clearDrawingButton: {
-    borderRadius: 14,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: '#0f766e',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  clearDrawingText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#0f766e',
   },
   paletteCloseButton: {
     backgroundColor: '#22543d',

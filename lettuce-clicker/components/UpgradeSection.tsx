@@ -79,6 +79,15 @@ export function UpgradeSection({
     [homeEmojiTheme, sortedThemes]
   );
 
+  const heroStats = useMemo(
+    () => [
+      { label: 'Auto clicks /s', value: autoPerSecond.toLocaleString() },
+      { label: 'Upgrades owned', value: ownedUpgradeCount.toLocaleString() },
+      { label: 'Themes unlocked', value: ownedThemeCount.toLocaleString() },
+    ],
+    [autoPerSecond, ownedThemeCount, ownedUpgradeCount]
+  );
+
   return (
     <View style={styles.section}>
       <View style={styles.heroCard}>
@@ -95,20 +104,21 @@ export function UpgradeSection({
             Invest your harvest to expand automation, then bring fresh ambience to your garden centerpiece.
           </Text>
           <View style={styles.heroStatsRow}>
-            <View style={styles.heroStat}>
-              <Text style={styles.heroStatLabel}>Auto clicks /s</Text>
-              <Text style={styles.heroStatValue}>{autoPerSecond.toLocaleString()}</Text>
-            </View>
-            <View style={styles.heroDivider} />
-            <View style={styles.heroStat}>
-              <Text style={styles.heroStatLabel}>Upgrades owned</Text>
-              <Text style={styles.heroStatValue}>{ownedUpgradeCount.toLocaleString()}</Text>
-            </View>
-            <View style={styles.heroDivider} />
-            <View style={styles.heroStat}>
-              <Text style={styles.heroStatLabel}>Themes unlocked</Text>
-              <Text style={styles.heroStatValue}>{ownedThemeCount}</Text>
-            </View>
+            {heroStats.map((stat, index) => (
+              <View
+                key={stat.label}
+                style={[styles.heroStat, index > 0 && styles.heroStatWithBorder]}
+              >
+                <Text
+                  style={styles.heroStatLabel}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                >
+                  {stat.label}
+                </Text>
+                <Text style={styles.heroStatValue}>{stat.value}</Text>
+              </View>
+            ))}
           </View>
         </View>
       </View>
@@ -364,32 +374,38 @@ const styles = StyleSheet.create({
   heroStatsRow: {
     marginTop: 4,
     flexDirection: 'row',
-    alignItems: 'center',
+    flexWrap: 'wrap',
+    alignItems: 'stretch',
     justifyContent: 'space-between',
     backgroundColor: 'rgba(15, 118, 110, 0.35)',
     borderRadius: 18,
-    paddingVertical: 14,
+    paddingVertical: 16,
     paddingHorizontal: 18,
-    gap: 18,
+    columnGap: 18,
+    rowGap: 12,
   },
   heroStat: {
     flex: 1,
+    minWidth: 110,
+    alignItems: 'center',
+    gap: 6,
+  },
+  heroStatWithBorder: {
+    borderLeftWidth: 1,
+    borderColor: 'rgba(226, 252, 239, 0.5)',
+    paddingLeft: 18,
   },
   heroStatLabel: {
     fontSize: 12,
     color: '#bbf7d0',
     textTransform: 'uppercase',
-    letterSpacing: 0.9,
+    letterSpacing: 0.8,
+    textAlign: 'center',
   },
   heroStatValue: {
     fontSize: 18,
     fontWeight: '700',
     color: '#f0fff4',
-  },
-  heroDivider: {
-    width: 1,
-    height: '70%',
-    backgroundColor: 'rgba(226, 252, 239, 0.35)',
   },
   workshopToggleRow: {
     flexDirection: 'row',
@@ -399,17 +415,22 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 22,
     padding: 18,
-    backgroundColor: '#eafaf1',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: 'rgba(22, 101, 52, 0.22)',
     shadowColor: '#bbf7d0',
-    shadowOpacity: 0.35,
-    shadowOffset: { width: 0, height: 10 },
-    shadowRadius: 18,
-    elevation: 4,
+    shadowOpacity: 0.25,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 16,
+    elevation: 3,
     gap: 8,
   },
   workshopToggleActive: {
-    backgroundColor: '#14532d',
+    borderColor: '#14532d',
+    borderWidth: 2,
     shadowColor: '#0b3d2c',
+    shadowOpacity: 0.3,
+    elevation: 4,
   },
   workshopToggleLabel: {
     fontSize: 16,
@@ -417,7 +438,7 @@ const styles = StyleSheet.create({
     color: '#14532d',
   },
   workshopToggleLabelActive: {
-    color: '#f8fafc',
+    color: '#0f766e',
   },
   workshopToggleHint: {
     fontSize: 13,
@@ -425,7 +446,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   workshopToggleHintActive: {
-    color: '#d1fae5',
+    color: '#0f766e',
   },
   workshopToggleBadge: {
     alignSelf: 'flex-start',

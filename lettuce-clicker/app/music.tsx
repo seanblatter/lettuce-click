@@ -59,12 +59,14 @@ export default function MusicScreen() {
   const router = useRouter();
   const [selectedTrackId, setSelectedTrackId] = useState<MusicOption['id']>(MUSIC_OPTIONS[0].id);
 
-  const groupedOptions = useMemo(() => {
-    return MUSIC_GROUPS.map((group) => ({
-      ...group,
-      options: MUSIC_OPTIONS.filter((option) => option.family === group.id),
-    }));
-  }, []);
+  const groupedOptions = useMemo(
+    () =>
+      MUSIC_GROUPS.map((group) => ({
+        ...group,
+        options: MUSIC_OPTIONS.filter((option) => option.family === group.id),
+      })),
+    []
+  );
 
   const selectedTrack = useMemo(
     () => MUSIC_OPTIONS.find((option) => option.id === selectedTrackId) ?? MUSIC_OPTIONS[0],
@@ -74,28 +76,32 @@ export default function MusicScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator>
-        <Pressable onPress={() => router.back()} style={styles.backButton} accessibilityLabel="Go back">
-          <Text style={styles.backLabel}>← Back</Text>
-        </Pressable>
-
-        <View style={styles.headerCard}>
-          <Text style={styles.headerTitle}>Garden Music</Text>
-          <Text style={styles.headerSubtitle}>
-            Choose a white or grey music blend to match the mood of your lettuce garden.
-          </Text>
+        <View style={styles.headerRow}>
+          <Pressable
+            onPress={() => router.back()}
+            style={styles.headerBackButton}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <Text style={styles.headerBackText}>Back</Text>
+          </Pressable>
+          <Text style={styles.headerTitle}>Music Lounge</Text>
         </View>
+        <Text style={styles.headerSubtitle}>
+          Choose a white or grey music blend to match the mood of your lettuce garden.
+        </Text>
 
         {groupedOptions.map((group) => (
           <View key={group.id} style={styles.groupSection}>
             <Text style={styles.groupTitle}>{group.label}</Text>
             <Text style={styles.groupDescription}>{group.intro}</Text>
-            <View style={styles.optionGrid}>
+            <View style={styles.optionList}>
               {group.options.map((option) => {
                 const isActive = option.id === selectedTrackId;
                 return (
                   <Pressable
                     key={option.id}
-                    style={[styles.optionCard, isActive && styles.optionCardActive]}
+                    style={[styles.optionRow, isActive && styles.optionRowActive]}
                     onPress={() => setSelectedTrackId(option.id)}
                     accessibilityRole="button"
                     accessibilityState={{ selected: isActive }}
@@ -103,8 +109,11 @@ export default function MusicScreen() {
                     <View style={[styles.optionEmojiWrap, isActive && styles.optionEmojiWrapActive]}>
                       <Text style={[styles.optionEmoji, isActive && styles.optionEmojiActive]}>{option.emoji}</Text>
                     </View>
-                    <Text style={[styles.optionName, isActive && styles.optionNameActive]}>{option.name}</Text>
-                    <Text style={styles.optionDescription}>{option.description}</Text>
+                    <View style={styles.optionBody}>
+                      <Text style={[styles.optionName, isActive && styles.optionNameActive]}>{option.name}</Text>
+                      <Text style={styles.optionDescription}>{option.description}</Text>
+                    </View>
+                    {isActive ? <Text style={styles.optionBadge}>Active</Text> : null}
                   </Pressable>
                 );
               })}
@@ -113,7 +122,7 @@ export default function MusicScreen() {
         ))}
 
         <View style={styles.selectionCard}>
-          <Text style={styles.selectionLabel}>Selected mix</Text>
+          <Text style={styles.selectionLabel}>Now playing</Text>
           <Text style={styles.selectionValue}>
             {selectedTrack.emoji} {selectedTrack.name}
           </Text>
@@ -134,28 +143,21 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     gap: 24,
   },
-  backButton: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 14,
-    backgroundColor: 'rgba(22, 101, 52, 0.1)',
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  backLabel: {
-    fontSize: 14,
+  headerBackButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: 'rgba(22, 101, 52, 0.14)',
+  },
+  headerBackText: {
+    fontSize: 13,
     fontWeight: '700',
     color: '#14532d',
-  },
-  headerCard: {
-    backgroundColor: '#d1fae5',
-    borderRadius: 20,
-    padding: 20,
-    gap: 8,
-    shadowColor: '#166534',
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 4,
   },
   headerTitle: {
     fontSize: 24,
@@ -179,36 +181,34 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#1f2937',
   },
-  optionGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 14,
+  optionList: {
+    gap: 12,
   },
-  optionCard: {
-    width: '48%',
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
     backgroundColor: '#ffffff',
     borderRadius: 18,
-    paddingVertical: 18,
-    paddingHorizontal: 14,
-    gap: 8,
-    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     borderWidth: 1,
     borderColor: 'rgba(20, 83, 45, 0.12)',
     shadowColor: '#0f172a',
     shadowOpacity: 0.05,
-    shadowRadius: 12,
+    shadowRadius: 10,
     shadowOffset: { width: 0, height: 6 },
     elevation: 2,
   },
-  optionCardActive: {
+  optionRowActive: {
     borderColor: '#10b981',
     shadowColor: '#10b981',
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.22,
   },
   optionEmojiWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: '#ecfdf5',
     alignItems: 'center',
     justifyContent: 'center',
@@ -217,52 +217,61 @@ const styles = StyleSheet.create({
     backgroundColor: '#bbf7d0',
   },
   optionEmoji: {
-    fontSize: 30,
+    fontSize: 28,
   },
   optionEmojiActive: {
     transform: [{ scale: 1.08 }],
   },
+  optionBody: {
+    flex: 1,
+    gap: 2,
+  },
   optionName: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     color: '#134e32',
-    textAlign: 'center',
   },
   optionNameActive: {
     color: '#0f766e',
   },
   optionDescription: {
-    fontSize: 12,
-    lineHeight: 16,
-    textAlign: 'center',
+    fontSize: 13,
+    lineHeight: 18,
     color: '#1f2937',
   },
+  optionBadge: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#047857',
+  },
   selectionCard: {
-    backgroundColor: '#14532d',
+    backgroundColor: '#f0fdf4',
     borderRadius: 22,
-    padding: 22,
+    padding: 20,
     gap: 6,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
     shadowColor: '#0f172a',
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 5,
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 3,
   },
   selectionLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
-    color: '#bbf7d0',
+    color: '#047857',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
   },
   selectionValue: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#f0fff4',
+    color: '#134e32',
   },
   selectionHint: {
     fontSize: 13,
-    lineHeight: 19,
-    color: '#d1fae5',
+    color: '#1f2937',
+    lineHeight: 18,
   },
 });

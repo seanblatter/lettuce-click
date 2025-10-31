@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -11,10 +11,12 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  Image,
   View,
 } from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import * as ImagePicker from 'expo-image-picker';
+import { Directions, Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   cancelAnimation,
   runOnJS,
@@ -37,6 +39,8 @@ type Props = {
   placements: Placement[];
   purchaseEmoji: (emojiId: string) => boolean;
   placeEmoji: (emojiId: string, position: { x: number; y: number }) => boolean;
+  addPhotoPlacement: (uri: string, position: { x: number; y: number }) => boolean;
+  addTextPlacement: (text: string, position: { x: number; y: number }, color?: string) => boolean;
   updatePlacement: (placementId: string, updates: Partial<Placement>) => void;
   clearGarden: () => void;
   registerCustomEmoji: (emoji: string) => EmojiDefinition | null;
@@ -64,6 +68,7 @@ const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, 
 
 const CANVAS_BACKGROUND = '#ffffff';
 const ERASER_COLOR = 'eraser';
+const DEFAULT_TEXT_COLOR = '#14532d';
 const QUICK_DRAW_COLORS = [
   '#1f6f4a',
   '#15803d',
@@ -135,6 +140,8 @@ export function GardenSection({
   placements,
   purchaseEmoji,
   placeEmoji,
+  addPhotoPlacement,
+  addTextPlacement,
   updatePlacement,
   clearGarden,
   registerCustomEmoji,
@@ -156,6 +163,10 @@ export function GardenSection({
   const [activeCategory, setActiveCategory] = useState<CategoryFilter>('all');
   const [inventoryOrder, setInventoryOrder] = useState<string[]>([]);
   const [draggingInventoryId, setDraggingInventoryId] = useState<string | null>(null);
+  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+  const [isPickingPhoto, setIsPickingPhoto] = useState(false);
+  const [textDraft, setTextDraft] = useState('');
+  const [isDrawingGestureActive, setIsDrawingGestureActive] = useState(false);
   const canvasRef = useRef<View | null>(null);
   const filteredOwnedInventoryRef = useRef<InventoryEntry[]>([]);
   const draggingInventoryIdRef = useRef<string | null>(null);
@@ -374,6 +385,24 @@ export function GardenSection({
     }
   }, []);
 
+  const handleCanvasLayout = useCallback((event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+
+    if (width > 0 && height > 0) {
+      setCanvasSize({ width, height });
+    }
+  }, []);
+
+  const getCanvasCenter = useCallback(() => {
+    const { width, height } = canvasSize;
+
+    if (width <= 0 || height <= 0) {
+      return { x: 180, y: 200 };
+    }
+
+    return { x: width / 2, y: height / 2 };
+  }, [canvasSize]);
+
   const commitInventoryReorder = useCallback((emojiId: string, targetIndex: number) => {
     const list = filteredOwnedInventoryRef.current;
 
@@ -560,6 +589,62 @@ export function GardenSection({
     setCurrentStroke(null);
   }, []);
 
+  const handleAddPhoto = useCallback(async () => {
+    if (isPickingPhoto) {
+      return;
+    }
+
+    try {
+      setIsPickingPhoto(true);
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (!permission.granted) {
+        Alert.alert('Permission needed', 'Enable photo access to add pictures to your garden.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.7,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      const asset = result.assets[0];
+      const uri = asset?.uri;
+
+      if (!uri) {
+        Alert.alert('Add photo failed', 'We could not read that photo. Please try another.');
+        return;
+      }
+
+      const center = getCanvasCenter();
+      addPhotoPlacement(uri, center);
+    } catch {
+      Alert.alert('Add photo failed', 'We could not open your photo library.');
+    } finally {
+      setIsPickingPhoto(false);
+    }
+  }, [addPhotoPlacement, getCanvasCenter, isPickingPhoto]);
+
+  const handleAddText = useCallback(() => {
+    const trimmed = textDraft.trim();
+
+    if (trimmed.length === 0) {
+      return;
+    }
+
+    const color = penColor === ERASER_COLOR ? DEFAULT_TEXT_COLOR : penColor;
+    const center = getCanvasCenter();
+    const added = addTextPlacement(trimmed, center, color);
+
+    if (added) {
+      setTextDraft('');
+    }
+  }, [addTextPlacement, getCanvasCenter, penColor, textDraft]);
+
   const renderStrokeSegments = useCallback(
     (stroke: Stroke, prefix: string) => {
       if (stroke.points.length === 0) {
@@ -670,6 +755,7 @@ export function GardenSection({
       }
 
       const { locationX, locationY } = event.nativeEvent;
+      setIsDrawingGestureActive(true);
       beginStroke(locationX, locationY);
     },
     [beginStroke, isDrawingMode]
@@ -694,15 +780,23 @@ export function GardenSection({
 
   const handleCanvasTouchEnd = useCallback(() => {
     if (!isDrawingMode) {
+      setIsDrawingGestureActive(false);
       return;
     }
 
     endStroke();
+    setIsDrawingGestureActive(false);
   }, [endStroke, isDrawingMode]);
 
   useEffect(() => {
     if (!isDrawingMode) {
       setCurrentStroke(null);
+    }
+  }, [isDrawingMode]);
+
+  useEffect(() => {
+    if (!isDrawingMode) {
+      setIsDrawingGestureActive(false);
     }
   }, [isDrawingMode]);
 
@@ -847,7 +941,7 @@ export function GardenSection({
           },
         ]}
         showsVerticalScrollIndicator={false}
-        scrollEnabled={!isDrawingMode}>
+        scrollEnabled={!isDrawingGestureActive}>
         <View style={[styles.harvestBanner, { paddingTop: bannerTopPadding }]}>
           <Text style={styles.harvestTitle}>Welcome to Lettuce Garden</Text>
           <Text style={styles.harvestAmount}>
@@ -882,8 +976,8 @@ export function GardenSection({
                 Ready to place {selectedDetails.emoji} {selectedDetails.name}
               </Text>
               <Text style={styles.selectionStatusCopy}>
-                Tap the canvas to drop it. Single tap the emoji to grow it, pinch to resize, twist to rotate,
-                and long press to shrink when fine tuning.
+                Tap the canvas to drop it. Single tap decorations to grow them, swipe up or down to fine-tune
+                their size, pinch to resize, twist to rotate freely, and long press to shrink when fine tuning.
               </Text>
               <View style={styles.selectionStatusActions}>
                 <Text style={styles.selectionStatusMeta}>
@@ -913,6 +1007,7 @@ export function GardenSection({
           <Pressable
             ref={canvasRef}
             style={styles.canvas}
+            onLayout={handleCanvasLayout}
             onPress={handleCanvasPress}
             onTouchStart={handleCanvasTouchStart}
             onTouchMove={handleCanvasTouchMove}
@@ -934,25 +1029,59 @@ export function GardenSection({
               <View pointerEvents="none" style={styles.canvasEmptyState}>
                 <Text style={styles.canvasEmptyTitle}>Tap the canvas to begin</Text>
                 <Text style={styles.canvasEmptyCopy}>
-                  Selected emojis will appear where you tap. Adjust them later by dragging, pinching,
-                  twisting, double tapping, or long pressing.
+                  Selected emoji, photos, or text will appear where you tap. Adjust them later by dragging,
+                  pinching, twisting, double tapping, swiping, or long pressing.
                 </Text>
               </View>
             ) : null}
             {placements.map((placement) => {
-              const emoji = emojiCatalog.find((item) => item.id === placement.emojiId);
+              if (placement.kind === 'emoji') {
+                const emoji = emojiCatalog.find((item) => item.id === placement.emojiId);
 
-              if (!emoji) {
-                return null;
+                if (!emoji) {
+                  return null;
+                }
+
+                return (
+                  <DraggablePlacement
+                    key={placement.id}
+                    placement={placement}
+                    baseSize={EMOJI_SIZE}
+                    onUpdate={(updates) => updatePlacement(placement.id, updates)}
+                  >
+                    <Text style={styles.canvasEmojiGlyph}>{emoji.emoji}</Text>
+                  </DraggablePlacement>
+                );
+              }
+
+              if (placement.kind === 'photo') {
+                return (
+                  <DraggablePlacement
+                    key={placement.id}
+                    placement={placement}
+                    baseSize={PHOTO_BASE_SIZE}
+                    onUpdate={(updates) => updatePlacement(placement.id, updates)}
+                  >
+                    <View style={styles.canvasPhotoFrame}>
+                      <Image source={{ uri: placement.imageUri }} style={styles.canvasPhotoImage} />
+                    </View>
+                  </DraggablePlacement>
+                );
               }
 
               return (
                 <DraggablePlacement
                   key={placement.id}
                   placement={placement}
-                  emoji={emoji.emoji}
+                  baseSize={TEXT_BASE_SIZE}
                   onUpdate={(updates) => updatePlacement(placement.id, updates)}
-                />
+                >
+                  <View style={styles.canvasTextWrap}>
+                    <Text style={[styles.canvasText, { color: placement.color ?? DEFAULT_TEXT_COLOR }]}>
+                      {placement.text}
+                    </Text>
+                  </View>
+                </DraggablePlacement>
               );
             })}
             {!penHiddenForSave ? (
@@ -1026,7 +1155,7 @@ export function GardenSection({
                   onPress={() => handleSelectPenColor(ERASER_COLOR)}
                   accessibilityLabel="Use eraser"
                 >
-                  <Text style={styles.eraserIcon}>⌫</Text>
+                  <Text style={styles.eraserIcon}>🧽</Text>
                 </Pressable>
                 <Pressable
                   style={[styles.colorWheelButton, showExtendedPalette && styles.colorWheelButtonActive]}
@@ -1085,6 +1214,58 @@ export function GardenSection({
                     <Text style={styles.sizeOptionLabel}>{size}px</Text>
                   </Pressable>
                 ))}
+              </View>
+            </View>
+            <View style={styles.paletteSection}>
+              <Text style={styles.paletteLabel}>Sketchbook extras</Text>
+              <View style={styles.additionsRow}>
+                <Pressable
+                  style={[styles.additionCircle, isPickingPhoto && styles.additionCircleDisabled]}
+                  onPress={handleAddPhoto}
+                  disabled={isPickingPhoto}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add a photo decoration"
+                >
+                  <Text style={styles.additionCircleIcon}>🖼️</Text>
+                </Pressable>
+                <View style={styles.additionBody}>
+                  <Text style={styles.additionTitle}>Photo charm</Text>
+                  <Text style={styles.additionCopy}>
+                    Drop a photo from your library onto the canvas.
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.textComposer}>
+                <TextInput
+                  style={styles.textComposerInput}
+                  value={textDraft}
+                  onChangeText={setTextDraft}
+                  placeholder="Write a garden note"
+                  placeholderTextColor="#4a5568"
+                  multiline
+                />
+                <Pressable
+                  style={[
+                    styles.textComposerButton,
+                    textDraft.trim().length === 0 && styles.textComposerButtonDisabled,
+                  ]}
+                  onPress={handleAddText}
+                  disabled={textDraft.trim().length === 0}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add a text decoration"
+                >
+                  <Text
+                    style={[
+                      styles.textComposerButtonText,
+                      textDraft.trim().length === 0 && styles.textComposerButtonTextDisabled,
+                    ]}
+                  >
+                    Add text
+                  </Text>
+                </Pressable>
+                <Text style={styles.textComposerHint}>
+                  Uses the active pen color for the text fill.
+                </Text>
               </View>
             </View>
             <Pressable
@@ -1264,6 +1445,8 @@ export function GardenSection({
 }
 
 const EMOJI_SIZE = 38;
+const PHOTO_BASE_SIZE = 150;
+const TEXT_BASE_SIZE = 220;
 const MIN_SCALE = 0.6;
 const MAX_SCALE = 2.4;
 
@@ -1407,12 +1590,13 @@ function InventoryTileItem({
 }
 
 type DraggablePlacementProps = {
-  emoji: string;
   placement: Placement;
+  baseSize: number;
   onUpdate: (updates: Partial<Placement>) => void;
+  children: ReactNode;
 };
 
-function DraggablePlacement({ emoji, placement, onUpdate }: DraggablePlacementProps) {
+function DraggablePlacement({ placement, onUpdate, baseSize, children }: DraggablePlacementProps) {
   const x = useSharedValue(placement.x);
   const y = useSharedValue(placement.y);
   const scale = useSharedValue(placement.scale ?? 1);
@@ -1433,9 +1617,7 @@ function DraggablePlacement({ emoji, placement, onUpdate }: DraggablePlacementPr
     'worklet';
     const nextScale = Math.min(Math.max(scale.value, MIN_SCALE), MAX_SCALE);
     scale.value = nextScale;
-    const normalizedRotation = ((rotation.value % 360) + 360) % 360;
-    rotation.value = normalizedRotation;
-    runOnJS(onUpdate)({ x: x.value, y: y.value, scale: nextScale, rotation: normalizedRotation });
+    runOnJS(onUpdate)({ x: x.value, y: y.value, scale: nextScale, rotation: rotation.value });
   };
 
   const panGesture = Gesture.Pan()
@@ -1495,29 +1677,46 @@ function DraggablePlacement({ emoji, placement, onUpdate }: DraggablePlacementPr
 
   const tapGestures = Gesture.Exclusive(doubleTapGesture, singleTapGesture);
 
+  const swipeUpGesture = Gesture.Fling()
+    .direction(Directions.UP)
+    .onEnd(() => {
+      scale.value = Math.min(scale.value * 1.15, MAX_SCALE);
+      reportUpdate();
+    });
+
+  const swipeDownGesture = Gesture.Fling()
+    .direction(Directions.DOWN)
+    .onEnd(() => {
+      scale.value = Math.max(scale.value * 0.85, MIN_SCALE);
+      reportUpdate();
+    });
+
   const composedGesture = Gesture.Simultaneous(
     panGesture,
     pinchGesture,
     rotationGesture,
     tapGestures,
-    longPressGesture
+    longPressGesture,
+    swipeUpGesture,
+    swipeDownGesture
   );
 
   const animatedStyle = useAnimatedStyle(() => {
     const clampedScale = Math.min(Math.max(scale.value, MIN_SCALE), MAX_SCALE);
-    const halfSize = (EMOJI_SIZE * clampedScale) / 2;
-    const normalizedRotation = ((rotation.value % 360) + 360) % 360;
+    const halfSize = (baseSize * clampedScale) / 2;
     return {
       left: x.value - halfSize,
       top: y.value - halfSize,
-      transform: [{ scale: clampedScale }, { rotate: `${normalizedRotation}deg` }],
+      width: baseSize,
+      height: baseSize,
+      transform: [{ scale: clampedScale }, { rotate: `${rotation.value}deg` }],
     };
   });
 
   return (
     <GestureDetector gesture={composedGesture}>
-      <Animated.View style={[styles.canvasEmoji, animatedStyle]}>
-        <Text style={styles.canvasEmojiGlyph}>{emoji}</Text>
+      <Animated.View style={[styles.canvasItem, animatedStyle]}>
+        {children}
       </Animated.View>
     </GestureDetector>
   );
@@ -1866,15 +2065,41 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
   },
-  canvasEmoji: {
+  canvasItem: {
     position: 'absolute',
-    width: EMOJI_SIZE,
-    height: EMOJI_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
   },
   canvasEmojiGlyph: {
     fontSize: 34,
+  },
+  canvasPhotoFrame: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 36,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: 'rgba(15, 118, 110, 0.35)',
+    backgroundColor: '#ffffff',
+  },
+  canvasPhotoImage: {
+    width: '100%',
+    height: '100%',
+  },
+  canvasTextWrap: {
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(20, 83, 45, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  canvasText: {
+    fontSize: 24,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   penButton: {
     position: 'absolute',
@@ -2251,6 +2476,86 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#134e32',
     fontWeight: '600',
+  },
+  additionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 6,
+  },
+  additionCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#ecfdf5',
+    borderWidth: 2,
+    borderColor: '#059669',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  additionCircleDisabled: {
+    opacity: 0.6,
+  },
+  additionCircleIcon: {
+    fontSize: 30,
+  },
+  additionBody: {
+    flex: 1,
+    gap: 4,
+  },
+  additionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#14532d',
+  },
+  additionCopy: {
+    fontSize: 13,
+    color: '#1f2937',
+    lineHeight: 18,
+  },
+  textComposer: {
+    marginTop: 12,
+    gap: 8,
+  },
+  textComposerInput: {
+    width: '100%',
+    minHeight: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: '#134e32',
+    textAlignVertical: 'top',
+  },
+  textComposerButton: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: '#15803d',
+  },
+  textComposerButtonDisabled: {
+    backgroundColor: '#bbf7d0',
+  },
+  textComposerButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ecfdf5',
+  },
+  textComposerButtonTextDisabled: {
+    color: '#166534',
+  },
+  textComposerHint: {
+    fontSize: 12,
+    color: '#1f2937',
   },
   paletteCloseButton: {
     backgroundColor: '#22543d',

@@ -211,6 +211,8 @@ const CATEGORY_OPTIONS: { id: CategoryFilter; label: string; icon: string }[] = 
 const INVENTORY_COLUMNS = 3;
 const INVENTORY_COLUMN_GAP = 12;
 const INVENTORY_ROW_GAP = 12;
+const SHOP_EMOJI_CHOICES = ['🏡', '🚀', '🛍', '📱'] as const;
+const INVENTORY_EMOJI_CHOICES = ['🧰', '📦', '💼', '👜'] as const;
 
 type InventoryEntry = EmojiDefinition & {
   owned: number;
@@ -243,6 +245,7 @@ export function GardenSection({
   const [activeSheet, setActiveSheet] = useState<'shop' | 'inventory' | null>(null);
   const [shopFilter, setShopFilter] = useState('');
   const [showPalette, setShowPalette] = useState(false);
+  const [fontPickerVisible, setFontPickerVisible] = useState(false);
   const [showExtendedPalette, setShowExtendedPalette] = useState(false);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [penColor, setPenColor] = useState<string>(QUICK_DRAW_COLORS[0]);
@@ -260,6 +263,9 @@ export function GardenSection({
   const [selectedTextStyle, setSelectedTextStyle] = useState<TextStyleId>('sprout');
   const [textScale, setTextScale] = useState(1);
   const [textSliderWidth, setTextSliderWidth] = useState(0);
+  const [shopEmoji, setShopEmoji] = useState('🏡');
+  const [inventoryEmoji, setInventoryEmoji] = useState('🧰');
+  const [activeEmojiPicker, setActiveEmojiPicker] = useState<'shop' | 'inventory' | null>(null);
   const [isDrawingGestureActive, setIsDrawingGestureActive] = useState(false);
   const [activeDrag, setActiveDrag] = useState<{ id: string; point: { x: number; y: number } } | null>(null);
   const [penButtonLayout, setPenButtonLayout] = useState<LayoutRectangle | null>(null);
@@ -285,6 +291,10 @@ export function GardenSection({
   const { height: windowHeight } = useWindowDimensions();
   const paletteMaxHeight = Math.max(windowHeight - insets.top - 32, 360);
   const palettePaddingBottom = 24 + insets.bottom;
+
+  useEffect(() => {
+    setActiveEmojiPicker(null);
+  }, [activeSheet]);
 
   const deleteZoneCenter = useMemo(() => {
     if (!penButtonLayout) {
@@ -997,6 +1007,7 @@ export function GardenSection({
   useEffect(() => {
     if (!showPalette) {
       setShowExtendedPalette(false);
+      setFontPickerVisible(false);
     }
   }, [showPalette]);
 
@@ -1012,6 +1023,10 @@ export function GardenSection({
     0,
     Math.max(textSliderWidth - TEXT_SLIDER_THUMB_SIZE, 0)
   );
+  const selectedTextStyleOption = useMemo(
+    () => TEXT_STYLE_OPTIONS.find((option) => option.id === selectedTextStyle) ?? TEXT_STYLE_OPTIONS[0],
+    [selectedTextStyle]
+  );
   const textPreviewStyle = TEXT_STYLE_MAP[selectedTextStyle] ?? {};
   const previewBaseFontSize =
     typeof textPreviewStyle.fontSize === 'number' ? textPreviewStyle.fontSize : 20;
@@ -1022,7 +1037,10 @@ export function GardenSection({
     () => placements.length === 0 && strokes.length === 0 && !selectedEmoji,
     [placements.length, strokes.length, selectedEmoji]
   );
-  const handleCloseSheet = useCallback(() => setActiveSheet(null), []);
+  const handleCloseSheet = useCallback(() => {
+    setActiveSheet(null);
+    setActiveEmojiPicker(null);
+  }, []);
   const handleOpenSheet = useCallback((sheet: 'shop' | 'inventory') => setActiveSheet(sheet), []);
   const handleChangeCategory = useCallback(
     (category: CategoryFilter) => {
@@ -1169,14 +1187,14 @@ export function GardenSection({
             style={styles.launcherCard}
             onPress={() => handleOpenSheet('shop')}
             accessibilityLabel="Open the Garden shop">
-            <Text style={styles.launcherIcon}>🏡</Text>
+            <Text style={styles.launcherIcon}>{shopEmoji}</Text>
             <Text style={styles.launcherHeading}>GardenShop</Text>
           </Pressable>
           <Pressable
             style={styles.launcherCard}
             onPress={() => handleOpenSheet('inventory')}
             accessibilityLabel="Open your inventory">
-            <Text style={styles.launcherIcon}>🧰</Text>
+            <Text style={styles.launcherIcon}>{inventoryEmoji}</Text>
             <Text style={styles.launcherHeading}>Inventory</Text>
           </Pressable>
         </View>
@@ -1393,7 +1411,7 @@ export function GardenSection({
             ]}
           >
             <View style={styles.paletteHandle} />
-            <Text style={styles.paletteTitle}>Sketchbook Studio</Text>
+            <Text style={styles.paletteTitle}>Garden Atelier</Text>
             <Text style={styles.paletteSubtitle}>
               Tune your pen, lettering, and photo charms without leaving the garden.
             </Text>
@@ -1503,37 +1521,29 @@ export function GardenSection({
                   </View>
                 </View>
                 <View style={styles.textComposer}>
-                  <Text style={styles.paletteLabel}>Text style</Text>
-                  <View style={styles.textStyleGrid}>
-                    {TEXT_STYLE_OPTIONS.map((option) => {
-                      const isActive = option.id === selectedTextStyle;
-                      return (
-                        <Pressable
-                          key={option.id}
-                          style={[styles.textStyleCard, isActive && styles.textStyleCardActive]}
-                          onPress={() => setSelectedTextStyle(option.id)}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected: isActive }}
-                          accessibilityLabel={`${option.label} text style`}
-                        >
-                          <View style={[styles.textStyleBadge, isActive && styles.textStyleBadgeActive]}>
-                            <Text
-                              style={[
-                                styles.textStylePreview,
-                                option.textStyle,
-                                isActive && styles.textStylePreviewActive,
-                              ]}
-                            >
-                              {option.preview}
-                            </Text>
-                          </View>
-                          <Text style={[styles.textStyleLabel, isActive && styles.textStyleLabelActive]}>
-                            {option.label}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
+                  <Pressable
+                    style={styles.fontPickerButton}
+                    onPress={() => setFontPickerVisible(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Choose text style"
+                  >
+                    <View style={styles.fontPickerIconBubble}>
+                      <Text style={styles.fontPickerIcon}>🔠</Text>
+                    </View>
+                    <View style={styles.fontPickerBody}>
+                      <Text style={styles.fontPickerTitle}>Text style</Text>
+                      <Text style={styles.fontPickerSubtitle} numberOfLines={1}>
+                        {selectedTextStyleOption.label}
+                      </Text>
+                      <Text
+                        style={[selectedTextStyleOption.textStyle, styles.fontPickerPreview]}
+                        numberOfLines={1}
+                      >
+                        {selectedTextStyleOption.preview}
+                      </Text>
+                    </View>
+                    <Text style={styles.fontPickerCaret}>▾</Text>
+                  </Pressable>
                   <View style={styles.textPreviewCard}>
                     <Text
                       style={[
@@ -1621,6 +1631,55 @@ export function GardenSection({
         </View>
       </Modal>
       <Modal
+        visible={fontPickerVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFontPickerVisible(false)}
+      >
+        <View style={styles.fontPickerOverlay}>
+          <Pressable style={styles.fontPickerBackdrop} onPress={() => setFontPickerVisible(false)} />
+          <View style={[styles.fontPickerCard, { paddingBottom: 16 + insets.bottom }]}>
+            <Text style={styles.fontPickerHeading}>Choose text style</Text>
+            <ScrollView
+              style={styles.fontPickerScroll}
+              contentContainerStyle={styles.fontPickerList}
+              showsVerticalScrollIndicator={false}
+            >
+              {TEXT_STYLE_OPTIONS.map((option) => {
+                const isActive = option.id === selectedTextStyle;
+                return (
+                  <Pressable
+                    key={option.id}
+                    style={[styles.fontOption, isActive && styles.fontOptionActive]}
+                    onPress={() => setSelectedTextStyle(option.id)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isActive }}
+                    accessibilityLabel={`${option.label} text style`}
+                  >
+                    <Text
+                      style={[option.textStyle, styles.fontOptionPreview]}
+                      numberOfLines={1}
+                    >
+                      {option.preview}
+                    </Text>
+                    <Text style={[styles.fontOptionLabel, isActive && styles.fontOptionLabelActive]}>
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            <Pressable
+              style={styles.fontPickerClose}
+              onPress={() => setFontPickerVisible(false)}
+              accessibilityLabel="Close text style picker"
+            >
+              <Text style={styles.fontPickerCloseText}>Done</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+      <Modal
         visible={activeSheet === 'shop'}
         animationType="slide"
         transparent
@@ -1630,7 +1689,45 @@ export function GardenSection({
           <Pressable style={styles.sheetBackdrop} onPress={handleCloseSheet} />
           <View style={styles.sheetCard}>
             <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>Garden shop</Text>
+            <View style={styles.sheetHeaderRow}>
+              <Text style={styles.sheetTitle}>Garden shop</Text>
+              <Pressable
+                style={styles.sheetEmojiButton}
+                onPress={() =>
+                  setActiveEmojiPicker((prev) => (prev === 'shop' ? null : 'shop'))
+                }
+                accessibilityRole="button"
+                accessibilityLabel="Change Garden shop icon"
+              >
+                <Text style={styles.sheetHeaderEmoji}>{shopEmoji}</Text>
+              </Pressable>
+            </View>
+            {activeEmojiPicker === 'shop' ? (
+              <View style={styles.sheetEmojiChooser}>
+                {SHOP_EMOJI_CHOICES.map((emoji) => {
+                  const isActive = shopEmoji === emoji;
+                  return (
+                    <Pressable
+                      key={emoji}
+                      style={[styles.sheetEmojiOption, isActive && styles.sheetEmojiOptionActive]}
+                      onPress={() => {
+                        setShopEmoji(emoji);
+                        setActiveEmojiPicker(null);
+                      }}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: isActive }}
+                      accessibilityLabel={`Use ${emoji} for GardenShop`}
+                    >
+                      <Text
+                        style={[styles.sheetEmojiOptionText, isActive && styles.sheetEmojiOptionTextActive]}
+                      >
+                        {emoji}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
             <View style={styles.sheetSearchBlock}>
               <View style={styles.searchRow}>
                 <TextInput
@@ -1711,7 +1808,45 @@ export function GardenSection({
           <Pressable style={styles.sheetBackdrop} onPress={handleCloseSheet} />
           <View style={styles.sheetCard}>
             <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>Inventory</Text>
+            <View style={styles.sheetHeaderRow}>
+              <Text style={styles.sheetTitle}>Inventory</Text>
+              <Pressable
+                style={styles.sheetEmojiButton}
+                onPress={() =>
+                  setActiveEmojiPicker((prev) => (prev === 'inventory' ? null : 'inventory'))
+                }
+                accessibilityRole="button"
+                accessibilityLabel="Change inventory icon"
+              >
+                <Text style={styles.sheetHeaderEmoji}>{inventoryEmoji}</Text>
+              </Pressable>
+            </View>
+            {activeEmojiPicker === 'inventory' ? (
+              <View style={styles.sheetEmojiChooser}>
+                {INVENTORY_EMOJI_CHOICES.map((emoji) => {
+                  const isActive = inventoryEmoji === emoji;
+                  return (
+                    <Pressable
+                      key={emoji}
+                      style={[styles.sheetEmojiOption, isActive && styles.sheetEmojiOptionActive]}
+                      onPress={() => {
+                        setInventoryEmoji(emoji);
+                        setActiveEmojiPicker(null);
+                      }}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: isActive }}
+                      accessibilityLabel={`Use ${emoji} for inventory`}
+                    >
+                      <Text
+                        style={[styles.sheetEmojiOptionText, isActive && styles.sheetEmojiOptionTextActive]}
+                      >
+                        {emoji}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
             <View style={styles.sheetSearchBlock}>
               <View style={styles.searchRow}>
                 <TextInput
@@ -2599,10 +2734,54 @@ const styles = StyleSheet.create({
     backgroundColor: '#bbf7d0',
   },
   sheetTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: '800',
     color: '#134e32',
-    textAlign: 'center',
+  },
+  sheetHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  sheetEmojiButton: {
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: '#d1fae5',
+  },
+  sheetHeaderEmoji: {
+    fontSize: 26,
+  },
+  sheetEmojiChooser: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    paddingVertical: 6,
+  },
+  sheetEmojiOption: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+  },
+  sheetEmojiOptionActive: {
+    backgroundColor: '#22543d',
+    borderColor: '#134e32',
+  },
+  sheetEmojiOptionText: {
+    fontSize: 22,
+  },
+  sheetEmojiOptionTextActive: {
+    color: '#f0fff4',
   },
   sheetSearchBlock: {
     gap: 8,
@@ -2925,63 +3104,55 @@ const styles = StyleSheet.create({
     marginTop: 12,
     gap: 10,
   },
-  textStyleGrid: {
+  fontPickerButton: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  textStyleCard: {
-    flexGrow: 1,
-    flexBasis: '48%',
-    borderRadius: 14,
-    backgroundColor: '#f0fdf4',
-    borderWidth: 1,
-    borderColor: 'rgba(15, 118, 110, 0.18)',
-    paddingVertical: 10,
-    paddingHorizontal: 10,
     alignItems: 'center',
-    gap: 6,
+    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    backgroundColor: '#ffffff',
     shadowColor: '#0f172a',
     shadowOpacity: 0.05,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },
     elevation: 2,
   },
-  textStyleCardActive: {
-    backgroundColor: '#d1fae5',
-    borderColor: '#0f766e',
-    shadowOpacity: 0.12,
-  },
-  textStyleBadge: {
-    minWidth: 56,
-    minHeight: 36,
-    borderRadius: 10,
-    backgroundColor: 'rgba(15, 118, 110, 0.08)',
+  fontPickerIconBubble: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#ecfdf5',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 4,
   },
-  textStyleBadgeActive: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#0f766e',
+  fontPickerIcon: {
+    fontSize: 22,
   },
-  textStylePreview: {
-    color: '#0f5132',
+  fontPickerBody: {
+    flex: 1,
+    gap: 2,
   },
-  textStylePreviewActive: {
-    color: '#0f766e',
-  },
-  textStyleLabel: {
-    fontSize: 10,
+  fontPickerTitle: {
+    fontSize: 12,
     fontWeight: '700',
-    color: '#134e32',
+    color: '#14532d',
     letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
-  textStyleLabelActive: {
-    color: '#0f766e',
+  fontPickerSubtitle: {
+    fontSize: 12,
+    color: '#166534',
+  },
+  fontPickerPreview: {
+    fontSize: 16,
+    color: '#134e32',
+  },
+  fontPickerCaret: {
+    fontSize: 18,
+    color: '#134e32',
   },
   textPreviewCard: {
     marginTop: 2,
@@ -3026,6 +3197,86 @@ const styles = StyleSheet.create({
   },
   textComposerButtonTextDisabled: {
     color: '#166534',
+  },
+  fontPickerOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(15, 31, 23, 0.55)',
+    paddingHorizontal: 24,
+  },
+  fontPickerBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  fontPickerCard: {
+    width: '90%',
+    maxWidth: 360,
+    backgroundColor: '#f8fffb',
+    borderRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    gap: 12,
+    shadowColor: '#0f2e20',
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
+  },
+  fontPickerHeading: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#134e32',
+    textAlign: 'center',
+  },
+  fontPickerScroll: {
+    maxHeight: 260,
+  },
+  fontPickerList: {
+    gap: 10,
+  },
+  fontOption: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    backgroundColor: '#ffffff',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    gap: 4,
+  },
+  fontOptionActive: {
+    borderColor: '#0f766e',
+    backgroundColor: '#ecfdf5',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  fontOptionPreview: {
+    fontSize: 20,
+    color: '#134e32',
+    textAlign: 'center',
+  },
+  fontOptionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0f5132',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  fontOptionLabelActive: {
+    color: '#0f766e',
+  },
+  fontPickerClose: {
+    borderRadius: 14,
+    paddingVertical: 10,
+    backgroundColor: '#22543d',
+  },
+  fontPickerCloseText: {
+    textAlign: 'center',
+    color: '#f0fff4',
+    fontWeight: '700',
   },
   textSizeControls: {
     flexDirection: 'row',

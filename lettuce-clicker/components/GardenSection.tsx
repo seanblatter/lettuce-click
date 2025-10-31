@@ -4,6 +4,7 @@ import {
   FlatList,
   LayoutChangeEvent,
   GestureResponderEvent,
+  LayoutRectangle,
   ListRenderItem,
   Modal,
   Pressable,
@@ -11,8 +12,10 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  TextStyle,
   Image,
   View,
+  Keyboard,
 } from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
 import * as ImagePicker from 'expo-image-picker';
@@ -30,7 +33,7 @@ import { captureRef } from 'react-native-view-shot';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { emojiCategoryOrder } from '@/constants/emojiCatalog';
-import { EmojiDefinition, Placement } from '@/context/GameContext';
+import { EmojiDefinition, Placement, TextStyleId } from '@/context/GameContext';
 
 type Props = {
   harvest: number;
@@ -40,8 +43,14 @@ type Props = {
   purchaseEmoji: (emojiId: string) => boolean;
   placeEmoji: (emojiId: string, position: { x: number; y: number }) => boolean;
   addPhotoPlacement: (uri: string, position: { x: number; y: number }) => boolean;
-  addTextPlacement: (text: string, position: { x: number; y: number }, color?: string) => boolean;
+  addTextPlacement: (
+    text: string,
+    position: { x: number; y: number },
+    color?: string,
+    style?: TextStyleId
+  ) => boolean;
   updatePlacement: (placementId: string, updates: Partial<Placement>) => void;
+  removePlacement: (placementId: string) => void;
   clearGarden: () => void;
   registerCustomEmoji: (emoji: string) => EmojiDefinition | null;
   title?: string;
@@ -99,6 +108,33 @@ const COLOR_WHEEL_RADIUS = 64;
 const COLOR_WHEEL_SWATCH_SIZE = 34;
 const PEN_SIZES = [3, 5, 8, 12];
 
+const TEXT_STYLE_OPTIONS: { id: TextStyleId; label: string; textStyle: TextStyle; preview: string }[] = [
+  { id: 'sprout', label: 'Sprout', textStyle: { fontSize: 18, fontWeight: '600' }, preview: 'Hello' },
+  {
+    id: 'bloom',
+    label: 'Bloom',
+    textStyle: { fontSize: 22, fontWeight: '700', letterSpacing: 0.4 },
+    preview: 'Bloom',
+  },
+  {
+    id: 'canopy',
+    label: 'Canopy',
+    textStyle: { fontSize: 26, fontWeight: '800', textTransform: 'uppercase' },
+    preview: 'Rise',
+  },
+  {
+    id: 'whisper',
+    label: 'Whisper',
+    textStyle: { fontSize: 20, fontStyle: 'italic', fontWeight: '500' },
+    preview: 'Calm',
+  },
+];
+
+const TEXT_STYLE_MAP = TEXT_STYLE_OPTIONS.reduce<Record<TextStyleId, TextStyle>>((acc, option) => {
+  acc[option.id] = option.textStyle;
+  return acc;
+}, {} as Record<TextStyleId, TextStyle>);
+
 const CATEGORY_LABELS: Record<EmojiDefinition['category'], string> = {
   plants: 'Plants & Foliage',
   scenery: 'Scenery & Sky',
@@ -143,6 +179,7 @@ export function GardenSection({
   addPhotoPlacement,
   addTextPlacement,
   updatePlacement,
+  removePlacement,
   clearGarden,
   registerCustomEmoji,
   title = 'Lettuce Gardens',
@@ -166,7 +203,11 @@ export function GardenSection({
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const [isPickingPhoto, setIsPickingPhoto] = useState(false);
   const [textDraft, setTextDraft] = useState('');
+  const [selectedTextStyle, setSelectedTextStyle] = useState<TextStyleId>('sprout');
   const [isDrawingGestureActive, setIsDrawingGestureActive] = useState(false);
+  const [deleteCandidateId, setDeleteCandidateId] = useState<string | null>(null);
+  const [activeDrag, setActiveDrag] = useState<{ id: string; point: { x: number; y: number } } | null>(null);
+  const [penButtonLayout, setPenButtonLayout] = useState<LayoutRectangle | null>(null);
   const canvasRef = useRef<View | null>(null);
   const filteredOwnedInventoryRef = useRef<InventoryEntry[]>([]);
   const draggingInventoryIdRef = useRef<string | null>(null);
@@ -184,6 +225,42 @@ export function GardenSection({
         return { color, left, top };
       }),
     []
+  );
+
+  const deleteZoneCenter = useMemo(() => {
+    if (!penButtonLayout) {
+      return null;
+    }
+
+    return {
+      x: penButtonLayout.x + penButtonLayout.width / 2,
+      y: penButtonLayout.y + penButtonLayout.height / 2,
+    };
+  }, [penButtonLayout]);
+
+  const isPointInDeleteZone = useCallback(
+    (point: { x: number; y: number } | null) => {
+      if (!point || !penButtonLayout || !deleteZoneCenter) {
+        return false;
+      }
+
+      const radius = Math.max(penButtonLayout.width, penButtonLayout.height) / 2 + 24;
+      const dx = point.x - deleteZoneCenter.x;
+      const dy = point.y - deleteZoneCenter.y;
+      return Math.hypot(dx, dy) <= radius;
+    },
+    [deleteZoneCenter, penButtonLayout]
+  );
+
+  const shouldHighlightDeleteZone = useMemo(
+    () =>
+      Boolean(
+        deleteCandidateId &&
+          activeDrag &&
+          deleteCandidateId === activeDrag.id &&
+          isPointInDeleteZone(activeDrag.point)
+      ),
+    [activeDrag, deleteCandidateId, isPointInDeleteZone]
   );
 
   const inventoryList = useMemo(
@@ -638,12 +715,44 @@ export function GardenSection({
 
     const color = penColor === ERASER_COLOR ? DEFAULT_TEXT_COLOR : penColor;
     const center = getCanvasCenter();
-    const added = addTextPlacement(trimmed, center, color);
+    const added = addTextPlacement(trimmed, center, color, selectedTextStyle);
 
     if (added) {
       setTextDraft('');
     }
-  }, [addTextPlacement, getCanvasCenter, penColor, textDraft]);
+  }, [addTextPlacement, getCanvasCenter, penColor, selectedTextStyle, textDraft]);
+
+  const handlePlacementLongPressChange = useCallback((placementId: string, isActive: boolean) => {
+    setDeleteCandidateId((current) => {
+      if (isActive) {
+        return placementId;
+      }
+
+      return current === placementId ? null : current;
+    });
+  }, []);
+
+  const handlePlacementDragBegin = useCallback((placementId: string, center: { x: number; y: number }) => {
+    setActiveDrag({ id: placementId, point: center });
+  }, []);
+
+  const handlePlacementDragMove = useCallback((placementId: string, center: { x: number; y: number }) => {
+    setActiveDrag({ id: placementId, point: center });
+  }, []);
+
+  const handlePlacementDragEnd = useCallback(
+    (placementId: string, center: { x: number; y: number }) => {
+      const shouldDelete = deleteCandidateId === placementId && isPointInDeleteZone(center);
+
+      if (shouldDelete) {
+        removePlacement(placementId);
+      }
+
+      setActiveDrag(null);
+      setDeleteCandidateId((current) => (current === placementId ? null : current));
+    },
+    [deleteCandidateId, isPointInDeleteZone, removePlacement]
+  );
 
   const renderStrokeSegments = useCallback(
     (stroke: Stroke, prefix: string) => {
@@ -825,6 +934,7 @@ export function GardenSection({
   const bannerTopPadding = insets.top + 24;
   const contentBottomPadding = insets.bottom + 48;
   const canClearGarden = placements.length > 0 || strokes.length > 0;
+  const deleteZoneVisible = deleteCandidateId !== null;
 
   const renderShopItem: ListRenderItem<InventoryEntry> = ({ item }) => {
     const owned = item.owned;
@@ -1048,6 +1158,10 @@ export function GardenSection({
                     placement={placement}
                     baseSize={EMOJI_SIZE}
                     onUpdate={(updates) => updatePlacement(placement.id, updates)}
+                    onDragBegin={handlePlacementDragBegin}
+                    onDragMove={handlePlacementDragMove}
+                    onDragEnd={handlePlacementDragEnd}
+                    onLongPressChange={handlePlacementLongPressChange}
                   >
                     <Text style={styles.canvasEmojiGlyph}>{emoji.emoji}</Text>
                   </DraggablePlacement>
@@ -1061,6 +1175,10 @@ export function GardenSection({
                     placement={placement}
                     baseSize={PHOTO_BASE_SIZE}
                     onUpdate={(updates) => updatePlacement(placement.id, updates)}
+                    onDragBegin={handlePlacementDragBegin}
+                    onDragMove={handlePlacementDragMove}
+                    onDragEnd={handlePlacementDragEnd}
+                    onLongPressChange={handlePlacementLongPressChange}
                   >
                     <View style={styles.canvasPhotoFrame}>
                       <Image source={{ uri: placement.imageUri }} style={styles.canvasPhotoImage} />
@@ -1075,9 +1193,19 @@ export function GardenSection({
                   placement={placement}
                   baseSize={TEXT_BASE_SIZE}
                   onUpdate={(updates) => updatePlacement(placement.id, updates)}
+                  onDragBegin={handlePlacementDragBegin}
+                  onDragMove={handlePlacementDragMove}
+                  onDragEnd={handlePlacementDragEnd}
+                  onLongPressChange={handlePlacementLongPressChange}
                 >
                   <View style={styles.canvasTextWrap}>
-                    <Text style={[styles.canvasText, { color: placement.color ?? DEFAULT_TEXT_COLOR }]}>
+                    <Text
+                      style={[
+                        styles.canvasText,
+                        TEXT_STYLE_MAP[placement.style ?? 'sprout'],
+                        { color: placement.color ?? DEFAULT_TEXT_COLOR },
+                      ]}
+                    >
                       {placement.text}
                     </Text>
                   </View>
@@ -1087,16 +1215,50 @@ export function GardenSection({
             {!penHiddenForSave ? (
               <Pressable
                 style={styles.penButton}
-                accessibilityLabel="Open drawing palette"
-                accessibilityHint="Opens options to pick colors and stroke sizes. Long press to exit drawing mode."
+                accessibilityLabel={
+                  deleteZoneVisible ? 'Trash can drop zone' : 'Open drawing palette'
+                }
+                accessibilityHint={
+                  deleteZoneVisible
+                    ? 'Drag an item here to delete it from the garden.'
+                    : 'Opens options to pick colors and stroke sizes. Long press to exit drawing mode.'
+                }
                 onPress={() => {
+                  if (deleteZoneVisible) {
+                    return;
+                  }
+
                   setIsDrawingMode(true);
                   setShowExtendedPalette(false);
                   setShowPalette(true);
                 }}
-                onLongPress={() => setIsDrawingMode(false)}>
-                <View style={[styles.penButtonCircle, isDrawingMode && styles.penButtonCircleActive]}>
-                  <Text style={[styles.penButtonIcon, isDrawingMode && styles.penButtonIconActive]}>✏️</Text>
+                onLongPress={() => {
+                  if (deleteZoneVisible) {
+                    return;
+                  }
+                  setIsDrawingMode(false);
+                }}
+                disabled={deleteZoneVisible}
+                onLayout={({ nativeEvent }) => setPenButtonLayout(nativeEvent.layout)}
+              >
+                <View
+                  style={[
+                    styles.penButtonCircle,
+                    isDrawingMode && !deleteZoneVisible && styles.penButtonCircleActive,
+                    deleteZoneVisible && styles.penButtonCircleDelete,
+                    shouldHighlightDeleteZone && styles.penButtonCircleDeleteActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.penButtonIcon,
+                      isDrawingMode && !deleteZoneVisible && styles.penButtonIconActive,
+                      deleteZoneVisible && styles.penButtonIconDelete,
+                      shouldHighlightDeleteZone && styles.penButtonIconDeleteActive,
+                    ]}
+                  >
+                    {deleteZoneVisible ? '🗑️' : '✏️'}
+                  </Text>
                 </View>
               </Pressable>
             ) : null}
@@ -1236,6 +1398,34 @@ export function GardenSection({
                 </View>
               </View>
               <View style={styles.textComposer}>
+                <View style={styles.textStyleRow}>
+                  {TEXT_STYLE_OPTIONS.map((option) => {
+                    const isActive = option.id === selectedTextStyle;
+                    return (
+                      <Pressable
+                        key={option.id}
+                        style={[styles.textStyleOption, isActive && styles.textStyleOptionActive]}
+                        onPress={() => setSelectedTextStyle(option.id)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: isActive }}
+                        accessibilityLabel={`${option.label} text style`}
+                      >
+                        <Text
+                          style={[
+                            styles.textStylePreview,
+                            option.textStyle,
+                            isActive && styles.textStylePreviewActive,
+                          ]}
+                        >
+                          {option.preview}
+                        </Text>
+                        <Text style={[styles.textStyleLabel, isActive && styles.textStyleLabelActive]}>
+                          {option.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
                 <TextInput
                   style={styles.textComposerInput}
                   value={textDraft}
@@ -1243,6 +1433,18 @@ export function GardenSection({
                   placeholder="Write a garden note"
                   placeholderTextColor="#4a5568"
                   multiline
+                  blurOnSubmit
+                  returnKeyType="done"
+                  onSubmitEditing={() => {
+                    Keyboard.dismiss();
+                    setTextDraft((prev) => prev.replace(/\n+/g, ' ').trim());
+                  }}
+                  onKeyPress={({ nativeEvent }) => {
+                    if (nativeEvent.key === 'Enter') {
+                      Keyboard.dismiss();
+                      setTextDraft((prev) => prev.replace(/\n+/g, ' ').trim());
+                    }
+                  }}
                 />
                 <Pressable
                   style={[
@@ -1594,9 +1796,22 @@ type DraggablePlacementProps = {
   baseSize: number;
   onUpdate: (updates: Partial<Placement>) => void;
   children: ReactNode;
+  onDragBegin?: (placementId: string, center: { x: number; y: number }) => void;
+  onDragMove?: (placementId: string, center: { x: number; y: number }) => void;
+  onDragEnd?: (placementId: string, center: { x: number; y: number }) => void;
+  onLongPressChange?: (placementId: string, isActive: boolean) => void;
 };
 
-function DraggablePlacement({ placement, onUpdate, baseSize, children }: DraggablePlacementProps) {
+function DraggablePlacement({
+  placement,
+  onUpdate,
+  baseSize,
+  children,
+  onDragBegin,
+  onDragMove,
+  onDragEnd,
+  onLongPressChange,
+}: DraggablePlacementProps) {
   const x = useSharedValue(placement.x);
   const y = useSharedValue(placement.y);
   const scale = useSharedValue(placement.scale ?? 1);
@@ -1624,13 +1839,23 @@ function DraggablePlacement({ placement, onUpdate, baseSize, children }: Draggab
     .onStart(() => {
       panStartX.value = x.value;
       panStartY.value = y.value;
+      if (onDragBegin) {
+        runOnJS(onDragBegin)(placement.id, { x: x.value, y: y.value });
+      }
     })
     .onChange((event) => {
       x.value = panStartX.value + event.translationX;
       y.value = panStartY.value + event.translationY;
+      if (onDragMove) {
+        runOnJS(onDragMove)(placement.id, { x: x.value, y: y.value });
+      }
     })
-    .onEnd(reportUpdate)
-    .onFinalize(reportUpdate);
+    .onFinalize(() => {
+      reportUpdate();
+      if (onDragEnd) {
+        runOnJS(onDragEnd)(placement.id, { x: x.value, y: y.value });
+      }
+    });
 
   const pinchGesture = Gesture.Pinch()
     .onStart(() => {
@@ -1670,9 +1895,19 @@ function DraggablePlacement({ placement, onUpdate, baseSize, children }: Draggab
 
   const longPressGesture = Gesture.LongPress()
     .minDuration(350)
+    .onStart(() => {
+      if (onLongPressChange) {
+        runOnJS(onLongPressChange)(placement.id, true);
+      }
+    })
     .onEnd(() => {
       scale.value = Math.max(scale.value * 0.8, MIN_SCALE);
       reportUpdate();
+    })
+    .onFinalize(() => {
+      if (onLongPressChange) {
+        runOnJS(onLongPressChange)(placement.id, false);
+      }
     });
 
   const tapGestures = Gesture.Exclusive(doubleTapGesture, singleTapGesture);
@@ -1691,6 +1926,20 @@ function DraggablePlacement({ placement, onUpdate, baseSize, children }: Draggab
       reportUpdate();
     });
 
+  const swipeLeftGesture = Gesture.Fling()
+    .direction(Directions.LEFT)
+    .onEnd(() => {
+      rotation.value = rotation.value - 15;
+      reportUpdate();
+    });
+
+  const swipeRightGesture = Gesture.Fling()
+    .direction(Directions.RIGHT)
+    .onEnd(() => {
+      rotation.value = rotation.value + 15;
+      reportUpdate();
+    });
+
   const composedGesture = Gesture.Simultaneous(
     panGesture,
     pinchGesture,
@@ -1698,7 +1947,9 @@ function DraggablePlacement({ placement, onUpdate, baseSize, children }: Draggab
     tapGestures,
     longPressGesture,
     swipeUpGesture,
-    swipeDownGesture
+    swipeDownGesture,
+    swipeLeftGesture,
+    swipeRightGesture
   );
 
   const animatedStyle = useAnimatedStyle(() => {
@@ -2124,12 +2375,26 @@ const styles = StyleSheet.create({
   penButtonCircleActive: {
     backgroundColor: '#1f6f4a',
   },
+  penButtonCircleDelete: {
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderColor: '#dc2626',
+  },
+  penButtonCircleDeleteActive: {
+    backgroundColor: '#dc2626',
+    borderColor: '#7f1d1d',
+  },
   penButtonIcon: {
     fontSize: 26,
     color: '#1f6f4a',
   },
   penButtonIconActive: {
     color: '#f0fff4',
+  },
+  penButtonIconDelete: {
+    color: '#dc2626',
+  },
+  penButtonIconDeleteActive: {
+    color: '#fef2f2',
   },
   strokeSegment: {
     position: 'absolute',
@@ -2521,6 +2786,42 @@ const styles = StyleSheet.create({
   textComposer: {
     marginTop: 12,
     gap: 8,
+  },
+  textStyleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  textStyleOption: {
+    flex: 1,
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(15, 118, 110, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(15, 118, 110, 0.16)',
+    alignItems: 'center',
+    gap: 2,
+  },
+  textStyleOptionActive: {
+    backgroundColor: 'rgba(15, 118, 110, 0.18)',
+    borderColor: '#0f766e',
+  },
+  textStylePreview: {
+    color: '#0f5132',
+  },
+  textStylePreviewActive: {
+    color: '#0f766e',
+  },
+  textStyleLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#134e32',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  textStyleLabelActive: {
+    color: '#0f766e',
   },
   textComposerInput: {
     width: '100%',

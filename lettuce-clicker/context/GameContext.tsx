@@ -77,10 +77,13 @@ export type PhotoPlacement = PlacementBase & {
   imageUri: string;
 };
 
+export type TextStyleId = 'sprout' | 'bloom' | 'canopy' | 'whisper';
+
 export type TextPlacement = PlacementBase & {
   kind: 'text';
   text: string;
   color: string;
+  style: TextStyleId;
 };
 
 export type Placement = EmojiPlacement | PhotoPlacement | TextPlacement;
@@ -135,8 +138,14 @@ type GameContextValue = {
   purchaseEmoji: (emojiId: string) => boolean;
   placeEmoji: (emojiId: string, position: { x: number; y: number }) => boolean;
   addPhotoPlacement: (imageUri: string, position: { x: number; y: number }) => boolean;
-  addTextPlacement: (text: string, position: { x: number; y: number }, color?: string) => boolean;
+  addTextPlacement: (
+    text: string,
+    position: { x: number; y: number },
+    color?: string,
+    style?: TextStyleId
+  ) => boolean;
   updatePlacement: (placementId: string, updates: Partial<Placement>) => void;
+  removePlacement: (placementId: string) => void;
   clearGarden: () => void;
   setProfileName: (value: string) => void;
   setProfileUsername: (value: string) => void;
@@ -441,6 +450,10 @@ const createPlacementId = (prefix: string) =>
   `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 const DEFAULT_TEXT_COLOR = '#14532d';
+const DEFAULT_TEXT_STYLE: TextStyleId = 'sprout';
+
+const isTextStyleId = (value: unknown): value is TextStyleId =>
+  value === 'sprout' || value === 'bloom' || value === 'canopy' || value === 'whisper';
 
 const normalizePlacement = (entry: unknown): Placement | null => {
   if (!entry || typeof entry !== 'object') {
@@ -469,11 +482,13 @@ const normalizePlacement = (entry: unknown): Placement | null => {
 
   if (kind === 'text' && typeof record.text === 'string') {
     const color = typeof record.color === 'string' ? record.color : DEFAULT_TEXT_COLOR;
+    const style = isTextStyleId(record.style) ? record.style : DEFAULT_TEXT_STYLE;
     return {
       id: baseId,
       kind: 'text',
       text: record.text,
       color,
+      style,
       x,
       y,
       scale,
@@ -974,7 +989,8 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const addTextPlacement = (
     text: string,
     position: { x: number; y: number },
-    color = DEFAULT_TEXT_COLOR
+    color = DEFAULT_TEXT_COLOR,
+    style: TextStyleId = DEFAULT_TEXT_STYLE
   ) => {
     const trimmed = text.trim();
 
@@ -983,6 +999,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     }
 
     const appliedColor = color && color.trim().length > 0 ? color : DEFAULT_TEXT_COLOR;
+    const appliedStyle = isTextStyleId(style) ? style : DEFAULT_TEXT_STYLE;
 
     setPlacements((prev) => [
       ...prev,
@@ -991,6 +1008,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         kind: 'text',
         text: trimmed,
         color: appliedColor,
+        style: appliedStyle,
         x: position.x,
         y: position.y,
         scale: 1,
@@ -1012,6 +1030,25 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
           : placement
       )
     );
+  };
+
+  const removePlacement = (placementId: string) => {
+    setPlacements((prevPlacements) => {
+      const target = prevPlacements.find((placement) => placement.id === placementId);
+
+      if (!target) {
+        return prevPlacements;
+      }
+
+      if (target.kind === 'emoji') {
+        setEmojiInventory((prevInventory) => ({
+          ...prevInventory,
+          [target.emojiId]: (prevInventory[target.emojiId] ?? 0) + 1,
+        }));
+      }
+
+      return prevPlacements.filter((placement) => placement.id !== placementId);
+    });
   };
 
   const clearGarden = () => {
@@ -1082,6 +1119,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     addPhotoPlacement,
     addTextPlacement,
     updatePlacement,
+    removePlacement,
     clearGarden,
     setProfileName,
     setProfileUsername,
@@ -1116,6 +1154,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     spendHarvestAmount,
     addPhotoPlacement,
     addTextPlacement,
+    removePlacement,
     purchasePremiumUpgrade,
     purchaseEmojiTheme,
     setPremiumAccentColor,

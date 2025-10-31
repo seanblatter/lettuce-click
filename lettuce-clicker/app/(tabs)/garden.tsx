@@ -15,6 +15,7 @@ export default function GardenScreen() {
     addPhotoPlacement,
     addTextPlacement,
     updatePlacement,
+    removePlacement,
     clearGarden,
     registerCustomEmoji,
   } = useGame();
@@ -31,6 +32,7 @@ export default function GardenScreen() {
         addPhotoPlacement={addPhotoPlacement}
         addTextPlacement={addTextPlacement}
         updatePlacement={updatePlacement}
+        removePlacement={removePlacement}
         clearGarden={clearGarden}
         registerCustomEmoji={registerCustomEmoji}
       />

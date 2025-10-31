@@ -12,9 +12,10 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 
 import { OrbitingUpgradeEmojis } from '@/components/OrbitingUpgradeEmojis';
+import { MusicContent } from '@/app/music';
+import { ProfileContent } from '@/app/profile';
 import { useGame } from '@/context/GameContext';
 import type { HomeEmojiTheme } from '@/context/GameContext';
 
@@ -84,6 +85,8 @@ export default function HomeScreen() {
   const [menuPage, setMenuPage] = useState<'overview' | 'themes'>('overview');
   const [activeNotice, setActiveNotice] = useState<typeof resumeNotice>(null);
   const [showDailyBonus, setShowDailyBonus] = useState(false);
+  const [showProfileQuickAction, setShowProfileQuickAction] = useState(false);
+  const [showMusicQuickAction, setShowMusicQuickAction] = useState(false);
   const [availableBonusSpins, setAvailableBonusSpins] = useState(0);
   const [bonusMessage, setBonusMessage] = useState<string | null>(null);
   const [lastBonusReward, setLastBonusReward] = useState<number | null>(null);
@@ -97,7 +100,6 @@ export default function HomeScreen() {
   const [hasDoubledPassiveHarvest, setHasDoubledPassiveHarvest] = useState(false);
   const [isWatchingResumeOffer, setIsWatchingResumeOffer] = useState(false);
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const flipAnimation = useRef(new Animated.Value(0)).current;
   const headerPaddingTop = useMemo(() => Math.max(insets.top - 6, 0) + 2, [insets.top]);
   const contentPaddingBottom = useMemo(() => insets.bottom + 32, [insets.bottom]);
@@ -240,13 +242,21 @@ export default function HomeScreen() {
 
   const handleNavigateProfile = useCallback(() => {
     setMenuOpen(false);
-    router.push('/profile');
-  }, [router]);
+    setShowProfileQuickAction(true);
+  }, []);
+
+  const handleCloseProfileQuickAction = useCallback(() => {
+    setShowProfileQuickAction(false);
+  }, []);
 
   const handleOpenMusic = useCallback(() => {
     setMenuOpen(false);
-    router.push('/music');
-  }, [router]);
+    setShowMusicQuickAction(true);
+  }, []);
+
+  const handleCloseMusicQuickAction = useCallback(() => {
+    setShowMusicQuickAction(false);
+  }, []);
 
   const handleSelectTheme = useCallback(
     (theme: HomeEmojiTheme) => {
@@ -880,6 +890,22 @@ export default function HomeScreen() {
           </View>
         </SafeAreaView>
       </Modal>
+      <Modal
+        visible={showProfileQuickAction}
+        animationType="slide"
+        onRequestClose={handleCloseProfileQuickAction}
+      >
+        <ProfileContent mode="modal" onRequestClose={handleCloseProfileQuickAction} />
+      </Modal>
+
+      <Modal
+        visible={showMusicQuickAction}
+        animationType="slide"
+        onRequestClose={handleCloseMusicQuickAction}
+      >
+        <MusicContent mode="modal" onRequestClose={handleCloseMusicQuickAction} />
+      </Modal>
+
     </SafeAreaView>
   );
 }

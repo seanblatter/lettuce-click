@@ -8,7 +8,12 @@ import { useGame } from '@/context/GameContext';
 
 const PREMIUM_ACCENT_OPTIONS = ['#1f6f4a', '#047857', '#2563eb', '#a855f7', '#f97316', '#0ea5e9'];
 
-export default function ProfileScreen() {
+type ProfileContentProps = {
+  mode?: 'screen' | 'modal';
+  onRequestClose?: () => void;
+};
+
+export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileContentProps) {
   const {
     profileName,
     profileUsername,
@@ -27,7 +32,6 @@ export default function ProfileScreen() {
     emojiInventory,
     registerCustomEmoji,
   } = useGame();
-  const router = useRouter();
   const [name, setName] = useState(profileName);
   const [username, setUsername] = useState(profileUsername);
   const [isSaving, setIsSaving] = useState(false);
@@ -182,6 +186,17 @@ export default function ProfileScreen() {
     [applyEmojiSelection, hasPremiumUpgrade]
   );
 
+  const handleClose = useCallback(() => {
+    if (onRequestClose) {
+      onRequestClose();
+    }
+  }, [onRequestClose]);
+
+  const closeAccessibilityLabel = mode === 'screen' ? 'Go back' : 'Close profile editor';
+  const closeLabel = mode === 'screen' ? '← Back' : 'Done';
+  const closeButtonStyle = mode === 'screen' ? styles.backButton : styles.modalCloseButton;
+  const closeTextStyle = mode === 'screen' ? styles.backLabel : styles.modalCloseLabel;
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <ScrollView
@@ -189,8 +204,8 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator
         contentInsetAdjustmentBehavior="never"
       >
-        <Pressable onPress={() => router.back()} style={styles.backButton} accessibilityLabel="Go back">
-          <Text style={styles.backLabel}>← Back</Text>
+        <Pressable onPress={handleClose} style={closeButtonStyle} accessibilityLabel={closeAccessibilityLabel}>
+          <Text style={closeTextStyle}>{closeLabel}</Text>
         </Pressable>
 
         <View style={styles.headerCard}>
@@ -324,6 +339,11 @@ export default function ProfileScreen() {
   );
 }
 
+export default function ProfileScreen() {
+  const router = useRouter();
+  return <ProfileContent mode="screen" onRequestClose={() => router.back()} />;
+}
+
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -343,6 +363,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#22543d',
     fontWeight: '600',
+  },
+  modalCloseButton: {
+    alignSelf: 'flex-end',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: 'rgba(22, 101, 52, 0.14)',
+  },
+  modalCloseLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#14532d',
   },
   headerCard: {
     backgroundColor: '#22543d',

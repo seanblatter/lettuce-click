@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -55,8 +55,12 @@ const MUSIC_GROUPS = [
 
 type MusicOption = (typeof MUSIC_OPTIONS)[number];
 
-export default function MusicScreen() {
-  const router = useRouter();
+type MusicContentProps = {
+  mode?: 'screen' | 'modal';
+  onRequestClose?: () => void;
+};
+
+export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentProps) {
   const [selectedTrackId, setSelectedTrackId] = useState<MusicOption['id']>(MUSIC_OPTIONS[0].id);
 
   const groupedOptions = useMemo(
@@ -73,6 +77,12 @@ export default function MusicScreen() {
     [selectedTrackId]
   );
 
+  const handleClose = useCallback(() => {
+    if (onRequestClose) {
+      onRequestClose();
+    }
+  }, [onRequestClose]);
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <ScrollView
@@ -81,15 +91,31 @@ export default function MusicScreen() {
         contentInsetAdjustmentBehavior="never"
       >
         <View style={styles.headerRow}>
-          <Pressable
-            onPress={() => router.back()}
-            style={styles.headerBackButton}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-          >
-            <Text style={styles.headerBackText}>Back</Text>
-          </Pressable>
+          {mode === 'screen' ? (
+            <Pressable
+              onPress={handleClose}
+              style={styles.headerBackButton}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+            >
+              <Text style={styles.headerBackText}>Back</Text>
+            </Pressable>
+          ) : (
+            <View style={styles.headerButtonPlaceholder} />
+          )}
           <Text style={styles.headerTitle}>Music Lounge</Text>
+          {mode === 'modal' ? (
+            <Pressable
+              onPress={handleClose}
+              style={styles.modalHeaderButton}
+              accessibilityRole="button"
+              accessibilityLabel="Close music lounge"
+            >
+              <Text style={styles.modalHeaderText}>Done</Text>
+            </Pressable>
+          ) : (
+            <View style={styles.headerButtonPlaceholder} />
+          )}
         </View>
         <Text style={styles.headerSubtitle}>
           Choose a white or grey music blend to match the mood of your lettuce garden.
@@ -137,6 +163,11 @@ export default function MusicScreen() {
   );
 }
 
+export default function MusicScreen() {
+  const router = useRouter();
+  return <MusicContent mode="screen" onRequestClose={() => router.back()} />;
+}
+
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -157,8 +188,26 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 16,
     backgroundColor: 'rgba(22, 101, 52, 0.14)',
+    alignItems: 'center',
+    minWidth: 72,
   },
   headerBackText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#14532d',
+  },
+  headerButtonPlaceholder: {
+    width: 72,
+  },
+  modalHeaderButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: 'rgba(22, 101, 52, 0.14)',
+    alignItems: 'center',
+    minWidth: 72,
+  },
+  modalHeaderText: {
     fontSize: 13,
     fontWeight: '700',
     color: '#14532d',
@@ -167,6 +216,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '800',
     color: '#134e32',
+    textAlign: 'center',
   },
   headerSubtitle: {
     fontSize: 14,

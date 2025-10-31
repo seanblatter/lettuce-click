@@ -428,7 +428,7 @@ export default function HomeScreen() {
             <Pressable
               accessibilityLabel={menuOpen ? 'Close garden menu' : 'Open garden menu'}
               accessibilityHint={menuOpen ? undefined : 'Opens actions and emoji theme options'}
-              style={styles.menuButton}
+              style={[styles.menuButton, menuOpen && styles.menuButtonActive]}
               onPress={() => setMenuOpen((prev) => !prev)}
               hitSlop={8}>
               <Text style={[styles.menuIcon, menuOpen && styles.menuIconActive]}>
@@ -444,10 +444,11 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator
           alwaysBounceVertical
         >
-          <Text style={styles.title}>Lettuce Click</Text>
-
           <View style={styles.lettuceWrapper}>
             <View style={styles.lettuceBackdrop}>
+              <View style={[styles.backdropHalo, styles.backdropHaloOuter]} />
+              <View style={[styles.backdropHalo, styles.backdropHaloMiddle]} />
+              <View style={[styles.backdropHalo, styles.backdropHaloInner]} />
               <View style={[styles.backdropBubble, styles.backdropBubbleOne]} />
               <View style={[styles.backdropBubble, styles.backdropBubbleTwo]} />
               <View style={[styles.backdropBubble, styles.backdropBubbleThree]} />
@@ -758,33 +759,49 @@ const styles = StyleSheet.create({
   headerWrapper: {
     paddingHorizontal: 20,
     paddingBottom: 10,
-    backgroundColor: '#14532d',
   },
   headerShelf: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 24,
-    backgroundColor: '#14532d',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 28,
+    backgroundColor: 'rgba(236, 253, 245, 0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(21, 101, 52, 0.2)',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 8,
   },
   headerText: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#f7fbea',
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#14532d',
   },
   menuButton: {
-    paddingHorizontal: 6,
-    paddingVertical: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderRadius: 24,
+    backgroundColor: '#ffffff',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  menuButtonActive: {
+    backgroundColor: '#dcfce7',
   },
   menuIcon: {
-    fontSize: 24,
-    color: '#f7fbea',
+    fontSize: 32,
+    color: '#14532d',
     fontWeight: '700',
   },
   menuIconActive: {
-    color: '#fefce8',
+    color: '#047857',
   },
   scroll: {
     flex: 1,
@@ -792,12 +809,6 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 24,
     gap: 28,
-  },
-  title: {
-    fontSize: 36,
-    fontWeight: '800',
-    color: '#1f6f4a',
-    textAlign: 'center',
   },
   lettuceWrapper: {
     alignSelf: 'center',
@@ -816,25 +827,27 @@ const styles = StyleSheet.create({
   backdropBubble: {
     position: 'absolute',
     borderRadius: 999,
-    opacity: 0.6,
+    opacity: 0.85,
+    borderWidth: 1,
+    borderColor: 'rgba(15, 118, 110, 0.18)',
     backgroundColor: '#bbf7d0',
   },
   backdropBubbleOne: {
     width: 220,
     height: 220,
     shadowColor: '#34d399',
-    shadowOpacity: 0.45,
-    shadowRadius: 40,
-    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.32,
+    shadowRadius: 48,
+    shadowOffset: { width: 0, height: 18 },
   },
   backdropBubbleTwo: {
     width: 170,
     height: 170,
     backgroundColor: '#c4f1f9',
     shadowColor: '#38bdf8',
-    shadowOpacity: 0.35,
-    shadowRadius: 32,
-    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.28,
+    shadowRadius: 42,
+    shadowOffset: { width: 0, height: 16 },
   },
   backdropBubbleThree: {
     width: 120,
@@ -856,6 +869,30 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 14 },
     elevation: 12,
+  },
+  backdropHalo: {
+    position: 'absolute',
+    borderRadius: 999,
+    opacity: 0.6,
+    borderWidth: 2,
+  },
+  backdropHaloOuter: {
+    width: 250,
+    height: 250,
+    backgroundColor: 'rgba(165, 243, 252, 0.25)',
+    borderColor: 'rgba(14, 116, 144, 0.25)',
+  },
+  backdropHaloMiddle: {
+    width: 200,
+    height: 200,
+    backgroundColor: 'rgba(190, 242, 100, 0.25)',
+    borderColor: 'rgba(101, 163, 13, 0.28)',
+  },
+  backdropHaloInner: {
+    width: 150,
+    height: 150,
+    backgroundColor: 'rgba(192, 132, 252, 0.22)',
+    borderColor: 'rgba(109, 40, 217, 0.28)',
   },
   lettucePressed: {
     transform: [{ scale: 0.95 }],

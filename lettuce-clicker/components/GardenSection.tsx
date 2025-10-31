@@ -777,7 +777,12 @@ export function GardenSection({
               ? 'Purchase and ready this decoration.'
               : 'Not enough harvest to purchase.'
           }>
-          <Text style={styles.emojiGlyphLarge}>{item.emoji}</Text>
+          <View style={[styles.emojiBadge, isSelected && styles.emojiBadgeSelected]}>
+            <View style={[styles.emojiBadgeGlow, isSelected && styles.emojiBadgeGlowActive]} />
+            <View style={[styles.emojiBadgeCore, isSelected && styles.emojiBadgeCoreSelected]}>
+              <Text style={[styles.emojiGlyphLarge, isSelected && styles.emojiGlyphSelected]}>{item.emoji}</Text>
+            </View>
+          </View>
           <Text style={styles.emojiTileLabel} numberOfLines={1}>
             {item.name}
           </Text>
@@ -920,7 +925,7 @@ export function GardenSection({
               }, [])}
               {currentStroke ? renderStrokeSegments(currentStroke, `${currentStroke.id}-live`) : null}
             </View>
-            {isDrawingMode ? (
+            {isDrawingMode && !penHiddenForSave ? (
               <View pointerEvents="none" style={styles.drawingModeBadge}>
                 <Text style={styles.drawingModeBadgeText}>Drawing mode</Text>
               </View>
@@ -1373,7 +1378,12 @@ function InventoryTileItem({
           accessibilityLabel={`${item.name} emoji`}
           accessibilityHint="Select to ready this decoration."
         >
-          <Text style={styles.emojiGlyphLarge}>{item.emoji}</Text>
+          <View style={[styles.emojiBadge, isSelected && styles.emojiBadgeSelected]}>
+            <View style={[styles.emojiBadgeGlow, isSelected && styles.emojiBadgeGlowActive]} />
+            <View style={[styles.emojiBadgeCore, isSelected && styles.emojiBadgeCoreSelected]}>
+              <Text style={[styles.emojiGlyphLarge, isSelected && styles.emojiGlyphSelected]}>{item.emoji}</Text>
+            </View>
+          </View>
           {item.owned > 0 ? (
             <View style={styles.emojiTileBadge}>
               <Text style={styles.emojiTileBadgeText}>×{item.owned}</Text>
@@ -1668,8 +1678,50 @@ const styles = StyleSheet.create({
   emojiTileDisabled: {
     opacity: 0.55,
   },
+  emojiBadge: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+    position: 'relative',
+  },
+  emojiBadgeGlow: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 36,
+    backgroundColor: 'rgba(56, 189, 248, 0.16)',
+  },
+  emojiBadgeGlowActive: {
+    backgroundColor: 'rgba(34, 197, 94, 0.22)',
+  },
+  emojiBadgeCore: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: 'rgba(15, 118, 110, 0.25)',
+    shadowColor: '#0f766e',
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  emojiBadgeCoreSelected: {
+    backgroundColor: '#ecfdf3',
+    borderColor: 'rgba(21, 128, 61, 0.45)',
+  },
+  emojiBadgeSelected: {
+    shadowColor: '#0f172a',
+  },
   emojiGlyphLarge: {
     fontSize: 34,
+  },
+  emojiGlyphSelected: {
+    transform: [{ scale: 1.05 }],
   },
   emojiTileLabel: {
     fontSize: 12,

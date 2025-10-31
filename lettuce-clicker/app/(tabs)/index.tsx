@@ -4,6 +4,7 @@ import {
   Alert,
   Animated,
   Easing,
+  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -23,6 +24,45 @@ const DAILY_BONUS_LAST_CLAIM_KEY = 'lettuce-click:daily-bonus-last-claim';
 const BONUS_REWARD_OPTIONS = [75, 125, 200, 325, 500, 650];
 const BONUS_ADDITIONAL_SPINS = 2;
 const DAILY_BONUS_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+const AMBIENT_TRACKS = [
+  {
+    id: 'canopy-white-noise',
+    title: 'Canopy White Noise',
+    emoji: '🌲',
+    tone: 'White noise',
+    description: 'Rustling leaves and distant wind for a focused, even hum.',
+    duration: '15 minute seamless loop',
+    file: {
+      label: 'canopy-white-noise.mp3',
+      uri: 'https://cdn.pixabay.com/download/audio/2022/02/23/audio_5e2251169a.mp3?filename=white-noise-ambient-100683.mp3',
+    },
+  },
+  {
+    id: 'grey-mist-pulse',
+    title: 'Grey Mist Pulse',
+    emoji: '🌫️',
+    tone: 'Grey noise',
+    description: 'Layered atmospheric hiss with a soft mechanical thrum.',
+    duration: '10 minute seamless loop',
+    file: {
+      label: 'grey-mist-pulse.mp3',
+      uri: 'https://cdn.pixabay.com/download/audio/2022/10/10/audio_19b0ebdc37.mp3?filename=gray-noise-ambient-121180.mp3',
+    },
+  },
+  {
+    id: 'rainy-conservatory',
+    title: 'Rainy Conservatory',
+    emoji: '🌧️',
+    tone: 'Water ambience',
+    description: 'Glasshouse rainfall with gentle drips for calm focus.',
+    duration: '20 minute seamless loop',
+    file: {
+      label: 'rainy-conservatory.mp3',
+      uri: 'https://cdn.pixabay.com/download/audio/2023/04/17/audio_22d6aeb017.mp3?filename=soft-rain-loop-145105.mp3',
+    },
+  },
+];
 
 const lightenColor = (hex: string, factor: number) => {
   const normalized = hex.replace('#', '');
@@ -81,7 +121,7 @@ export default function HomeScreen() {
   } = useGame();
   const [showGrowModal, setShowGrowModal] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [menuPage, setMenuPage] = useState<'overview' | 'themes'>('overview');
+  const [menuPage, setMenuPage] = useState<'overview' | 'themes' | 'music'>('overview');
   const [activeNotice, setActiveNotice] = useState<typeof resumeNotice>(null);
   const [showDailyBonus, setShowDailyBonus] = useState(false);
   const [availableBonusSpins, setAvailableBonusSpins] = useState(0);
@@ -112,16 +152,6 @@ export default function HomeScreen() {
   const accentRingOuter = useMemo(() => lightenColor(accentColor, 0.55), [accentColor]);
   const accentRingMiddle = useMemo(() => lightenColor(accentColor, 0.45), [accentColor]);
   const accentRingInner = useMemo(() => lightenColor(accentColor, 0.35), [accentColor]);
-  const profileCardPalette = useMemo(
-    () => ({
-      background: lightenColor(accentColor, 0.88),
-      border: lightenColor(accentColor, 0.48),
-      iconBackground: lightenColor(accentColor, 0.65),
-      iconBorder: lightenColor(accentColor, 0.38),
-      icon: accentColor,
-    }),
-    [accentColor]
-  );
   const bonusFlipRotation = useMemo(
     () =>
       flipAnimation.interpolate({
@@ -336,6 +366,12 @@ export default function HomeScreen() {
     router.push('/profile');
   }, [router]);
 
+  const handlePreviewTrack = useCallback((uri: string) => {
+    Linking.openURL(uri).catch(() => {
+      Alert.alert('Unable to open sample', 'Please try again later.');
+    });
+  }, []);
+
   const handleSelectTheme = useCallback(
     (theme: HomeEmojiTheme) => {
       setHomeEmojiTheme(theme);
@@ -344,102 +380,87 @@ export default function HomeScreen() {
     [setHomeEmojiTheme]
   );
 
+  const loadDailyBonusState = useCallback(async () => {
+    try {
+      const stored = await AsyncStorage.getItem(DAILY_BONUS_LAST_CLAIM_KEY);
+      const now = Date.now();
+      const lastClaim = stored ? Number.parseInt(stored, 10) : Number.NaN;
+
+      if (!Number.isFinite(lastClaim)) {
+        setIsDailySpinAvailable(true);
+        setDailyBonusAvailableAt(null);
+        setDailyCountdown('Ready to spin!');
+        setAvailableBonusSpins((prev) => (prev > 0 ? prev : 1));
+        return;
+      }
+
+      const nextAvailable = lastClaim + DAILY_BONUS_INTERVAL_MS;
+
+      if (now >= nextAvailable) {
+        setIsDailySpinAvailable(true);
+        setDailyBonusAvailableAt(null);
+        setDailyCountdown('Ready to spin!');
+        setAvailableBonusSpins((prev) => (prev > 0 ? prev : 1));
+        return;
+      }
+
+      setIsDailySpinAvailable(false);
+      setDailyBonusAvailableAt(nextAvailable);
+      setDailyCountdown(formatDuration(Math.max(nextAvailable - now, 0)));
+      setAvailableBonusSpins((prev) => (prev > 0 ? prev : 1));
+    } catch {
+      setIsDailySpinAvailable(true);
+      setDailyBonusAvailableAt(null);
+      setDailyCountdown('Ready to spin!');
+      setAvailableBonusSpins((prev) => (prev > 0 ? prev : 1));
+    }
+  }, []);
+
   const handleOpenDailyBonus = useCallback(() => {
     setMenuOpen(false);
     setShowDailyBonus(true);
-    setAvailableBonusSpins(0);
     setBonusMessage(null);
     setLastBonusReward(null);
     setHasWatchedBonusAd(false);
     setIsSpinningBonus(false);
     setIsWatchingAd(false);
     setHasPurchasedBonusSpins(false);
-    setIsDailySpinAvailable(false);
-    setDailyBonusAvailableAt(null);
-    setDailyCountdown(null);
-  }, []);
+    loadDailyBonusState();
+  }, [loadDailyBonusState]);
 
   const handleCloseDailyBonus = useCallback(() => {
     setShowDailyBonus(false);
   }, []);
 
   useEffect(() => {
-    if (!showDailyBonus) {
+    loadDailyBonusState();
+  }, [loadDailyBonusState]);
+
+  useEffect(() => {
+    if (showDailyBonus) {
+      loadDailyBonusState();
+    }
+  }, [showDailyBonus, loadDailyBonusState]);
+
+  useEffect(() => {
+    if (isDailySpinAvailable) {
+      setDailyCountdown('Ready to spin!');
       return;
     }
 
-    let isMounted = true;
-
-    const loadDailyBonusState = async () => {
-      try {
-        const stored = await AsyncStorage.getItem(DAILY_BONUS_LAST_CLAIM_KEY);
-        if (!isMounted) {
-          return;
-        }
-
-        const now = Date.now();
-        const lastClaim = stored ? Number.parseInt(stored, 10) : Number.NaN;
-
-        if (!Number.isFinite(lastClaim)) {
-          setIsDailySpinAvailable(true);
-          setDailyBonusAvailableAt(null);
-          setAvailableBonusSpins((prev) => (prev > 0 ? prev : 1));
-          return;
-        }
-
-        const nextAvailable = lastClaim + DAILY_BONUS_INTERVAL_MS;
-
-        if (now >= nextAvailable) {
-          setIsDailySpinAvailable(true);
-          setDailyBonusAvailableAt(null);
-          setAvailableBonusSpins((prev) => (prev > 0 ? prev : 1));
-          return;
-        }
-
-        setIsDailySpinAvailable(false);
-        setDailyBonusAvailableAt(nextAvailable);
-        setDailyCountdown(formatDuration(Math.max(nextAvailable - now, 0)));
-      } catch {
-        if (!isMounted) {
-          return;
-        }
-
-        setIsDailySpinAvailable(true);
-        setDailyBonusAvailableAt(null);
-        setAvailableBonusSpins((prev) => (prev > 0 ? prev : 1));
-      }
-    };
-
-    loadDailyBonusState();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [showDailyBonus]);
-
-  useEffect(() => {
-    if (!showDailyBonus) {
+    if (!dailyBonusAvailableAt) {
+      setDailyCountdown(null);
       return;
     }
 
     const updateCountdown = () => {
-      if (isDailySpinAvailable) {
-        setDailyCountdown('Ready to spin!');
-        return;
-      }
-
-      if (!dailyBonusAvailableAt) {
-        setDailyCountdown(null);
-        return;
-      }
-
       const remaining = dailyBonusAvailableAt - Date.now();
 
       if (remaining <= 0) {
         setDailyCountdown('Ready to spin!');
         setIsDailySpinAvailable((prev) => {
           if (!prev) {
-            setAvailableBonusSpins((spins) => spins + 1);
+            setAvailableBonusSpins((spins) => (spins > 0 ? spins : spins + 1));
           }
           return true;
         });
@@ -456,7 +477,7 @@ export default function HomeScreen() {
     return () => {
       clearInterval(interval);
     };
-  }, [showDailyBonus, dailyBonusAvailableAt, isDailySpinAvailable]);
+  }, [dailyBonusAvailableAt, isDailySpinAvailable]);
 
   const handleSpinBonus = useCallback(() => {
     if (availableBonusSpins <= 0 || isSpinningBonus) {
@@ -714,12 +735,8 @@ export default function HomeScreen() {
                     <Pressable
                       style={({ pressed }) => [
                         styles.menuItemCard,
+                        styles.menuItemHighlightCard,
                         styles.menuItemProfileCard,
-                        {
-                          backgroundColor: profileCardPalette.background,
-                          borderColor: profileCardPalette.border,
-                          shadowColor: profileCardPalette.border,
-                        },
                         pressed && styles.menuItemCardPressed,
                       ]}
                       onPress={handleNavigateProfile}
@@ -727,26 +744,23 @@ export default function HomeScreen() {
                       <View
                         style={[
                           styles.menuItemIconWrap,
+                          styles.menuItemIconWrapHighlight,
                           styles.menuItemProfileIconWrap,
-                          {
-                            backgroundColor: profileCardPalette.iconBackground,
-                            borderColor: profileCardPalette.iconBorder,
-                          },
                         ]}
                         pointerEvents="none"
                       >
                         <Text
                           style={[
                             styles.menuItemIcon,
+                            styles.menuItemIconHighlight,
                             styles.menuItemProfileIcon,
-                            { color: profileCardPalette.icon },
                           ]}
                         >
                           🌿
                         </Text>
                       </View>
                       <View style={styles.menuItemBody}>
-                        <Text style={[styles.menuItemTitle, styles.menuItemProfileTitle]}>Profile</Text>
+                        <Text style={[styles.menuItemTitle, styles.menuItemProfileTitle, styles.menuHighlight]}>Profile</Text>
                         <Text style={[styles.menuItemSubtitle, styles.menuItemProfileSubtitle]}>
                           Refresh your gardener details
                         </Text>
@@ -773,6 +787,20 @@ export default function HomeScreen() {
                       </View>
                     </Pressable>
                     <Pressable
+                      style={[styles.menuItemCard, styles.menuMusicOverviewCard]}
+                      onPress={() => setMenuPage('music')}
+                      accessibilityRole="button"
+                    >
+                      <View style={styles.menuMusicOverviewEmojiWrap}>
+                        <Text style={styles.menuMusicOverviewEmoji}>🎧</Text>
+                      </View>
+                      <View style={styles.menuItemBody}>
+                        <Text style={[styles.menuItemTitle, styles.menuHighlight]}>Music Lounge</Text>
+                        <Text style={styles.menuItemSubtitle}>Drift with loops & noises</Text>
+                      </View>
+                      <Text style={styles.menuThemeOverviewChevron}>›</Text>
+                    </Pressable>
+                    <Pressable
                       style={[styles.menuItemCard, styles.menuThemeOverviewCard]}
                       onPress={() => setMenuPage('themes')}
                       accessibilityRole="button"
@@ -783,13 +811,13 @@ export default function HomeScreen() {
                         </Text>
                       </View>
                       <View style={styles.menuItemBody}>
-                        <Text style={[styles.menuItemTitle, styles.menuThemeOverviewTitle]}>Themes Workshop</Text>
+                        <Text style={[styles.menuItemTitle, styles.menuThemeOverviewTitle]}>Themes</Text>
                         <Text style={styles.menuThemeOverviewSubtitle}>{themeOverviewSubtitle}</Text>
                       </View>
                       <Text style={styles.menuThemeOverviewChevron}>›</Text>
                     </Pressable>
                   </>
-                ) : (
+                ) : menuPage === 'themes' ? (
                   <>
                     <View style={styles.menuThemeHeader}>
                       <Pressable
@@ -799,7 +827,7 @@ export default function HomeScreen() {
                       >
                         <Text style={styles.menuThemeBackText}>Back</Text>
                       </Pressable>
-                      <Text style={styles.menuSectionTitle}>Themes Workshop</Text>
+                      <Text style={styles.menuSectionTitle}>Themes</Text>
                     </View>
                     <Text style={styles.menuThemeSubtitle}>Choose an orbit style for your garden centerpiece.</Text>
                     <ScrollView
@@ -842,6 +870,48 @@ export default function HomeScreen() {
                         unlock more.
                       </Text>
                     ) : null}
+                  </>
+                ) : (
+                  <>
+                    <View style={styles.menuThemeHeader}>
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => setMenuPage('overview')}
+                        style={styles.menuThemeBackButton}
+                      >
+                        <Text style={styles.menuThemeBackText}>Back</Text>
+                      </Pressable>
+                      <Text style={styles.menuSectionTitle}>Music Lounge</Text>
+                    </View>
+                    <Text style={styles.menuMusicSubtitle}>Queue ambient companions to keep the park humming along.</Text>
+                    <ScrollView
+                      style={styles.menuMusicScroll}
+                      contentContainerStyle={styles.menuMusicScrollContent}
+                      showsVerticalScrollIndicator
+                    >
+                      {AMBIENT_TRACKS.map((track) => (
+                        <View key={track.id} style={styles.musicTrackCard}>
+                          <View style={styles.musicTrackHeader}>
+                            <Text style={styles.musicTrackEmoji}>{track.emoji}</Text>
+                            <View style={styles.musicTrackTitleBlock}>
+                              <Text style={styles.musicTrackTitle}>{track.title}</Text>
+                              <Text style={styles.musicTrackMeta}>
+                                {track.tone} • {track.duration}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={styles.musicTrackDescription}>{track.description}</Text>
+                          <Pressable
+                            style={styles.musicTrackButton}
+                            onPress={() => handlePreviewTrack(track.file.uri)}
+                            accessibilityLabel={`Open sample for ${track.title}`}
+                          >
+                            <Text style={styles.musicTrackButtonText}>Play sample</Text>
+                          </Pressable>
+                          <Text style={styles.musicTrackFile}>{track.file.label}</Text>
+                        </View>
+                      ))}
+                    </ScrollView>
                   </>
                 )}
               </View>
@@ -1055,8 +1125,8 @@ const styles = StyleSheet.create({
   },
   lettuceWrapper: {
     alignSelf: 'center',
-    width: 240,
-    height: 240,
+    width: 280,
+    height: 280,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1076,16 +1146,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#bbf7d0',
   },
   backdropBubbleOne: {
-    width: 220,
-    height: 220,
+    width: 260,
+    height: 260,
     shadowColor: '#34d399',
     shadowOpacity: 0.32,
     shadowRadius: 48,
     shadowOffset: { width: 0, height: 18 },
   },
   backdropBubbleTwo: {
-    width: 170,
-    height: 170,
+    width: 200,
+    height: 200,
     backgroundColor: '#c4f1f9',
     shadowColor: '#38bdf8',
     shadowOpacity: 0.28,
@@ -1093,8 +1163,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 16 },
   },
   backdropBubbleThree: {
-    width: 120,
-    height: 120,
+    width: 150,
+    height: 150,
     backgroundColor: '#fef3c7',
     shadowColor: '#fbbf24',
     shadowOpacity: 0.35,
@@ -1102,9 +1172,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 18 },
   },
   lettuceButton: {
-    width: 200,
-    height: 200,
-    borderRadius: 100,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -1120,20 +1190,20 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   backdropHaloOuter: {
-    width: 250,
-    height: 250,
+    width: 300,
+    height: 300,
     backgroundColor: 'rgba(165, 243, 252, 0.25)',
     borderColor: 'rgba(14, 116, 144, 0.25)',
   },
   backdropHaloMiddle: {
-    width: 200,
-    height: 200,
+    width: 240,
+    height: 240,
     backgroundColor: 'rgba(190, 242, 100, 0.25)',
     borderColor: 'rgba(101, 163, 13, 0.28)',
   },
   backdropHaloInner: {
-    width: 150,
-    height: 150,
+    width: 188,
+    height: 188,
     backgroundColor: 'rgba(192, 132, 252, 0.22)',
     borderColor: 'rgba(109, 40, 217, 0.28)',
   },
@@ -1146,22 +1216,22 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   ringOuter: {
-    width: 200,
-    height: 200,
+    width: 240,
+    height: 240,
   },
   ringMiddle: {
-    width: 150,
-    height: 150,
+    width: 184,
+    height: 184,
   },
   ringInner: {
-    width: 108,
-    height: 108,
+    width: 132,
+    height: 132,
   },
   ringRipple: {
     borderWidth: 2.4,
   },
   lettuceEmoji: {
-    fontSize: 76,
+    fontSize: 86,
   },
   statsCard: {
     backgroundColor: '#ffffff',
@@ -1411,6 +1481,11 @@ const styles = StyleSheet.create({
     color: '#0f766e',
     fontWeight: '700',
   },
+  menuMusicOverviewCard: {
+    backgroundColor: 'rgba(13, 148, 136, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(13, 148, 136, 0.32)',
+  },
   menuPill: {
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -1426,6 +1501,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0fdf4',
     borderWidth: 1,
     borderColor: 'rgba(22, 101, 52, 0.18)',
+  },
+  menuMusicOverviewEmojiWrap: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: '#ccfbf1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuMusicOverviewEmoji: {
+    fontSize: 26,
   },
   menuThemeOverviewEmojiWrap: {
     width: 46,
@@ -1471,13 +1557,86 @@ const styles = StyleSheet.create({
     color: '#1f2937',
     lineHeight: 18,
   },
+  menuMusicSubtitle: {
+    fontSize: 13,
+    color: '#134e32',
+    lineHeight: 18,
+  },
   menuThemeScroll: {
+    maxHeight: 320,
+    borderRadius: 18,
+  },
+  menuMusicScroll: {
     maxHeight: 320,
     borderRadius: 18,
   },
   menuThemeScrollContent: {
     gap: 12,
     paddingBottom: 12,
+  },
+  menuMusicScrollContent: {
+    gap: 14,
+    paddingBottom: 12,
+  },
+  musicTrackCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 16,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(20, 83, 45, 0.12)',
+    shadowColor: '#000000',
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
+  },
+  musicTrackHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  musicTrackEmoji: {
+    fontSize: 28,
+  },
+  musicTrackTitleBlock: {
+    flex: 1,
+    gap: 2,
+  },
+  musicTrackTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f5132',
+  },
+  musicTrackMeta: {
+    fontSize: 12,
+    color: '#1f2937',
+  },
+  musicTrackDescription: {
+    fontSize: 13,
+    color: '#1f2937',
+    lineHeight: 18,
+  },
+  musicTrackButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#0f766e',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+    shadowColor: '#0f766e',
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  musicTrackButtonText: {
+    color: '#f0fff4',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  musicTrackFile: {
+    fontSize: 11,
+    color: '#0f5132',
   },
   menuThemeOptionCard: {
     flexDirection: 'row',

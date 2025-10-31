@@ -1,7 +1,21 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Alert,
+  Modal,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  Vibration,
+} from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+// eslint-disable-next-line import/no-unresolved
+import { Audio } from 'expo-av';
+import { ALARM_CHIME_DATA_URI } from '@/assets/audio/alarmChime';
 
 const MUSIC_OPTIONS = [
   {
@@ -162,8 +176,8 @@ const SERVICE_NOW_PLAYING: Record<MusicServiceId, { emoji: string; title: string
 };
 
 const SLEEP_MODE_OPTIONS = [
-  { id: 'timer', label: 'Sleep timer', description: 'Fade out and stop playback when the time ends.' },
-  { id: 'alarm', label: 'Wake alarm', description: 'Play gentle chimes when the timer finishes.' },
+  { id: 'timer', label: 'Timer', description: 'Fade out and stop playback when the time ends.' },
+  { id: 'alarm', label: 'Wake alarm', description: 'Play gentle chimes at your wake time.' },
 ] as const;
 
 const SLEEP_TIMER_PRESETS = [
@@ -175,9 +189,23 @@ const SLEEP_TIMER_PRESETS = [
   { id: '120', label: '120 min', minutes: 120 },
 ] as const;
 
-const ALARM_MINUTE_OPTIONS = Array.from({ length: 240 }, (_, index) => index + 1);
+const ALARM_HOUR_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1);
+const ALARM_MINUTE_OPTIONS = Array.from({ length: 60 }, (_, index) => index);
+const ALARM_PERIOD_OPTIONS: AlarmPeriod[] = ['AM', 'PM'];
+const WHEEL_ITEM_HEIGHT = 46;
+const WHEEL_VISIBLE_ROWS = 5;
+const WHEEL_CONTAINER_HEIGHT = WHEEL_ITEM_HEIGHT * WHEEL_VISIBLE_ROWS;
+const WHEEL_PADDING = (WHEEL_CONTAINER_HEIGHT - WHEEL_ITEM_HEIGHT) / 2;
+const ALARM_SOUND_URI = ALARM_CHIME_DATA_URI;
 
 const PRIORITIZED_GROUP_IDS = new Set(['forest', 'static', 'keys', 'ocean']);
+
+const formatAlarmDisplay = (hour: number, minute: number, period: AlarmPeriod) =>
+  `${hour}:${minute.toString().padStart(2, '0')} ${period}`;
+
+const clampTimerMinutes = (minutes: number) => Math.max(1, Math.round(minutes));
+
+const ceilingMinutesFromMs = (ms: number) => Math.max(1, Math.ceil(ms / 60000));
 
 const formatDurationLong = (minutes: number) => {
   const hours = Math.floor(minutes / 60);
@@ -211,7 +239,12 @@ type MusicOption = (typeof MUSIC_OPTIONS)[number];
 type MusicServiceId = (typeof MUSIC_SERVICES)[number]['id'];
 type MusicSource = 'mix' | MusicServiceId;
 type SleepMode = (typeof SLEEP_MODE_OPTIONS)[number]['id'];
-type SleepCircleState = { mode: SleepMode; minutes: number } | null;
+type AlarmPeriod = 'AM' | 'PM';
+
+type SleepCircleState =
+  | { mode: 'timer'; duration: number; targetTimestamp: number }
+  | { mode: 'alarm'; fireTimestamp: number; hour: number; minute: number; period: AlarmPeriod }
+  | null;
 
 type MusicContentProps = {
   mode?: 'screen' | 'modal';
@@ -228,9 +261,66 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
   const [nowPlayingSource, setNowPlayingSource] = useState<MusicSource>('mix');
   const [sleepModalOpen, setSleepModalOpen] = useState(false);
   const [sleepMode, setSleepMode] = useState<SleepMode>('timer');
-  const [sleepDuration, setSleepDuration] = useState<number>(30);
+  const [sleepTimerMinutes, setSleepTimerMinutes] = useState<number>(30);
+  const [alarmHour, setAlarmHour] = useState<number>(7);
+  const [alarmMinute, setAlarmMinute] = useState<number>(0);
+  const [alarmPeriod, setAlarmPeriod] = useState<AlarmPeriod>('AM');
   const [sleepCircle, setSleepCircle] = useState<SleepCircleState>(null);
+  const [sleepNow, setSleepNow] = useState(() => Date.now());
+  const sleepTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const alarmSoundRef = useRef<Audio.Sound | null>(null);
+  const [audioReady, setAudioReady] = useState(false);
+  const [audioError, setAudioError] = useState<Error | null>(null);
   const [showAllGroups, setShowAllGroups] = useState(false);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSleepNow(Date.now());
+    }, 15000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, staysActiveInBackground: false });
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: ALARM_SOUND_URI },
+          { shouldPlay: false, volume: 1 },
+        );
+
+        if (cancelled) {
+          await sound.unloadAsync();
+          return;
+        }
+
+        alarmSoundRef.current = sound;
+        setAudioReady(true);
+      } catch (error) {
+        if (!cancelled) {
+          setAudioError(error instanceof Error ? error : new Error('Failed to prepare alarm sound'));
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+
+      if (sleepTimeoutRef.current) {
+        clearTimeout(sleepTimeoutRef.current);
+        sleepTimeoutRef.current = null;
+      }
+
+      const sound = alarmSoundRef.current;
+      if (sound) {
+        sound.unloadAsync().catch(() => {});
+        alarmSoundRef.current = null;
+      }
+    };
+  }, []);
 
   const groupedOptions = useMemo(
     () =>
@@ -301,24 +391,44 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
   const sleepSummary = useMemo(() => {
     if (!sleepCircle) {
       return {
-        headline: 'Timer off',
-        detail: 'No timer or alarm set',
+        headline: 'Dream Capsule off',
+        detail: 'Timer and alarm idle',
       };
     }
 
-    const compact = formatDurationCompact(sleepCircle.minutes);
-    const long = formatDurationLong(sleepCircle.minutes);
     if (sleepCircle.mode === 'timer') {
+      const remainingMs = sleepCircle.targetTimestamp - sleepNow;
+
+      if (remainingMs <= 0) {
+        return {
+          headline: 'Timer · ready',
+          detail: 'Awaiting your next session',
+        };
+      }
+
+      const minutes = ceilingMinutesFromMs(remainingMs);
       return {
-        headline: `Timer · ${compact}`,
-        detail: `Stops after ${long}`,
+        headline: `Timer · ${formatDurationCompact(minutes)}`,
+        detail: `Stops in ${formatDurationLong(minutes)}`,
       };
     }
+
+    const remainingMs = sleepCircle.fireTimestamp - sleepNow;
+    const label = formatAlarmDisplay(sleepCircle.hour, sleepCircle.minute, sleepCircle.period);
+
+    if (remainingMs <= 0) {
+      return {
+        headline: `Alarm · ${label}`,
+        detail: 'Ringing momentarily',
+      };
+    }
+
+    const minutes = ceilingMinutesFromMs(remainingMs);
     return {
-      headline: `Alarm · ${compact}`,
-      detail: `Chimes after ${long}`,
+      headline: `Alarm · ${label}`,
+      detail: `Rings in ${formatDurationLong(minutes)}`,
     };
-  }, [sleepCircle]);
+  }, [sleepCircle, sleepNow]);
 
   const handleSelectTrack = useCallback((trackId: MusicOption['id']) => {
     setSelectedTrackId(trackId);
@@ -340,25 +450,103 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
     [nowPlayingSource]
   );
 
+  const handleSleepComplete = useCallback(
+    async (mode: SleepMode) => {
+      setSleepCircle(null);
+      Vibration.vibrate([0, 400, 200, 400], false);
+
+      try {
+        const sound = alarmSoundRef.current;
+        if (mode === 'alarm' && sound) {
+          await sound.replayAsync();
+        } else if (mode === 'alarm' && audioError) {
+          console.warn('Alarm sound unavailable', audioError);
+        }
+      } catch (error) {
+        console.warn('Alarm playback failed', error);
+      }
+
+      Alert.alert(
+        mode === 'timer' ? 'Timer finished' : 'Alarm ringing',
+        mode === 'timer'
+          ? 'Playback faded out with the Dream Capsule timer.'
+          : 'Time to wake up! Your Dream Capsule alarm is sounding.'
+      );
+    },
+    [audioError]
+  );
+
+  const scheduleSleepTrigger = useCallback(
+    (state: SleepCircleState) => {
+      if (sleepTimeoutRef.current) {
+        clearTimeout(sleepTimeoutRef.current);
+        sleepTimeoutRef.current = null;
+      }
+
+      if (!state) {
+        return;
+      }
+
+      const target = state.mode === 'timer' ? state.targetTimestamp : state.fireTimestamp;
+      const delay = Math.max(target - Date.now(), 0);
+
+      sleepTimeoutRef.current = setTimeout(() => {
+        handleSleepComplete(state.mode);
+      }, delay);
+    },
+    [handleSleepComplete]
+  );
+
+  useEffect(() => {
+    scheduleSleepTrigger(sleepCircle);
+  }, [scheduleSleepTrigger, sleepCircle]);
+
   const handleOpenSleepModal = useCallback(() => {
-    if (sleepCircle) {
-      setSleepMode(sleepCircle.mode);
-      setSleepDuration(sleepCircle.minutes);
+    if (sleepCircle?.mode === 'timer') {
+      const remainingMs = sleepCircle.targetTimestamp - Date.now();
+      setSleepMode('timer');
+      setSleepTimerMinutes(clampTimerMinutes(remainingMs > 0 ? remainingMs / 60000 : sleepCircle.duration));
+    } else if (sleepCircle?.mode === 'alarm') {
+      setSleepMode('alarm');
+      setAlarmHour(sleepCircle.hour);
+      setAlarmMinute(sleepCircle.minute);
+      setAlarmPeriod(sleepCircle.period);
     }
     setSleepModalOpen(true);
   }, [sleepCircle]);
 
   const handleApplySleepCircle = useCallback(() => {
-    setSleepCircle({ mode: sleepMode, minutes: sleepDuration });
-    setSleepModalOpen(false);
-  }, [sleepDuration, sleepMode]);
+    if (sleepMode === 'timer') {
+      const minutes = clampTimerMinutes(sleepTimerMinutes);
+      const targetTimestamp = Date.now() + minutes * 60000;
+      setSleepCircle({ mode: 'timer', duration: minutes, targetTimestamp });
+    } else {
+      const normalizedHour = alarmHour % 12 === 0 ? 12 : alarmHour % 12;
+      const hour24 = (normalizedHour % 12) + (alarmPeriod === 'PM' ? 12 : 0);
+      const now = new Date();
+      const target = new Date(now);
+      target.setSeconds(0, 0);
+      target.setHours(hour24, alarmMinute, 0, 0);
 
-  const handleClearSleepCircle = useCallback(() => {
-    if (sleepCircle) {
-      setSleepCircle(null);
+      if (target.getTime() <= now.getTime()) {
+        target.setDate(target.getDate() + 1);
+      }
+
+      setSleepCircle({
+        mode: 'alarm',
+        fireTimestamp: target.getTime(),
+        hour: normalizedHour,
+        minute: alarmMinute,
+        period: alarmPeriod,
+      });
     }
     setSleepModalOpen(false);
-  }, [sleepCircle]);
+  }, [alarmHour, alarmMinute, alarmPeriod, sleepMode, sleepTimerMinutes]);
+
+  const handleClearSleepCircle = useCallback(() => {
+    setSleepCircle(null);
+    setSleepModalOpen(false);
+  }, []);
 
   const handleClose = useCallback(() => {
     if (onRequestClose) {
@@ -372,6 +560,7 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
   return (
     <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 12 }]} edges={['left', 'right']}>
       <ScrollView
+        style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator
         contentInsetAdjustmentBehavior="never"
@@ -386,23 +575,22 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
             <Text style={styles.headerBackText}>{headerBackText}</Text>
           </Pressable>
           <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>Music Lounge</Text>
-            <Text style={styles.headerSubtitle}>Your day &amp; night oasis for ambient focus.</Text>
+            <Text style={styles.headerTitle}>🥬 Music Lounge</Text>
+            <Text style={styles.headerSubtitle}>Curated ambience for focus &amp; rest.</Text>
           </View>
           <Pressable
             onPress={handleOpenSleepModal}
             style={styles.sleepButton}
             accessibilityRole="button"
-            accessibilityLabel="Open sleep circle timer"
+            accessibilityLabel="Open Dream Capsule controls"
+            accessibilityHint="Set timers or wake alarms"
+            accessibilityValue={{ text: sleepSummary.headline }}
           >
-            <View style={styles.sleepButtonIconWrap}>
-              <Text style={styles.sleepButtonIcon}>🌙</Text>
+            <View style={styles.sleepGlyphBubble}>
+              <Text style={styles.sleepGlyph}>🌙</Text>
             </View>
-            <View style={styles.sleepButtonBody}>
-              <Text style={styles.sleepButtonLabel}>Sleep circle</Text>
-              <Text style={styles.sleepButtonStatus} numberOfLines={1}>
-                {sleepSummary.headline}
-              </Text>
+            <View style={styles.sleepGlyphBubble}>
+              <Text style={styles.sleepGlyph}>⏰</Text>
             </View>
           </Pressable>
         </View>
@@ -410,7 +598,7 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
         <View style={styles.nowPlayingCard}>
           <View style={styles.nowPlayingHeader}>
             <Text style={styles.nowPlayingLabel}>Now playing</Text>
-            <Text style={styles.nowPlayingStatus}>{sleepSummary.detail}</Text>
+            <Text style={styles.nowPlayingMeta}>{sleepSummary.headline}</Text>
           </View>
           <View style={styles.nowPlayingRow}>
             <View style={styles.nowPlayingEmojiWrap}>
@@ -420,6 +608,15 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
               <Text style={styles.nowPlayingTitle}>{nowPlayingDetails.title}</Text>
               <Text style={styles.nowPlayingSubtitle}>{nowPlayingDetails.subtitle}</Text>
             </View>
+          </View>
+          <View style={styles.sleepStatusBlock}>
+            <Text style={styles.sleepStatusLabel}>Dream Capsule</Text>
+            <Text style={styles.sleepStatusHeadline}>{sleepSummary.detail}</Text>
+            {!audioReady && audioError ? (
+              <Text style={styles.sleepStatusWarning}>
+                Alarm chime installs with expo-av. Until then, we’ll vibrate instead.
+              </Text>
+            ) : null}
           </View>
           <View style={styles.nowPlayingSources}>
             {availableSources.map((source) => {
@@ -565,9 +762,9 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
           <Pressable style={styles.sleepBackdrop} onPress={() => setSleepModalOpen(false)} />
           <View style={[styles.sleepCard, { paddingBottom: 24 + insets.bottom }]}>
             <View style={styles.sleepHandle} />
-            <Text style={styles.sleepTitle}>Sleep circle</Text>
+            <Text style={styles.sleepTitle}>Dream Capsule</Text>
             <Text style={styles.sleepDescription}>
-              Set a timer to fade out white noise or a wake alarm for a gentle morning.
+              Set a fade-out timer or schedule a wake alarm with a soft lettuce chime.
             </Text>
             <View style={styles.sleepModeRow}>
               {SLEEP_MODE_OPTIONS.map((option) => {
@@ -589,17 +786,17 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
               })}
             </View>
             <Text style={styles.sleepSectionLabel}>
-              {sleepMode === 'timer' ? 'Timer length' : 'Alarm'}
+              {sleepMode === 'timer' ? 'Timer length' : 'Wake time'}
             </Text>
             {sleepMode === 'timer' ? (
               <View style={styles.sleepTimerGrid}>
                 {SLEEP_TIMER_PRESETS.map((preset) => {
-                  const isActive = sleepDuration === preset.minutes;
+                  const isActive = sleepTimerMinutes === preset.minutes;
                   return (
                     <Pressable
                       key={preset.id}
                       style={[styles.sleepTimerButton, isActive && styles.sleepTimerButtonActive]}
-                      onPress={() => setSleepDuration(preset.minutes)}
+                      onPress={() => setSleepTimerMinutes(preset.minutes)}
                       accessibilityRole="button"
                       accessibilityState={{ selected: isActive }}
                     >
@@ -611,37 +808,33 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
                 })}
               </View>
             ) : (
-              <FlatList
-                style={styles.sleepAlarmList}
-                contentContainerStyle={styles.sleepAlarmListContent}
-                data={ALARM_MINUTE_OPTIONS}
-                keyExtractor={(item) => item.toString()}
-                renderItem={({ item }) => {
-                  const isActive = sleepDuration === item;
-                  return (
-                    <Pressable
-                      style={[styles.sleepAlarmButton, isActive && styles.sleepAlarmButtonActive]}
-                      onPress={() => setSleepDuration(item)}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: isActive }}
-                    >
-                      <Text style={[styles.sleepAlarmText, isActive && styles.sleepAlarmTextActive]}>
-                        {formatDurationCompact(item)}
-                      </Text>
-                    </Pressable>
-                  );
-                }}
-                numColumns={4}
-                columnWrapperStyle={styles.sleepAlarmColumn}
-                showsVerticalScrollIndicator
-                initialNumToRender={32}
-                getItemLayout={(_, index) => {
-                  const rowHeight = 52;
-                  return { length: rowHeight, offset: Math.floor(index / 4) * rowHeight, index };
-                }}
-              />
+              <View style={styles.alarmPickerRow}>
+                <WheelPicker
+                  data={ALARM_HOUR_OPTIONS}
+                  value={alarmHour}
+                  onChange={setAlarmHour}
+                  label="Alarm hour"
+                />
+                <Text style={styles.alarmPickerSeparator}>:</Text>
+                <WheelPicker
+                  data={ALARM_MINUTE_OPTIONS}
+                  value={alarmMinute}
+                  onChange={setAlarmMinute}
+                  formatter={(value) => value.toString().padStart(2, '0')}
+                  label="Alarm minute"
+                />
+                <WheelPicker
+                  data={ALARM_PERIOD_OPTIONS}
+                  value={alarmPeriod}
+                  onChange={setAlarmPeriod}
+                  label="AM or PM"
+                />
+              </View>
             )}
-            <Text style={styles.sleepActiveSummary}>{sleepSummary.detail}</Text>
+            <View style={styles.sleepActiveSummary}>
+              <Text style={styles.sleepActiveHeadline}>{sleepSummary.headline}</Text>
+              <Text style={styles.sleepActiveDetail}>{sleepSummary.detail}</Text>
+            </View>
             <View style={styles.sleepActions}>
               <Pressable
                 style={styles.sleepClearButton}
@@ -649,7 +842,7 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
                 accessibilityRole="button"
               >
                 <Text style={styles.sleepClearButtonText}>
-                  {sleepCircle ? 'Clear circle' : 'Cancel'}
+                  {sleepCircle ? 'Clear capsule' : 'Cancel'}
                 </Text>
               </Pressable>
               <Pressable
@@ -674,107 +867,170 @@ export default function MusicScreen() {
   return <MusicContent mode="screen" onRequestClose={() => router.back()} />;
 }
 
+type WheelValue = string | number;
+
+type WheelPickerProps<T extends WheelValue> = {
+  data: readonly T[];
+  value: T;
+  onChange: (value: T) => void;
+  formatter?: (value: T) => string;
+  label?: string;
+};
+
+function WheelPicker<T extends WheelValue>({
+  data,
+  value,
+  onChange,
+  formatter,
+  label = 'Alarm time selector',
+}: WheelPickerProps<T>) {
+  const scrollRef = useRef<ScrollView | null>(null);
+
+  const formatValue = useCallback((item: T) => (formatter ? formatter(item) : String(item)), [formatter]);
+
+  useEffect(() => {
+    const index = data.findIndex((item) => item === value);
+    if (index >= 0 && scrollRef.current) {
+      scrollRef.current.scrollTo({ y: index * WHEEL_ITEM_HEIGHT, animated: true });
+    }
+  }, [data, value]);
+
+  const handleMomentumEnd = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const offset = event.nativeEvent.contentOffset.y;
+      const index = Math.min(data.length - 1, Math.max(0, Math.round(offset / WHEEL_ITEM_HEIGHT)));
+      const next = data[index];
+      if (next !== undefined && next !== value) {
+        onChange(next);
+      }
+    },
+    [data, onChange, value]
+  );
+
+  const initialIndex = Math.max(data.findIndex((item) => item === value), 0);
+
+  return (
+    <View style={styles.wheelPickerContainer} accessible accessibilityLabel={label}>
+      <View style={styles.wheelPickerHighlight} pointerEvents="none" />
+      <ScrollView
+        ref={scrollRef}
+        style={styles.wheelPickerScroll}
+        contentContainerStyle={styles.wheelPickerContent}
+        showsVerticalScrollIndicator={false}
+        snapToInterval={WHEEL_ITEM_HEIGHT}
+        decelerationRate="fast"
+        snapToAlignment="center"
+        onMomentumScrollEnd={handleMomentumEnd}
+        onScrollEndDrag={handleMomentumEnd}
+        contentOffset={{ y: initialIndex * WHEEL_ITEM_HEIGHT }}
+      >
+        {data.map((item) => {
+          const formatted = formatValue(item);
+          const isActive = item === value;
+          return (
+            <View key={String(item)} style={styles.wheelPickerItem}>
+              <Text style={[styles.wheelPickerText, isActive && styles.wheelPickerTextActive]}>{formatted}</Text>
+            </View>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f2f9f2',
+    backgroundColor: '#04120c',
+  },
+  scroll: {
+    flex: 1,
+    backgroundColor: '#04120c',
   },
   content: {
     paddingHorizontal: 24,
-    paddingBottom: 36,
-    gap: 22,
+    paddingBottom: 48,
+    gap: 28,
   },
   headerRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: 16,
   },
   headerBackButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 16,
-    backgroundColor: 'rgba(22, 101, 52, 0.14)',
-    alignItems: 'center',
-    minWidth: 72,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: 'rgba(77, 255, 166, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(77, 255, 166, 0.35)',
   },
   headerBackText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#14532d',
+    color: '#86f3c1',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
   headerCenter: {
     flex: 1,
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
   },
   headerTitle: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: '800',
-    color: '#134e32',
+    color: '#f6fff6',
     textAlign: 'center',
   },
   headerSubtitle: {
     fontSize: 14,
     lineHeight: 20,
-    color: '#166534',
+    color: '#9edfb6',
     textAlign: 'center',
   },
   sleepButton: {
-    minWidth: 120,
-    borderRadius: 20,
-    backgroundColor: '#0f5132',
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-start',
+    gap: 10,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    flexDirection: 'row',
-    gap: 12,
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.2,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(18, 61, 39, 0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(77, 255, 166, 0.32)',
+    shadowColor: '#03140d',
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
   },
-  sleepButtonIconWrap: {
+  sleepGlyphBubble: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#14532d',
+    backgroundColor: 'rgba(77, 255, 166, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(77, 255, 166, 0.45)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sleepButtonIcon: {
-    fontSize: 24,
-  },
-  sleepButtonBody: {
-    flex: 1,
-    gap: 2,
-  },
-  sleepButtonLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#ecfdf5',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-  sleepButtonStatus: {
-    fontSize: 13,
-    color: '#bbf7d0',
-    fontWeight: '600',
+  sleepGlyph: {
+    fontSize: 22,
   },
   nowPlayingCard: {
-    backgroundColor: '#ecfdf5',
-    borderRadius: 26,
-    padding: 22,
-    gap: 16,
+    backgroundColor: 'rgba(10, 34, 24, 0.92)',
+    borderRadius: 28,
+    padding: 24,
+    gap: 18,
     borderWidth: 1,
-    borderColor: '#bbf7d0',
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 4,
+    borderColor: 'rgba(77, 255, 166, 0.25)',
+    shadowColor: '#021008',
+    shadowOpacity: 0.45,
+    shadowRadius: 26,
+    shadowOffset: { width: 0, height: 18 },
+    elevation: 8,
   },
   nowPlayingHeader: {
     flexDirection: 'row',
@@ -784,44 +1040,68 @@ const styles = StyleSheet.create({
   nowPlayingLabel: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#047857',
+    color: '#74f0ba',
+    letterSpacing: 1,
     textTransform: 'uppercase',
-    letterSpacing: 0.6,
   },
-  nowPlayingStatus: {
+  nowPlayingMeta: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#0f5132',
+    color: '#caffd6',
   },
   nowPlayingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 18,
   },
   nowPlayingEmojiWrap: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#bbf7d0',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(77, 255, 166, 0.22)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   nowPlayingEmoji: {
-    fontSize: 32,
+    fontSize: 34,
   },
   nowPlayingBody: {
     flex: 1,
-    gap: 4,
+    gap: 6,
   },
   nowPlayingTitle: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#134e32',
+    color: '#f6fff6',
   },
   nowPlayingSubtitle: {
     fontSize: 13,
-    color: '#1f2937',
     lineHeight: 18,
+    color: '#9cbda9',
+  },
+  sleepStatusBlock: {
+    gap: 4,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: 'rgba(8, 30, 21, 0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(77, 255, 166, 0.18)',
+  },
+  sleepStatusLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#6ee7b7',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  sleepStatusHeadline: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#e7fff2',
+  },
+  sleepStatusWarning: {
+    fontSize: 12,
+    color: '#fcd34d',
   },
   nowPlayingSources: {
     flexDirection: 'row',
@@ -829,80 +1109,70 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   sourcePill: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.45)',
-    backgroundColor: '#f0fdf4',
+    borderColor: 'rgba(77, 255, 166, 0.3)',
+    backgroundColor: 'rgba(7, 28, 19, 0.9)',
   },
   sourcePillActive: {
-    backgroundColor: '#047857',
-    borderColor: '#047857',
-    shadowColor: '#047857',
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
+    backgroundColor: '#2dd78f',
+    borderColor: '#2dd78f',
+    shadowColor: '#2dd78f',
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
   },
   sourcePillText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#047857',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#caffd6',
   },
   sourcePillTextActive: {
-    color: '#ecfdf5',
+    color: '#062014',
   },
   serviceSection: {
-    gap: 10,
+    gap: 12,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#14532d',
+    color: '#e7fff2',
   },
   sectionSubtitle: {
     fontSize: 13,
-    color: '#1f2937',
-    lineHeight: 18,
+    color: '#94b8a4',
+    lineHeight: 19,
   },
   serviceList: {
-    gap: 10,
+    gap: 12,
   },
   serviceCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    backgroundColor: '#ffffff',
+    gap: 14,
+    backgroundColor: 'rgba(8, 26, 18, 0.9)',
     borderRadius: 20,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    padding: 18,
     borderWidth: 1,
-    borderColor: 'rgba(20, 83, 45, 0.12)',
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
+    borderColor: 'rgba(77, 255, 166, 0.14)',
   },
   serviceCardConnected: {
-    borderColor: '#10b981',
-    backgroundColor: '#ecfdf5',
-    shadowColor: '#10b981',
-    shadowOpacity: 0.18,
+    borderColor: 'rgba(77, 255, 166, 0.4)',
+    backgroundColor: 'rgba(9, 36, 24, 0.95)',
   },
   serviceIconWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#ecfdf5',
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: 'rgba(77, 255, 166, 0.18)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   serviceIconWrapConnected: {
-    backgroundColor: '#bbf7d0',
+    backgroundColor: 'rgba(77, 255, 166, 0.28)',
   },
   serviceIcon: {
     fontSize: 28,
@@ -914,290 +1184,312 @@ const styles = StyleSheet.create({
   serviceName: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#134e32',
+    color: '#ecfff6',
   },
   serviceNameConnected: {
-    color: '#047857',
+    color: '#86f3c1',
   },
   serviceDescription: {
     fontSize: 13,
-    color: '#1f2937',
+    color: '#92af9f',
     lineHeight: 18,
   },
   serviceStatus: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#0f5132',
+    color: '#82cfa6',
   },
   serviceStatusConnected: {
-    color: '#047857',
+    color: '#46f09d',
   },
   groupSection: {
-    gap: 10,
+    gap: 14,
   },
   groupToggle: {
     alignSelf: 'flex-start',
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: '#e0f2f1',
+    backgroundColor: 'rgba(8, 26, 18, 0.9)',
+    borderWidth: 1,
+    borderColor: 'rgba(77, 255, 166, 0.28)',
   },
   groupToggleText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#0f766e',
+    color: '#6ee7b7',
+    letterSpacing: 0.8,
     textTransform: 'uppercase',
-    letterSpacing: 0.6,
   },
   secondaryGroup: {
-    gap: 10,
+    gap: 14,
   },
   groupTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#14532d',
+    color: '#f7fff9',
   },
   groupDescription: {
     fontSize: 13,
-    color: '#1f2937',
+    color: '#9cbda9',
   },
   optionList: {
-    gap: 10,
+    gap: 12,
   },
   optionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    backgroundColor: '#ffffff',
-    borderRadius: 18,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    gap: 14,
+    backgroundColor: 'rgba(9, 26, 18, 0.92)',
+    borderRadius: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: 'rgba(20, 83, 45, 0.12)',
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
+    borderColor: 'rgba(77, 255, 166, 0.18)',
+    shadowColor: '#021007',
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 3,
   },
   optionRowActive: {
-    borderColor: '#10b981',
-    shadowColor: '#10b981',
-    shadowOpacity: 0.22,
+    borderColor: '#2dd78f',
+    shadowColor: '#2dd78f',
+    shadowOpacity: 0.45,
   },
   optionEmojiWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#ecfdf5',
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(77, 255, 166, 0.16)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   optionEmojiWrapActive: {
-    backgroundColor: '#bbf7d0',
+    backgroundColor: 'rgba(77, 255, 166, 0.28)',
   },
   optionEmoji: {
-    fontSize: 26,
+    fontSize: 28,
   },
   optionEmojiActive: {
-    transform: [{ scale: 1.08 }],
+    transform: [{ scale: 1.1 }],
   },
   optionBody: {
     flex: 1,
-    gap: 2,
+    gap: 4,
   },
   optionName: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#134e32',
+    color: '#f6fff6',
   },
   optionNameActive: {
-    color: '#0f766e',
+    color: '#86f3c1',
   },
   optionDescription: {
     fontSize: 12,
-    lineHeight: 16,
-    color: '#1f2937',
+    lineHeight: 17,
+    color: '#97b2a4',
   },
   optionBadge: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#047857',
+    color: '#6ee7b7',
   },
   sleepOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 31, 23, 0.55)',
+    backgroundColor: 'rgba(4, 12, 8, 0.82)',
     justifyContent: 'flex-end',
   },
   sleepBackdrop: {
     ...StyleSheet.absoluteFillObject,
   },
   sleepCard: {
-    backgroundColor: '#f8fffb',
+    backgroundColor: 'rgba(3, 16, 10, 0.98)',
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
     paddingHorizontal: 24,
-    paddingTop: 18,
-    gap: 18,
+    paddingTop: 22,
+    gap: 20,
   },
   sleepHandle: {
     alignSelf: 'center',
-    width: 48,
+    width: 52,
     height: 5,
     borderRadius: 999,
-    backgroundColor: '#bbf7d0',
+    backgroundColor: 'rgba(77, 255, 166, 0.28)',
   },
   sleepTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '800',
-    color: '#134e32',
+    color: '#f6fff6',
     textAlign: 'center',
   },
   sleepDescription: {
     fontSize: 13,
-    color: '#166534',
-    lineHeight: 18,
+    color: '#8fb59f',
     textAlign: 'center',
+    lineHeight: 18,
   },
   sleepModeRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 12,
   },
   sleepModeButton: {
     flex: 1,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.35)',
-    backgroundColor: '#f0fdf4',
-    paddingVertical: 12,
+    borderColor: 'rgba(77, 255, 166, 0.14)',
+    paddingVertical: 16,
     paddingHorizontal: 14,
     gap: 6,
+    backgroundColor: 'rgba(7, 24, 16, 0.9)',
   },
   sleepModeButtonActive: {
-    backgroundColor: '#047857',
-    borderColor: '#047857',
-    shadowColor: '#047857',
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
+    backgroundColor: 'rgba(18, 60, 39, 0.95)',
+    borderColor: '#2dd78f',
   },
   sleepModeLabel: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#047857',
+    color: '#8fb59f',
   },
   sleepModeLabelActive: {
-    color: '#ecfdf5',
+    color: '#f6fff6',
   },
   sleepModeDescription: {
     fontSize: 12,
-    color: '#166534',
+    color: '#6f8d7c',
     lineHeight: 16,
   },
   sleepSectionLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
-    color: '#14532d',
+    color: '#6ee7b7',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
   sleepTimerGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 10,
   },
   sleepTimerButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(20, 83, 45, 0.2)',
-    backgroundColor: '#ffffff',
+    borderColor: 'rgba(77, 255, 166, 0.18)',
+    backgroundColor: 'rgba(7, 24, 16, 0.9)',
   },
   sleepTimerButtonActive: {
-    backgroundColor: '#10b981',
-    borderColor: '#0f766e',
+    backgroundColor: 'rgba(18, 60, 39, 0.95)',
+    borderColor: '#2dd78f',
   },
   sleepTimerText: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#14532d',
+    color: '#caffd6',
   },
   sleepTimerTextActive: {
-    color: '#ecfdf5',
+    color: '#062014',
   },
-  sleepAlarmList: {
-    maxHeight: 220,
-  },
-  sleepAlarmListContent: {
-    paddingVertical: 4,
-  },
-  sleepAlarmColumn: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  sleepAlarmButton: {
-    flex: 1,
-    minWidth: 60,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(20, 83, 45, 0.2)',
-    backgroundColor: '#ffffff',
+  alarmPickerRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
+    gap: 12,
+    justifyContent: 'space-between',
   },
-  sleepAlarmButtonActive: {
-    backgroundColor: '#10b981',
-    borderColor: '#0f766e',
-  },
-  sleepAlarmText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#14532d',
-  },
-  sleepAlarmTextActive: {
-    color: '#ecfdf5',
+  alarmPickerSeparator: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#6ee7b7',
   },
   sleepActiveSummary: {
-    fontSize: 13,
-    color: '#166534',
-    textAlign: 'center',
+    gap: 4,
+    alignItems: 'center',
+  },
+  sleepActiveHeadline: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#caffd6',
+  },
+  sleepActiveDetail: {
+    fontSize: 12,
+    color: '#8fb59f',
   },
   sleepActions: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 14,
   },
   sleepClearButton: {
     flex: 1,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#bbf7d0',
-    paddingVertical: 12,
+    borderColor: 'rgba(77, 255, 166, 0.28)',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#ffffff',
+    paddingVertical: 14,
   },
   sleepClearButtonText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
-    color: '#14532d',
+    color: '#86f3c1',
   },
   sleepApplyButton: {
     flex: 1,
     borderRadius: 16,
-    paddingVertical: 12,
+    backgroundColor: '#2dd78f',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#047857',
-    shadowColor: '#047857',
-    shadowOpacity: 0.18,
+    paddingVertical: 14,
+    shadowColor: '#2dd78f',
+    shadowOpacity: 0.4,
     shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
   },
   sleepApplyButtonText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
-    color: '#ecfdf5',
+    color: '#04120c',
+  },
+  wheelPickerContainer: {
+    height: WHEEL_CONTAINER_HEIGHT,
+    width: 64,
+    borderRadius: 18,
+    backgroundColor: 'rgba(7, 24, 16, 0.9)',
+    borderWidth: 1,
+    borderColor: 'rgba(77, 255, 166, 0.18)',
+    overflow: 'hidden',
+  },
+  wheelPickerHighlight: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: (WHEEL_CONTAINER_HEIGHT - WHEEL_ITEM_HEIGHT) / 2,
+    height: WHEEL_ITEM_HEIGHT,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: 'rgba(77, 255, 166, 0.35)',
+    backgroundColor: 'rgba(18, 60, 39, 0.35)',
+  },
+  wheelPickerScroll: {
+    flex: 1,
+  },
+  wheelPickerContent: {
+    paddingVertical: WHEEL_PADDING,
+  },
+  wheelPickerItem: {
+    height: WHEEL_ITEM_HEIGHT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  wheelPickerText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#6f8d7c',
+  },
+  wheelPickerTextActive: {
+    color: '#f6fff6',
   },
 });
+

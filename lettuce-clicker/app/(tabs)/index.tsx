@@ -136,7 +136,7 @@ export default function HomeScreen() {
   const ownedThemeList = useMemo(
     () =>
       emojiThemes
-        .filter((theme) => ownedThemes[theme.id])
+        .filter((theme) => ownedThemes[theme.id] || theme.cost === 0)
         .sort((a, b) => {
           if (a.cost === b.cost) {
             return a.name.localeCompare(b.name);
@@ -623,9 +623,9 @@ export default function HomeScreen() {
                         <Text style={[styles.menuItemIcon, styles.quickActionIcon]}>🎧</Text>
                       </View>
                       <View style={styles.menuItemBody}>
-                        <Text style={[styles.menuItemTitle, styles.quickActionTitle]}>Music Lounge</Text>
+                        <Text style={[styles.menuItemTitle, styles.quickActionTitle]}>🥬 Music Lounge</Text>
                         <Text style={[styles.menuItemSubtitle, styles.quickActionSubtitle]}>
-                          Your Day &amp; Night Oasis
+                          Curated ambience for focus &amp; rest
                         </Text>
                       </View>
                       <View style={[styles.menuItemMeta, styles.quickActionMeta]} pointerEvents="none">

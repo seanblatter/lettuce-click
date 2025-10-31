@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -32,6 +32,7 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
     emojiInventory,
     registerCustomEmoji,
   } = useGame();
+  const insets = useSafeAreaInsets();
   const [name, setName] = useState(profileName);
   const [username, setUsername] = useState(profileUsername);
   const [isSaving, setIsSaving] = useState(false);
@@ -197,17 +198,28 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
   const closeLabel = isModal ? 'Back' : '← Back';
   const closeButtonStyle = isModal ? styles.modalBackButton : styles.backButton;
   const closeTextStyle = isModal ? styles.modalBackLabel : styles.backLabel;
+  const containerStyle = useMemo(() => [styles.safeArea, { paddingTop: insets.top + 12 }], [insets.top]);
+  const contentStyle = useMemo(
+    () => [styles.content, { paddingBottom: 40 + insets.bottom }],
+    [insets.bottom]
+  );
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={containerStyle} edges={['left', 'right']}>
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={contentStyle}
         showsVerticalScrollIndicator
         contentInsetAdjustmentBehavior="never"
       >
-        <Pressable onPress={handleClose} style={closeButtonStyle} accessibilityLabel={closeAccessibilityLabel}>
-          <Text style={closeTextStyle}>{closeLabel}</Text>
-        </Pressable>
+        <View style={styles.topBar}>
+          <Pressable
+            onPress={handleClose}
+            style={closeButtonStyle}
+            accessibilityLabel={closeAccessibilityLabel}
+          >
+            <Text style={closeTextStyle}>{closeLabel}</Text>
+          </Pressable>
+        </View>
 
         <View style={styles.headerCard}>
           <Pressable style={styles.avatarButton} onPress={handlePickImage} accessibilityLabel="Choose profile image">
@@ -354,6 +366,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingBottom: 40,
     gap: 24,
+  },
+  topBar: {
+    marginBottom: 8,
+    alignItems: 'flex-start',
   },
   backButton: {
     alignSelf: 'flex-start',

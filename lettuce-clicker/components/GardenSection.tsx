@@ -776,7 +776,7 @@ export function GardenSection({
   }, [addPhotoPlacement, getCanvasCenter, isPickingPhoto, setShowPalette]);
 
   const handleAddText = useCallback(() => {
-    const trimmed = textDraft.trim();
+    const trimmed = textDraft.replace(/\n+/g, ' ').trim();
 
     if (trimmed.length === 0) {
       return;
@@ -789,8 +789,10 @@ export function GardenSection({
 
     if (added) {
       setTextDraft('');
+      setShowPalette(false);
+      Keyboard.dismiss();
     }
-  }, [addTextPlacement, getCanvasCenter, penColor, selectedTextStyle, textDraft, textScale]);
+  }, [addTextPlacement, getCanvasCenter, penColor, selectedTextStyle, setShowPalette, textDraft, textScale]);
 
   const handleTextSliderChange = useCallback(
     (locationX: number) => {
@@ -1411,7 +1413,7 @@ export function GardenSection({
             ]}
           >
             <View style={styles.paletteHandle} />
-            <Text style={styles.paletteTitle}>Garden Atelier</Text>
+            <Text style={styles.paletteTitle}>Garden Studio</Text>
             <Text style={styles.paletteSubtitle}>
               Tune your pen, lettering, and photo charms without leaving the garden.
             </Text>
@@ -1585,16 +1587,7 @@ export function GardenSection({
                     multiline
                     blurOnSubmit
                     returnKeyType="done"
-                    onSubmitEditing={() => {
-                      Keyboard.dismiss();
-                      setTextDraft((prev) => prev.replace(/\n+/g, ' ').trim());
-                    }}
-                    onKeyPress={({ nativeEvent }) => {
-                      if (nativeEvent.key === 'Enter') {
-                        Keyboard.dismiss();
-                        setTextDraft((prev) => prev.replace(/\n+/g, ' ').trim());
-                      }
-                    }}
+                    onSubmitEditing={handleAddText}
                   />
                   <Pressable
                     style={[
@@ -1651,7 +1644,10 @@ export function GardenSection({
                   <Pressable
                     key={option.id}
                     style={[styles.fontOption, isActive && styles.fontOptionActive]}
-                    onPress={() => setSelectedTextStyle(option.id)}
+                    onPress={() => {
+                      setSelectedTextStyle(option.id);
+                      setFontPickerVisible(false);
+                    }}
                     accessibilityRole="button"
                     accessibilityState={{ selected: isActive }}
                     accessibilityLabel={`${option.label} text style`}
@@ -2869,7 +2865,8 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-end',
     backgroundColor: 'rgba(15, 31, 23, 0.55)',
-    paddingBottom: 16,
+    paddingBottom: 0,
+    alignItems: 'stretch',
   },
   paletteBackdrop: {
     ...StyleSheet.absoluteFillObject,
@@ -2881,6 +2878,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingTop: 14,
     gap: 14,
+    alignSelf: 'stretch',
     shadowColor: '#0f2e20',
     shadowOpacity: 0.16,
     shadowRadius: 18,

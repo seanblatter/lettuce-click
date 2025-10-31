@@ -144,11 +144,11 @@ const upgradeCatalog: UpgradeDefinition[] = [
   },
   {
     id: 'gardeners-gloves',
-    name: 'Verdant Grip Gloves',
-    description: 'Adds +5 clicks per second with a leaf-soft, steady grip.',
+    name: 'Bloomguard Gloves',
+    description: 'Adds +5 clicks per second with bloom-bright protection.',
     cost: 100,
     increment: 5,
-    emoji: '🧤',
+    emoji: '🌱',
   },
   {
     id: 'sun-soaker',

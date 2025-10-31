@@ -112,16 +112,6 @@ export default function HomeScreen() {
   const accentRingOuter = useMemo(() => lightenColor(accentColor, 0.55), [accentColor]);
   const accentRingMiddle = useMemo(() => lightenColor(accentColor, 0.45), [accentColor]);
   const accentRingInner = useMemo(() => lightenColor(accentColor, 0.35), [accentColor]);
-  const profileCardPalette = useMemo(
-    () => ({
-      background: lightenColor(accentColor, 0.88),
-      border: lightenColor(accentColor, 0.48),
-      iconBackground: lightenColor(accentColor, 0.65),
-      iconBorder: lightenColor(accentColor, 0.38),
-      icon: accentColor,
-    }),
-    [accentColor]
-  );
   const bonusFlipRotation = useMemo(
     () =>
       flipAnimation.interpolate({
@@ -164,7 +154,7 @@ export default function HomeScreen() {
   );
   const dailyMenuStatus = useMemo(() => {
     if (isDailySpinAvailable) {
-      return 'Ready!';
+      return 'Ready! ❗';
     }
 
     if (!dailyCountdown) {
@@ -172,7 +162,7 @@ export default function HomeScreen() {
     }
 
     if (dailyCountdown.toLowerCase().includes('ready')) {
-      return 'Ready!';
+      return 'Ready! ❗';
     }
 
     return dailyCountdown;
@@ -336,6 +326,11 @@ export default function HomeScreen() {
     router.push('/profile');
   }, [router]);
 
+  const handleOpenMusic = useCallback(() => {
+    setMenuOpen(false);
+    router.push('/music');
+  }, [router]);
+
   const handleSelectTheme = useCallback(
     (theme: HomeEmojiTheme) => {
       setHomeEmojiTheme(theme);
@@ -344,87 +339,75 @@ export default function HomeScreen() {
     [setHomeEmojiTheme]
   );
 
+  const refreshDailyBonusState = useCallback(async () => {
+    try {
+      const stored = await AsyncStorage.getItem(DAILY_BONUS_LAST_CLAIM_KEY);
+      const now = Date.now();
+      const lastClaim = stored ? Number.parseInt(stored, 10) : Number.NaN;
+
+      if (!Number.isFinite(lastClaim)) {
+        setIsDailySpinAvailable(true);
+        setDailyBonusAvailableAt(null);
+        setAvailableBonusSpins((prev) => (prev > 0 ? prev : 1));
+        return;
+      }
+
+      const nextAvailable = lastClaim + DAILY_BONUS_INTERVAL_MS;
+
+      if (now >= nextAvailable) {
+        setIsDailySpinAvailable(true);
+        setDailyBonusAvailableAt(null);
+        setAvailableBonusSpins((prev) => (prev > 0 ? prev : 1));
+        return;
+      }
+
+      setIsDailySpinAvailable(false);
+      setDailyBonusAvailableAt(nextAvailable);
+    } catch {
+      setIsDailySpinAvailable(true);
+      setDailyBonusAvailableAt(null);
+      setAvailableBonusSpins((prev) => (prev > 0 ? prev : 1));
+    }
+  }, []);
+
   const handleOpenDailyBonus = useCallback(() => {
     setMenuOpen(false);
     setShowDailyBonus(true);
-    setAvailableBonusSpins(0);
     setBonusMessage(null);
     setLastBonusReward(null);
     setHasWatchedBonusAd(false);
     setIsSpinningBonus(false);
     setIsWatchingAd(false);
     setHasPurchasedBonusSpins(false);
-    setIsDailySpinAvailable(false);
-    setDailyBonusAvailableAt(null);
-    setDailyCountdown(null);
-  }, []);
+    refreshDailyBonusState();
+  }, [refreshDailyBonusState]);
 
   const handleCloseDailyBonus = useCallback(() => {
     setShowDailyBonus(false);
   }, []);
 
   useEffect(() => {
-    if (!showDailyBonus) {
-      return;
-    }
-
-    let isMounted = true;
-
-    const loadDailyBonusState = async () => {
-      try {
-        const stored = await AsyncStorage.getItem(DAILY_BONUS_LAST_CLAIM_KEY);
-        if (!isMounted) {
-          return;
-        }
-
-        const now = Date.now();
-        const lastClaim = stored ? Number.parseInt(stored, 10) : Number.NaN;
-
-        if (!Number.isFinite(lastClaim)) {
-          setIsDailySpinAvailable(true);
-          setDailyBonusAvailableAt(null);
-          setAvailableBonusSpins((prev) => (prev > 0 ? prev : 1));
-          return;
-        }
-
-        const nextAvailable = lastClaim + DAILY_BONUS_INTERVAL_MS;
-
-        if (now >= nextAvailable) {
-          setIsDailySpinAvailable(true);
-          setDailyBonusAvailableAt(null);
-          setAvailableBonusSpins((prev) => (prev > 0 ? prev : 1));
-          return;
-        }
-
-        setIsDailySpinAvailable(false);
-        setDailyBonusAvailableAt(nextAvailable);
-        setDailyCountdown(formatDuration(Math.max(nextAvailable - now, 0)));
-      } catch {
-        if (!isMounted) {
-          return;
-        }
-
-        setIsDailySpinAvailable(true);
-        setDailyBonusAvailableAt(null);
-        setAvailableBonusSpins((prev) => (prev > 0 ? prev : 1));
-      }
-    };
-
-    loadDailyBonusState();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [showDailyBonus]);
+    refreshDailyBonusState();
+  }, [refreshDailyBonusState]);
 
   useEffect(() => {
-    if (!showDailyBonus) {
+    if (!menuOpen) {
       return;
     }
 
+    refreshDailyBonusState();
+  }, [menuOpen, refreshDailyBonusState]);
+
+  useEffect(() => {
+    if (showDailyBonus) {
+      refreshDailyBonusState();
+    }
+  }, [showDailyBonus, refreshDailyBonusState]);
+
+  useEffect(() => {
     const updateCountdown = () => {
       if (isDailySpinAvailable) {
-        setDailyCountdown('Ready to spin!');
+        setDailyCountdown('Ready to spin! ❗');
         return;
       }
 
@@ -436,10 +419,10 @@ export default function HomeScreen() {
       const remaining = dailyBonusAvailableAt - Date.now();
 
       if (remaining <= 0) {
-        setDailyCountdown('Ready to spin!');
+        setDailyCountdown('Ready to spin! ❗');
         setIsDailySpinAvailable((prev) => {
           if (!prev) {
-            setAvailableBonusSpins((spins) => spins + 1);
+            setAvailableBonusSpins((spins) => (spins > 0 ? spins : 1));
           }
           return true;
         });
@@ -456,7 +439,7 @@ export default function HomeScreen() {
     return () => {
       clearInterval(interval);
     };
-  }, [showDailyBonus, dailyBonusAvailableAt, isDailySpinAvailable]);
+  }, [dailyBonusAvailableAt, isDailySpinAvailable]);
 
   const handleSpinBonus = useCallback(() => {
     if (availableBonusSpins <= 0 || isSpinningBonus) {
@@ -714,79 +697,104 @@ export default function HomeScreen() {
                     <Pressable
                       style={({ pressed }) => [
                         styles.menuItemCard,
-                        styles.menuItemProfileCard,
-                        {
-                          backgroundColor: profileCardPalette.background,
-                          borderColor: profileCardPalette.border,
-                          shadowColor: profileCardPalette.border,
-                        },
+                        styles.quickActionCard,
                         pressed && styles.menuItemCardPressed,
                       ]}
                       onPress={handleNavigateProfile}
                     >
                       <View
-                        style={[
-                          styles.menuItemIconWrap,
-                          styles.menuItemProfileIconWrap,
-                          {
-                            backgroundColor: profileCardPalette.iconBackground,
-                            borderColor: profileCardPalette.iconBorder,
-                          },
-                        ]}
+                        style={[styles.menuItemIconWrap, styles.quickActionIconWrap]}
                         pointerEvents="none"
                       >
-                        <Text
-                          style={[
-                            styles.menuItemIcon,
-                            styles.menuItemProfileIcon,
-                            { color: profileCardPalette.icon },
-                          ]}
-                        >
-                          🌿
-                        </Text>
+                        <Text style={[styles.menuItemIcon, styles.quickActionIcon]}>🌿</Text>
                       </View>
                       <View style={styles.menuItemBody}>
-                        <Text style={[styles.menuItemTitle, styles.menuItemProfileTitle]}>Profile</Text>
-                        <Text style={[styles.menuItemSubtitle, styles.menuItemProfileSubtitle]}>
+                        <Text style={[styles.menuItemTitle, styles.quickActionTitle]}>Profile</Text>
+                        <Text style={[styles.menuItemSubtitle, styles.quickActionSubtitle]}>
                           Refresh your gardener details
                         </Text>
                       </View>
-                      <View style={styles.menuItemMeta} pointerEvents="none">
-                        <Text style={styles.menuItemChevron}>›</Text>
+                      <View style={[styles.menuItemMeta, styles.quickActionMeta]} pointerEvents="none">
+                        <Text style={[styles.menuItemChevron, styles.quickActionChevron]}>›</Text>
                       </View>
                     </Pressable>
                     <Pressable
-                      style={[styles.menuItemCard, styles.menuItemHighlightCard]}
+                      style={({ pressed }) => [
+                        styles.menuItemCard,
+                        styles.quickActionCard,
+                        pressed && styles.menuItemCardPressed,
+                      ]}
                       onPress={handleOpenDailyBonus}
                     >
-                      <View style={[styles.menuItemIconWrap, styles.menuItemIconWrapHighlight]} pointerEvents="none">
-                        <Text style={[styles.menuItemIcon, styles.menuItemIconHighlight]}>🎁</Text>
+                      <View
+                        style={[styles.menuItemIconWrap, styles.quickActionIconWrap]}
+                        pointerEvents="none"
+                      >
+                        <Text style={[styles.menuItemIcon, styles.quickActionIcon]}>🎁</Text>
                       </View>
                       <View style={styles.menuItemBody}>
-                        <Text style={[styles.menuItemTitle, styles.menuHighlight]}>Daily Bonus</Text>
-                        <Text style={styles.menuItemSubtitle}>Spin for surprise clicks</Text>
+                        <Text style={[styles.menuItemTitle, styles.quickActionTitle]}>Daily Bonus</Text>
+                        <Text style={[styles.menuItemSubtitle, styles.quickActionSubtitle]}>
+                          Spin for surprise clicks
+                        </Text>
                       </View>
-                      <View style={styles.menuItemMeta} pointerEvents="none">
-                        <View style={styles.menuPill}>
-                          <Text style={styles.menuPillText}>{dailyMenuStatus}</Text>
+                      <View style={[styles.menuItemMeta, styles.quickActionMeta]} pointerEvents="none">
+                        <View style={[styles.menuPill, styles.quickActionPill]}>
+                          <Text style={[styles.menuPillText, styles.quickActionPillText]}>{dailyMenuStatus}</Text>
                         </View>
                       </View>
                     </Pressable>
                     <Pressable
-                      style={[styles.menuItemCard, styles.menuThemeOverviewCard]}
+                      style={({ pressed }) => [
+                        styles.menuItemCard,
+                        styles.quickActionCard,
+                        pressed && styles.menuItemCardPressed,
+                      ]}
+                      onPress={handleOpenMusic}
+                      accessibilityRole="button"
+                    >
+                      <View
+                        style={[styles.menuItemIconWrap, styles.quickActionIconWrap]}
+                        pointerEvents="none"
+                      >
+                        <Text style={[styles.menuItemIcon, styles.quickActionIcon]}>🎧</Text>
+                      </View>
+                      <View style={styles.menuItemBody}>
+                        <Text style={[styles.menuItemTitle, styles.quickActionTitle]}>Music Lounge</Text>
+                        <Text style={[styles.menuItemSubtitle, styles.quickActionSubtitle]}>
+                          Mix white and grey garden tunes
+                        </Text>
+                      </View>
+                      <View style={[styles.menuItemMeta, styles.quickActionMeta]} pointerEvents="none">
+                        <Text style={[styles.menuItemChevron, styles.quickActionChevron]}>›</Text>
+                      </View>
+                    </Pressable>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.menuItemCard,
+                        styles.quickActionCard,
+                        pressed && styles.menuItemCardPressed,
+                      ]}
                       onPress={() => setMenuPage('themes')}
                       accessibilityRole="button"
                     >
-                      <View style={styles.menuThemeOverviewEmojiWrap}>
-                        <Text style={styles.menuThemeOverviewEmoji}>
+                      <View
+                        style={[styles.menuItemIconWrap, styles.quickActionIconWrap]}
+                        pointerEvents="none"
+                      >
+                        <Text style={[styles.menuItemIcon, styles.quickActionIcon]}>
                           {activeThemeDefinition?.emoji ?? '✨'}
                         </Text>
                       </View>
                       <View style={styles.menuItemBody}>
-                        <Text style={[styles.menuItemTitle, styles.menuThemeOverviewTitle]}>Themes Workshop</Text>
-                        <Text style={styles.menuThemeOverviewSubtitle}>{themeOverviewSubtitle}</Text>
+                        <Text style={[styles.menuItemTitle, styles.quickActionTitle]}>Themes Workshop</Text>
+                        <Text style={[styles.menuItemSubtitle, styles.quickActionSubtitle]}>
+                          {themeOverviewSubtitle}
+                        </Text>
                       </View>
-                      <Text style={styles.menuThemeOverviewChevron}>›</Text>
+                      <View style={[styles.menuItemMeta, styles.quickActionMeta]} pointerEvents="none">
+                        <Text style={[styles.menuItemChevron, styles.quickActionChevron]}>›</Text>
+                      </View>
                     </Pressable>
                   </>
                 ) : (
@@ -1327,12 +1335,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     elevation: 3,
   },
-  menuItemProfileCard: {
-    shadowOpacity: 0.12,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 6,
-  },
   menuItemCardPressed: {
     transform: [{ scale: 0.98 }],
   },
@@ -1346,32 +1348,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  menuItemIconWrapHighlight: {
-    backgroundColor: '#14532d',
-    borderColor: '#0b3d2c',
-    shadowColor: '#0b3d2c',
-    shadowOpacity: 0.28,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
-  },
   menuItemIcon: {
     fontSize: 26,
     color: '#134e32',
-  },
-  menuItemIconHighlight: {
-    color: '#f0fff4',
-  },
-  menuItemProfileIconWrap: {
-    shadowColor: 'rgba(21, 101, 52, 0.25)',
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
-  },
-  menuItemProfileIcon: {
-    fontSize: 24,
-    fontWeight: '700',
   },
   menuItemBody: {
     flex: 1,
@@ -1382,16 +1361,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#134e32',
   },
-  menuItemProfileTitle: {
-    fontSize: 17,
-  },
   menuItemSubtitle: {
     fontSize: 13,
     color: '#2d3748',
-  },
-  menuItemProfileSubtitle: {
-    color: '#166534',
-    fontWeight: '500',
   },
   menuItemMeta: {
     marginLeft: 'auto',
@@ -1402,14 +1374,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '600',
     color: '#1f2937',
-  },
-  menuItemHighlightCard: {
-    backgroundColor: 'rgba(15, 118, 110, 0.08)',
-    borderColor: 'rgba(15, 118, 110, 0.38)',
-  },
-  menuHighlight: {
-    color: '#0f766e',
-    fontWeight: '700',
   },
   menuPill: {
     paddingHorizontal: 12,
@@ -1422,33 +1386,39 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  menuThemeOverviewCard: {
-    backgroundColor: '#f0fdf4',
-    borderWidth: 1,
-    borderColor: 'rgba(22, 101, 52, 0.18)',
+  quickActionCard: {
+    backgroundColor: '#166534',
+    borderColor: '#0f3f26',
+    shadowColor: 'rgba(6, 78, 59, 0.6)',
+    shadowOpacity: 0.3,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 6,
   },
-  menuThemeOverviewEmojiWrap: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: '#dcfce7',
-    alignItems: 'center',
-    justifyContent: 'center',
+  quickActionIconWrap: {
+    backgroundColor: '#1b7a45',
+    borderColor: '#0f3f26',
   },
-  menuThemeOverviewEmoji: {
-    fontSize: 26,
+  quickActionIcon: {
+    color: '#ecfdf5',
   },
-  menuThemeOverviewTitle: {
-    color: '#134e32',
+  quickActionTitle: {
+    color: '#f0fff4',
   },
-  menuThemeOverviewSubtitle: {
-    fontSize: 13,
-    color: '#1f2937',
+  quickActionSubtitle: {
+    color: '#d1fae5',
   },
-  menuThemeOverviewChevron: {
-    fontSize: 26,
-    fontWeight: '600',
-    color: '#14532d',
+  quickActionMeta: {
+    alignItems: 'flex-end',
+  },
+  quickActionChevron: {
+    color: '#bbf7d0',
+  },
+  quickActionPill: {
+    backgroundColor: '#bbf7d0',
+  },
+  quickActionPillText: {
+    color: '#065f46',
   },
   menuThemeHeader: {
     flexDirection: 'row',

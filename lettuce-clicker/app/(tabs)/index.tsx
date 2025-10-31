@@ -1,6 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Alert,
+  Animated,
+  Easing,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
@@ -84,10 +94,14 @@ export default function HomeScreen() {
   const [isDailySpinAvailable, setIsDailySpinAvailable] = useState(false);
   const [dailyBonusAvailableAt, setDailyBonusAvailableAt] = useState<number | null>(null);
   const [dailyCountdown, setDailyCountdown] = useState<string | null>(null);
+  const [hasDoubledPassiveHarvest, setHasDoubledPassiveHarvest] = useState(false);
+  const [isWatchingResumeOffer, setIsWatchingResumeOffer] = useState(false);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const flipAnimation = useRef(new Animated.Value(0)).current;
-  const headerPaddingTop = useMemo(() => Math.max(insets.top, 4), [insets.top]);
+  const rippleValue = useRef(new Animated.Value(0)).current;
+  const rippleLoopRef = useRef<Animated.CompositeAnimation | null>(null);
+  const headerPaddingTop = useMemo(() => Math.max(insets.top - 6, 0) + 2, [insets.top]);
   const contentPaddingBottom = useMemo(() => insets.bottom + 140, [insets.bottom]);
   const friendlyName = useMemo(() => {
     const trimmed = profileName.trim();
@@ -98,6 +112,16 @@ export default function HomeScreen() {
   const accentRingOuter = useMemo(() => lightenColor(accentColor, 0.55), [accentColor]);
   const accentRingMiddle = useMemo(() => lightenColor(accentColor, 0.45), [accentColor]);
   const accentRingInner = useMemo(() => lightenColor(accentColor, 0.35), [accentColor]);
+  const profileCardPalette = useMemo(
+    () => ({
+      background: lightenColor(accentColor, 0.88),
+      border: lightenColor(accentColor, 0.48),
+      iconBackground: lightenColor(accentColor, 0.65),
+      iconBorder: lightenColor(accentColor, 0.38),
+      icon: accentColor,
+    }),
+    [accentColor]
+  );
   const bonusFlipRotation = useMemo(
     () =>
       flipAnimation.interpolate({
@@ -105,6 +129,38 @@ export default function HomeScreen() {
         outputRange: ['0deg', '1440deg'],
       }),
     [flipAnimation]
+  );
+  const rippleOuterScale = useMemo(
+    () =>
+      rippleValue.interpolate({
+        inputRange: [0, 1],
+        outputRange: [1, 1.3],
+      }),
+    [rippleValue]
+  );
+  const rippleMiddleScale = useMemo(
+    () =>
+      rippleValue.interpolate({
+        inputRange: [0, 1],
+        outputRange: [1, 1.2],
+      }),
+    [rippleValue]
+  );
+  const rippleInnerScale = useMemo(
+    () =>
+      rippleValue.interpolate({
+        inputRange: [0, 1],
+        outputRange: [1, 1.12],
+      }),
+    [rippleValue]
+  );
+  const rippleOpacity = useMemo(
+    () =>
+      rippleValue.interpolate({
+        inputRange: [0, 0.5, 1],
+        outputRange: [0, 0.28, 0],
+      }),
+    [rippleValue]
   );
   const dailyMenuStatus = useMemo(() => {
     if (isDailySpinAvailable) {
@@ -154,6 +210,46 @@ export default function HomeScreen() {
       ? `Active: ${activeLabel} • ${lockedThemeCount} locked`
       : `Active: ${activeLabel}`;
   }, [activeThemeDefinition, lockedThemeCount, ownedThemeList.length]);
+  const startRipple = useCallback(() => {
+    if (rippleLoopRef.current) {
+      return;
+    }
+
+    rippleValue.setValue(0);
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(rippleValue, {
+          toValue: 1,
+          duration: 720,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(rippleValue, {
+          toValue: 0,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    rippleLoopRef.current = animation;
+    animation.start();
+  }, [rippleValue]);
+
+  const stopRipple = useCallback(() => {
+    if (rippleLoopRef.current) {
+      rippleLoopRef.current.stop();
+      rippleLoopRef.current = null;
+    }
+
+    Animated.timing(rippleValue, {
+      toValue: 0,
+      duration: 180,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    }).start();
+  }, [rippleValue]);
+
   const noticeTitle = useMemo(() => {
     if (!activeNotice) {
       return '';
@@ -175,8 +271,15 @@ export default function HomeScreen() {
       return `When you signed back in you had ${activeNotice.harvestSnapshot.toLocaleString()} harvest with lifetime totals at ${activeNotice.lifetimeHarvestSnapshot.toLocaleString()}. Auto clicks continue at ${activeNotice.autoPerSecondSnapshot.toLocaleString()} per second.`;
     }
 
-    return `You gathered ${activeNotice.passiveHarvest.toLocaleString()} harvest while away. Your stores now hold ${activeNotice.harvestSnapshot.toLocaleString()} harvest with lifetime totals at ${activeNotice.lifetimeHarvestSnapshot.toLocaleString()}. Auto clicks continue humming at ${activeNotice.autoPerSecondSnapshot.toLocaleString()} per second.`;
-  }, [activeNotice]);
+    const baseMessage = `You gathered ${activeNotice.passiveHarvest.toLocaleString()} harvest while away. Your stores now hold ${activeNotice.harvestSnapshot.toLocaleString()} harvest with lifetime totals at ${activeNotice.lifetimeHarvestSnapshot.toLocaleString()}. Auto clicks continue humming at ${activeNotice.autoPerSecondSnapshot.toLocaleString()} per second.`;
+
+    if (hasDoubledPassiveHarvest && activeNotice.passiveHarvest > 0) {
+      const doubledTotal = (activeNotice.passiveHarvest * 2).toLocaleString();
+      return `${baseMessage} Thanks for watching! Your reward doubled to ${doubledTotal} clicks.`;
+    }
+
+    return baseMessage;
+  }, [activeNotice, hasDoubledPassiveHarvest]);
 
   useEffect(() => {
     AsyncStorage.getItem(MODAL_STORAGE_KEY)
@@ -194,14 +297,30 @@ export default function HomeScreen() {
   useEffect(() => {
     if (resumeNotice) {
       setActiveNotice(resumeNotice);
+      setHasDoubledPassiveHarvest(false);
+      setIsWatchingResumeOffer(false);
     }
   }, [resumeNotice]);
+
+  useEffect(() => {
+    if (!activeNotice) {
+      setHasDoubledPassiveHarvest(false);
+      setIsWatchingResumeOffer(false);
+    }
+  }, [activeNotice]);
 
   useEffect(() => {
     if (!menuOpen) {
       setMenuPage('overview');
     }
   }, [menuOpen]);
+
+  useEffect(() => () => {
+    if (rippleLoopRef.current) {
+      rippleLoopRef.current.stop();
+      rippleLoopRef.current = null;
+    }
+  }, []);
 
   const handleDismissGrow = useCallback(async () => {
     setShowGrowModal(false);
@@ -279,6 +398,7 @@ export default function HomeScreen() {
 
         setIsDailySpinAvailable(false);
         setDailyBonusAvailableAt(nextAvailable);
+        setDailyCountdown(formatDuration(Math.max(nextAvailable - now, 0)));
       } catch {
         if (!isMounted) {
           return;
@@ -364,7 +484,7 @@ export default function HomeScreen() {
         const nextAvailable = now + DAILY_BONUS_INTERVAL_MS;
         setIsDailySpinAvailable(false);
         setDailyBonusAvailableAt(nextAvailable);
-        setDailyCountdown(formatDuration(DAILY_BONUS_INTERVAL_MS));
+        setDailyCountdown(formatDuration(Math.max(nextAvailable - now, 0)));
         AsyncStorage.setItem(DAILY_BONUS_LAST_CLAIM_KEY, now.toString()).catch(() => {
           // persistence best effort only
         });
@@ -416,8 +536,34 @@ export default function HomeScreen() {
 
   const handleDismissNotice = useCallback(() => {
     setActiveNotice(null);
+    setHasDoubledPassiveHarvest(false);
+    setIsWatchingResumeOffer(false);
     clearResumeNotice();
   }, [clearResumeNotice]);
+
+  const handleWatchResumeBonus = useCallback(() => {
+    if (
+      !activeNotice ||
+      activeNotice.type !== 'background' ||
+      activeNotice.passiveHarvest <= 0 ||
+      hasDoubledPassiveHarvest ||
+      isWatchingResumeOffer
+    ) {
+      return;
+    }
+
+    setIsWatchingResumeOffer(true);
+    setTimeout(() => {
+      setIsWatchingResumeOffer(false);
+      setHasDoubledPassiveHarvest(true);
+      addHarvestAmount(activeNotice.passiveHarvest);
+    }, 1200);
+  }, [
+    activeNotice,
+    addHarvestAmount,
+    hasDoubledPassiveHarvest,
+    isWatchingResumeOffer,
+  ]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -428,7 +574,11 @@ export default function HomeScreen() {
             <Pressable
               accessibilityLabel={menuOpen ? 'Close garden menu' : 'Open garden menu'}
               accessibilityHint={menuOpen ? undefined : 'Opens actions and emoji theme options'}
-              style={[styles.menuButton, menuOpen && styles.menuButtonActive]}
+              style={({ pressed }) => [
+                styles.menuButton,
+                menuOpen && styles.menuButtonActive,
+                pressed && styles.menuButtonPressed,
+              ]}
               onPress={() => setMenuOpen((prev) => !prev)}
               hitSlop={8}>
               <Text style={[styles.menuIcon, menuOpen && styles.menuIconActive]}>
@@ -457,6 +607,9 @@ export default function HomeScreen() {
             <Pressable
               accessibilityLabel="Harvest lettuce"
               onPress={addHarvest}
+              onPressIn={startRipple}
+              onPressOut={stopRipple}
+              onTouchMove={startRipple}
               style={({ pressed }) => [
                 styles.lettuceButton,
                 { backgroundColor: accentSurface, shadowColor: accentColor },
@@ -470,6 +623,46 @@ export default function HomeScreen() {
                   styles.ring,
                   styles.ringInner,
                   { borderColor: accentRingInner, backgroundColor: lightenColor(accentRingInner, 0.45) },
+                ]}
+              />
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.ring,
+                  styles.ringOuter,
+                  styles.ringRipple,
+                  {
+                    borderColor: accentRingOuter,
+                    opacity: rippleOpacity,
+                    transform: [{ scale: rippleOuterScale }],
+                  },
+                ]}
+              />
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.ring,
+                  styles.ringMiddle,
+                  styles.ringRipple,
+                  {
+                    borderColor: accentRingMiddle,
+                    opacity: rippleOpacity,
+                    transform: [{ scale: rippleMiddleScale }],
+                  },
+                ]}
+              />
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.ring,
+                  styles.ringInner,
+                  styles.ringRipple,
+                  {
+                    borderColor: accentRingInner,
+                    opacity: rippleOpacity,
+                    backgroundColor: lightenColor(accentRingInner, 0.45),
+                    transform: [{ scale: rippleInnerScale }],
+                  },
                 ]}
               />
               <Text style={styles.lettuceEmoji}>{customClickEmoji}</Text>
@@ -518,13 +711,45 @@ export default function HomeScreen() {
                 {menuPage === 'overview' ? (
                   <>
                     <Text style={styles.menuSectionTitle}>Quick actions</Text>
-                    <Pressable style={styles.menuItemCard} onPress={handleNavigateProfile}>
-                      <View style={styles.menuItemIconWrap} pointerEvents="none">
-                        <Text style={styles.menuItemIcon}>🌿</Text>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.menuItemCard,
+                        styles.menuItemProfileCard,
+                        {
+                          backgroundColor: profileCardPalette.background,
+                          borderColor: profileCardPalette.border,
+                          shadowColor: profileCardPalette.border,
+                        },
+                        pressed && styles.menuItemCardPressed,
+                      ]}
+                      onPress={handleNavigateProfile}
+                    >
+                      <View
+                        style={[
+                          styles.menuItemIconWrap,
+                          styles.menuItemProfileIconWrap,
+                          {
+                            backgroundColor: profileCardPalette.iconBackground,
+                            borderColor: profileCardPalette.iconBorder,
+                          },
+                        ]}
+                        pointerEvents="none"
+                      >
+                        <Text
+                          style={[
+                            styles.menuItemIcon,
+                            styles.menuItemProfileIcon,
+                            { color: profileCardPalette.icon },
+                          ]}
+                        >
+                          🌿
+                        </Text>
                       </View>
                       <View style={styles.menuItemBody}>
-                        <Text style={styles.menuItemTitle}>Profile</Text>
-                        <Text style={styles.menuItemSubtitle}>Edit your gardener details</Text>
+                        <Text style={[styles.menuItemTitle, styles.menuItemProfileTitle]}>Profile</Text>
+                        <Text style={[styles.menuItemSubtitle, styles.menuItemProfileSubtitle]}>
+                          Refresh your gardener details
+                        </Text>
                       </View>
                       <View style={styles.menuItemMeta} pointerEvents="none">
                         <Text style={styles.menuItemChevron}>›</Text>
@@ -662,6 +887,31 @@ export default function HomeScreen() {
           <View style={styles.noticeCard}>
             <Text style={styles.noticeTitle}>{noticeTitle}</Text>
             <Text style={styles.noticeCopy}>{noticeCopy}</Text>
+            {activeNotice?.type === 'background' && activeNotice.passiveHarvest > 0 ? (
+              <Text style={styles.noticeInfoText}>
+                {hasDoubledPassiveHarvest
+                  ? 'Bonus applied! Your doubled clicks are already in your harvest.'
+                  : `Watch a quick clip to double your ${activeNotice.passiveHarvest.toLocaleString()} passive clicks.`}
+              </Text>
+            ) : null}
+            {activeNotice?.type === 'background' && activeNotice.passiveHarvest > 0 ? (
+              <Pressable
+                style={[
+                  styles.noticeSecondaryButton,
+                  (hasDoubledPassiveHarvest || isWatchingResumeOffer) && styles.noticeSecondaryButtonDisabled,
+                ]}
+                onPress={handleWatchResumeBonus}
+                disabled={hasDoubledPassiveHarvest || isWatchingResumeOffer}
+              >
+                <Text style={styles.noticeSecondaryText}>
+                  {hasDoubledPassiveHarvest
+                    ? 'Thanks for watching!'
+                    : isWatchingResumeOffer
+                      ? 'Loading bonus…'
+                      : `Double to ${(activeNotice.passiveHarvest * 2).toLocaleString()} clicks`}
+                </Text>
+              </Pressable>
+            ) : null}
             <Pressable style={styles.noticeButton} onPress={handleDismissNotice}>
               <Text style={styles.noticeButtonText}>Back to the garden</Text>
             </Pressable>
@@ -757,51 +1007,44 @@ const styles = StyleSheet.create({
     backgroundColor: '#f2f9f2',
   },
   headerWrapper: {
-    paddingHorizontal: 20,
-    paddingBottom: 10,
+    paddingHorizontal: 24,
+    paddingBottom: 6,
   },
   headerShelf: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 28,
-    backgroundColor: 'rgba(236, 253, 245, 0.92)',
-    borderWidth: 1,
-    borderColor: 'rgba(21, 101, 52, 0.2)',
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.12,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 8,
+    marginTop: 4,
   },
   headerText: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '800',
     color: '#14532d',
+    letterSpacing: 0.2,
   },
   menuButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    borderRadius: 24,
-    backgroundColor: '#ffffff',
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.16,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    backgroundColor: 'transparent',
   },
   menuButtonActive: {
-    backgroundColor: '#dcfce7',
+    backgroundColor: 'rgba(21, 101, 52, 0.08)',
+    borderColor: 'rgba(21, 101, 52, 0.16)',
+  },
+  menuButtonPressed: {
+    backgroundColor: 'rgba(21, 101, 52, 0.14)',
+    borderColor: 'rgba(21, 101, 52, 0.22)',
   },
   menuIcon: {
-    fontSize: 32,
-    color: '#14532d',
+    fontSize: 30,
+    color: '#166534',
     fontWeight: '700',
   },
   menuIconActive: {
-    color: '#047857',
+    color: '#0f5132',
   },
   scroll: {
     flex: 1,
@@ -913,6 +1156,9 @@ const styles = StyleSheet.create({
   ringInner: {
     width: 108,
     height: 108,
+  },
+  ringRipple: {
+    borderWidth: 2.4,
   },
   lettuceEmoji: {
     fontSize: 76,
@@ -1081,6 +1327,15 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     elevation: 3,
   },
+  menuItemProfileCard: {
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 6,
+  },
+  menuItemCardPressed: {
+    transform: [{ scale: 0.98 }],
+  },
   menuItemIconWrap: {
     width: 48,
     height: 48,
@@ -1107,6 +1362,17 @@ const styles = StyleSheet.create({
   menuItemIconHighlight: {
     color: '#f0fff4',
   },
+  menuItemProfileIconWrap: {
+    shadowColor: 'rgba(21, 101, 52, 0.25)',
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  menuItemProfileIcon: {
+    fontSize: 24,
+    fontWeight: '700',
+  },
   menuItemBody: {
     flex: 1,
     gap: 4,
@@ -1116,9 +1382,16 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#134e32',
   },
+  menuItemProfileTitle: {
+    fontSize: 17,
+  },
   menuItemSubtitle: {
     fontSize: 13,
-    color: '#1f2937',
+    color: '#2d3748',
+  },
+  menuItemProfileSubtitle: {
+    color: '#166534',
+    fontWeight: '500',
   },
   menuItemMeta: {
     marginLeft: 'auto',
@@ -1432,6 +1705,31 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#2d3748',
     lineHeight: 22,
+    textAlign: 'center',
+  },
+  noticeInfoText: {
+    fontSize: 13,
+    color: '#166534',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  noticeSecondaryButton: {
+    alignSelf: 'center',
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: '#bbf7d0',
+    borderWidth: 1,
+    borderColor: 'rgba(21, 101, 52, 0.24)',
+  },
+  noticeSecondaryButtonDisabled: {
+    backgroundColor: '#e2e8f0',
+    borderColor: 'rgba(148, 163, 184, 0.6)',
+  },
+  noticeSecondaryText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#134e32',
     textAlign: 'center',
   },
   noticeButton: {

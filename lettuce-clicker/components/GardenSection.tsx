@@ -140,7 +140,7 @@ export function GardenSection({
   updatePlacement,
   clearGarden,
   registerCustomEmoji,
-  title = 'Garden Atelier',
+  title = 'Lettuce Gardens',
 }: Props) {
   const insets = useSafeAreaInsets();
   const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null);

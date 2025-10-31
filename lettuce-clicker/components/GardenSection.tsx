@@ -810,15 +810,13 @@ export function GardenSection({
 
   const handlePlacementDragBegin = useCallback(
     (placementId: string, center: { x: number; y: number }) => {
-      const placement = placements.find((item) => item.id === placementId);
-
-      if (placement?.kind === 'photo' && isDrawingMode) {
+      if (isDrawingMode) {
         setIsDrawingMode(false);
       }
 
       setActiveDrag({ id: placementId, point: center });
     },
-    [isDrawingMode, placements]
+    [isDrawingMode]
   );
 
   const handlePlacementDragMove = useCallback((placementId: string, center: { x: number; y: number }) => {
@@ -1324,7 +1322,6 @@ export function GardenSection({
                     return;
                   }
 
-                  setIsDrawingMode(true);
                   setShowExtendedPalette(false);
                   setShowPalette(true);
                 }}
@@ -1500,27 +1497,29 @@ export function GardenSection({
                 </View>
                 <View style={styles.textComposer}>
                   <Text style={styles.paletteLabel}>Text style</Text>
-                  <View style={styles.textStyleRow}>
+                  <View style={styles.textStyleGrid}>
                     {TEXT_STYLE_OPTIONS.map((option) => {
                       const isActive = option.id === selectedTextStyle;
                       return (
                         <Pressable
                           key={option.id}
-                          style={[styles.textStyleOption, isActive && styles.textStyleOptionActive]}
+                          style={[styles.textStyleCard, isActive && styles.textStyleCardActive]}
                           onPress={() => setSelectedTextStyle(option.id)}
                           accessibilityRole="button"
                           accessibilityState={{ selected: isActive }}
                           accessibilityLabel={`${option.label} text style`}
                         >
-                          <Text
-                            style={[
-                              styles.textStylePreview,
-                              option.textStyle,
-                              isActive && styles.textStylePreviewActive,
-                            ]}
-                          >
-                            {option.preview}
-                          </Text>
+                          <View style={[styles.textStyleBadge, isActive && styles.textStyleBadgeActive]}>
+                            <Text
+                              style={[
+                                styles.textStylePreview,
+                                option.textStyle,
+                                isActive && styles.textStylePreviewActive,
+                              ]}
+                            >
+                              {option.preview}
+                            </Text>
+                          </View>
                           <Text style={[styles.textStyleLabel, isActive && styles.textStyleLabelActive]}>
                             {option.label}
                           </Text>
@@ -1528,7 +1527,7 @@ export function GardenSection({
                       );
                     })}
                   </View>
-                  <View style={styles.textPreviewWrap}>
+                  <View style={styles.textPreviewCard}>
                     <Text
                       style={[
                         styles.textPreviewSample,
@@ -1542,6 +1541,7 @@ export function GardenSection({
                   </View>
                   <Text style={styles.paletteLabel}>Text size</Text>
                   <View style={styles.textSizeControls}>
+                    <Text style={styles.textSizeGlyphSmall}>A</Text>
                     <View
                       style={styles.textSizeSlider}
                       onLayout={({ nativeEvent }) => setTextSliderWidth(Math.max(nativeEvent.layout.width, 0))}
@@ -1554,7 +1554,10 @@ export function GardenSection({
                       <View style={[styles.textSizeSliderFill, { width: sliderFillWidth }]} />
                       <View style={[styles.textSizeSliderThumb, { left: sliderThumbLeft }]} />
                     </View>
-                    <Text style={styles.textSizeValue}>{Math.round(clampedTextScale * 100)}%</Text>
+                    <Text style={styles.textSizeGlyphLarge}>A</Text>
+                    <View style={styles.textSizeValuePill}>
+                      <Text style={styles.textSizeValueText}>{Math.round(clampedTextScale * 100)}%</Text>
+                    </View>
                   </View>
                   <TextInput
                     style={styles.textComposerInput}
@@ -2120,31 +2123,33 @@ const styles = StyleSheet.create({
   harvestBanner: {
     backgroundColor: '#22543d',
     borderRadius: 20,
-    paddingHorizontal: 24,
-    paddingBottom: 24,
-    paddingTop: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
     shadowColor: '#000',
     shadowOpacity: 0.1,
     shadowOffset: { width: 0, height: 6 },
     shadowRadius: 12,
     elevation: 4,
-    gap: 6,
+    gap: 8,
+    alignItems: 'center',
   },
   harvestTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: '#f0fff4',
+    textAlign: 'center',
   },
   harvestAmount: {
     fontSize: 24,
     fontWeight: '800',
     color: '#c6f6d5',
+    textAlign: 'center',
   },
   harvestHint: {
-    marginTop: 4,
     color: '#e6fffa',
     fontSize: 14,
     lineHeight: 20,
+    textAlign: 'center',
   },
   launcherRow: {
     flexDirection: 'row',
@@ -2906,28 +2911,48 @@ const styles = StyleSheet.create({
   },
   textComposer: {
     marginTop: 12,
-    gap: 8,
+    gap: 10,
   },
-  textStyleRow: {
+  textStyleGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    columnGap: 8,
-    rowGap: 8,
+    gap: 10,
   },
-  textStyleOption: {
+  textStyleCard: {
     flexGrow: 1,
     flexBasis: '48%',
-    borderRadius: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    backgroundColor: 'rgba(15, 118, 110, 0.08)',
+    borderRadius: 16,
+    backgroundColor: '#f0fdf4',
     borderWidth: 1,
-    borderColor: 'rgba(15, 118, 110, 0.16)',
+    borderColor: 'rgba(15, 118, 110, 0.18)',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     alignItems: 'center',
-    gap: 2,
+    gap: 8,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
   },
-  textStyleOptionActive: {
-    backgroundColor: 'rgba(15, 118, 110, 0.18)',
+  textStyleCardActive: {
+    backgroundColor: '#d1fae5',
+    borderColor: '#0f766e',
+    shadowOpacity: 0.12,
+  },
+  textStyleBadge: {
+    minWidth: 64,
+    minHeight: 42,
+    borderRadius: 12,
+    backgroundColor: 'rgba(15, 118, 110, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  textStyleBadgeActive: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
     borderColor: '#0f766e',
   },
   textStylePreview: {
@@ -2937,19 +2962,22 @@ const styles = StyleSheet.create({
     color: '#0f766e',
   },
   textStyleLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
     color: '#134e32',
-    letterSpacing: 0.6,
+    letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
   textStyleLabelActive: {
     color: '#0f766e',
   },
-  textPreviewWrap: {
+  textPreviewCard: {
+    marginTop: 4,
+    borderRadius: 16,
+    backgroundColor: '#ecfdf5',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 4,
   },
   textPreviewSample: {
     color: '#134e32',
@@ -2987,44 +3015,50 @@ const styles = StyleSheet.create({
   textComposerButtonTextDisabled: {
     color: '#166534',
   },
-  textComposerHint: {
-    fontSize: 12,
-    color: '#1f2937',
-  },
   textSizeControls: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginTop: 8,
+    marginTop: 4,
+  },
+  textSizeGlyphSmall: {
+    fontSize: 14,
+    color: '#0f5132',
+    fontWeight: '700',
+  },
+  textSizeGlyphLarge: {
+    fontSize: 24,
+    color: '#0f5132',
+    fontWeight: '700',
   },
   textSizeSlider: {
     flex: 1,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(15, 118, 110, 0.08)',
+    height: 34,
+    borderRadius: 18,
+    backgroundColor: 'rgba(15, 118, 110, 0.12)',
     justifyContent: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
   },
   textSizeSliderTrack: {
     position: 'absolute',
-    left: 14,
-    right: 14,
-    top: 14,
+    left: 16,
+    right: 16,
+    top: 15,
     height: 4,
     borderRadius: 2,
     backgroundColor: 'rgba(15, 118, 110, 0.25)',
   },
   textSizeSliderFill: {
     position: 'absolute',
-    left: 14,
-    top: 14,
+    left: 16,
+    top: 15,
     height: 4,
     borderRadius: 2,
     backgroundColor: '#0f766e',
   },
   textSizeSliderThumb: {
     position: 'absolute',
-    top: 4,
+    top: 5,
     width: TEXT_SLIDER_THUMB_SIZE,
     height: TEXT_SLIDER_THUMB_SIZE,
     borderRadius: TEXT_SLIDER_THUMB_SIZE / 2,
@@ -3035,11 +3069,20 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
-  textSizeValue: {
-    minWidth: 54,
-    textAlign: 'right',
+  textSizeValuePill: {
+    borderRadius: 14,
+    backgroundColor: '#bbf7d0',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  textSizeValueText: {
+    fontSize: 13,
     fontWeight: '700',
     color: '#134e32',
+  },
+  textComposerHint: {
+    fontSize: 12,
+    color: '#1f2937',
   },
   paletteCloseButton: {
     backgroundColor: '#22543d',

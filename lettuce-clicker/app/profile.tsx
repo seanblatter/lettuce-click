@@ -192,10 +192,11 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
     }
   }, [onRequestClose]);
 
-  const closeAccessibilityLabel = mode === 'screen' ? 'Go back' : 'Close profile editor';
-  const closeLabel = mode === 'screen' ? '← Back' : 'Done';
-  const closeButtonStyle = mode === 'screen' ? styles.backButton : styles.modalCloseButton;
-  const closeTextStyle = mode === 'screen' ? styles.backLabel : styles.modalCloseLabel;
+  const isModal = mode === 'modal';
+  const closeAccessibilityLabel = isModal ? 'Close profile editor' : 'Go back';
+  const closeLabel = isModal ? 'Back' : '← Back';
+  const closeButtonStyle = isModal ? styles.modalBackButton : styles.backButton;
+  const closeTextStyle = isModal ? styles.modalBackLabel : styles.backLabel;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
@@ -364,14 +365,14 @@ const styles = StyleSheet.create({
     color: '#22543d',
     fontWeight: '600',
   },
-  modalCloseButton: {
-    alignSelf: 'flex-end',
+  modalBackButton: {
+    alignSelf: 'flex-start',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 16,
     backgroundColor: 'rgba(22, 101, 52, 0.14)',
   },
-  modalCloseLabel: {
+  modalBackLabel: {
     fontSize: 13,
     fontWeight: '700',
     color: '#14532d',

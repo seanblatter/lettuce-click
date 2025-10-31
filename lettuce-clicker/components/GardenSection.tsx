@@ -754,13 +754,16 @@ export function GardenSection({
       }
 
       const center = getCanvasCenter();
-      addPhotoPlacement(uri, center);
+      const added = addPhotoPlacement(uri, center);
+      if (added) {
+        setShowPalette(false);
+      }
     } catch {
       Alert.alert('Add photo failed', 'We could not open your photo library.');
     } finally {
       setIsPickingPhoto(false);
     }
-  }, [addPhotoPlacement, getCanvasCenter, isPickingPhoto]);
+  }, [addPhotoPlacement, getCanvasCenter, isPickingPhoto, setShowPalette]);
 
   const handleAddText = useCallback(() => {
     const trimmed = textDraft.trim();
@@ -1390,13 +1393,17 @@ export function GardenSection({
             ]}
           >
             <View style={styles.paletteHandle} />
-            <Text style={styles.paletteTitle}>Pen color</Text>
+            <Text style={styles.paletteTitle}>Sketchbook Studio</Text>
+            <Text style={styles.paletteSubtitle}>
+              Tune your pen, lettering, and photo charms without leaving the garden.
+            </Text>
             <ScrollView
               style={styles.paletteScroll}
               contentContainerStyle={styles.paletteScrollContent}
               showsVerticalScrollIndicator={false}
             >
               <View style={styles.paletteSection}>
+                <Text style={styles.paletteLabel}>Pen &amp; color</Text>
                 <View style={styles.paletteColorRow}>
                   {QUICK_DRAW_COLORS.map((color) => {
                     const isActive = penColor === color;
@@ -2692,9 +2699,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fffb',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    gap: 16,
+    paddingHorizontal: 22,
+    paddingTop: 14,
+    gap: 14,
     shadowColor: '#0f2e20',
     shadowOpacity: 0.16,
     shadowRadius: 18,
@@ -2708,31 +2715,36 @@ const styles = StyleSheet.create({
     backgroundColor: '#bbf7d0',
   },
   paletteTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#134e32',
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0f5132',
     textAlign: 'left',
+  },
+  paletteSubtitle: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#166534',
   },
   paletteScroll: {
     flexGrow: 0,
   },
   paletteScrollContent: {
-    paddingBottom: 16,
-    gap: 16,
+    paddingBottom: 12,
+    gap: 14,
   },
   paletteSection: {
-    gap: 10,
+    gap: 8,
   },
   paletteLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: '#134e32',
   },
   paletteColorRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    columnGap: 12,
-    rowGap: 12,
+    columnGap: 10,
+    rowGap: 10,
   },
   colorSwatch: {
     width: COLOR_WHEEL_SWATCH_SIZE,
@@ -2921,14 +2933,14 @@ const styles = StyleSheet.create({
   textStyleCard: {
     flexGrow: 1,
     flexBasis: '48%',
-    borderRadius: 16,
+    borderRadius: 14,
     backgroundColor: '#f0fdf4',
     borderWidth: 1,
     borderColor: 'rgba(15, 118, 110, 0.18)',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     shadowColor: '#0f172a',
     shadowOpacity: 0.05,
     shadowRadius: 8,
@@ -2941,14 +2953,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
   },
   textStyleBadge: {
-    minWidth: 64,
-    minHeight: 42,
-    borderRadius: 12,
+    minWidth: 56,
+    minHeight: 36,
+    borderRadius: 10,
     backgroundColor: 'rgba(15, 118, 110, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
   },
   textStyleBadgeActive: {
     backgroundColor: '#ffffff',
@@ -2962,21 +2974,21 @@ const styles = StyleSheet.create({
     color: '#0f766e',
   },
   textStyleLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     color: '#134e32',
-    letterSpacing: 0.5,
+    letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
   textStyleLabelActive: {
     color: '#0f766e',
   },
   textPreviewCard: {
-    marginTop: 4,
-    borderRadius: 16,
+    marginTop: 2,
+    borderRadius: 14,
     backgroundColor: '#ecfdf5',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     alignItems: 'center',
   },
   textPreviewSample: {
@@ -2986,29 +2998,29 @@ const styles = StyleSheet.create({
   },
   textComposerInput: {
     width: '100%',
-    minHeight: 48,
-    borderRadius: 14,
+    minHeight: 44,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#bbf7d0',
     backgroundColor: '#ffffff',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 15,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontSize: 14,
     color: '#134e32',
     textAlignVertical: 'top',
   },
   textComposerButton: {
     alignSelf: 'flex-start',
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 12,
     backgroundColor: '#15803d',
   },
   textComposerButtonDisabled: {
     backgroundColor: '#bbf7d0',
   },
   textComposerButtonText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: '#ecfdf5',
   },
@@ -3018,7 +3030,7 @@ const styles = StyleSheet.create({
   textSizeControls: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
     marginTop: 4,
   },
   textSizeGlyphSmall: {

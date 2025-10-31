@@ -625,7 +625,7 @@ export default function HomeScreen() {
                       <View style={styles.menuItemBody}>
                         <Text style={[styles.menuItemTitle, styles.quickActionTitle]}>Music Lounge</Text>
                         <Text style={[styles.menuItemSubtitle, styles.quickActionSubtitle]}>
-                          Mix white and grey garden tunes
+                          Your Day &amp; Night Oasis
                         </Text>
                       </View>
                       <View style={[styles.menuItemMeta, styles.quickActionMeta]} pointerEvents="none">

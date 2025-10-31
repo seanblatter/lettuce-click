@@ -135,25 +135,40 @@ export default function ProfileScreen() {
     [hasPremiumUpgrade, setPremiumAccentColor]
   );
 
-  const handleApplyEmoji = useCallback(() => {
-    if (!hasPremiumUpgrade) {
-      Alert.alert('Upgrade required', 'Upgrade to change your click emoji.');
-      return;
-    }
+  const applyEmojiSelection = useCallback(
+    (value: string) => {
+      if (!hasPremiumUpgrade) {
+        Alert.alert('Upgrade required', 'Upgrade to change your click emoji.');
+        return;
+      }
 
-    const trimmed = emojiInput.trim();
+      const trimmed = value.trim();
 
-    if (trimmed.length === 0) {
-      Alert.alert('Enter an emoji', 'Type or select an emoji to personalize your garden.');
-      return;
-    }
+      if (trimmed.length === 0) {
+        setEmojiInput('');
+        return;
+      }
 
-    const glyph = Array.from(trimmed)[0];
-    setEmojiInput(glyph);
-    setCustomClickEmoji(glyph);
-    registerCustomEmoji(glyph);
-    Alert.alert('Emoji updated', 'Your click emoji and menu icon have been refreshed.');
-  }, [emojiInput, hasPremiumUpgrade, registerCustomEmoji, setCustomClickEmoji]);
+      const glyph = Array.from(trimmed)[0];
+
+      if (!glyph) {
+        setEmojiInput('');
+        return;
+      }
+
+      setEmojiInput(glyph);
+      setCustomClickEmoji(glyph);
+      registerCustomEmoji(glyph);
+    },
+    [hasPremiumUpgrade, registerCustomEmoji, setCustomClickEmoji]
+  );
+
+  const handleEmojiInputChange = useCallback(
+    (value: string) => {
+      applyEmojiSelection(value);
+    },
+    [applyEmojiSelection]
+  );
 
   const handleChooseEmoji = useCallback(
     (emoji: string) => {
@@ -162,11 +177,9 @@ export default function ProfileScreen() {
         return;
       }
 
-      setEmojiInput(emoji);
-      setCustomClickEmoji(emoji);
-      registerCustomEmoji(emoji);
+      applyEmojiSelection(emoji);
     },
-    [hasPremiumUpgrade, registerCustomEmoji, setCustomClickEmoji]
+    [applyEmojiSelection, hasPremiumUpgrade]
   );
 
   return (
@@ -260,7 +273,12 @@ export default function ProfileScreen() {
                         accessibilityLabel={`Use ${option.emoji} as your click emoji`}
                         accessibilityState={{ selected: isSelected }}
                       >
-                        <Text style={styles.emojiChoiceGlyph}>{option.emoji}</Text>
+                        <View style={[styles.emojiChoiceHalo, isSelected && styles.emojiChoiceHaloActive]} />
+                        <View style={[styles.emojiChoiceInner, isSelected && styles.emojiChoiceInnerActive]}>
+                          <Text style={[styles.emojiChoiceGlyph, isSelected && styles.emojiChoiceGlyphActive]}>
+                            {option.emoji}
+                          </Text>
+                        </View>
                       </Pressable>
                     );
                   })}
@@ -270,7 +288,7 @@ export default function ProfileScreen() {
               )}
               <TextInput
                 value={emojiInput}
-                onChangeText={setEmojiInput}
+                onChangeText={handleEmojiInputChange}
                 placeholder="Type any emoji"
                 style={styles.emojiInput}
                 maxLength={6}
@@ -279,11 +297,8 @@ export default function ProfileScreen() {
                 returnKeyType="done"
               />
               <Text style={styles.emojiNote}>
-                Tip: applying an emoji updates both the main click button and the lettuce menu icon.
+                Tip: tap a suggestion or type an emoji to update your click button and menu instantly.
               </Text>
-              <Pressable style={styles.applyButton} onPress={handleApplyEmoji} accessibilityLabel="Apply custom emoji">
-                <Text style={styles.applyButtonText}>Apply emoji</Text>
-              </Pressable>
             </>
           ) : (
             <>
@@ -466,25 +481,53 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   emojiRow: {
-    gap: 12,
-    paddingVertical: 4,
+    gap: 14,
+    paddingVertical: 6,
   },
   emojiChoice: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: '#ffffff',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#d1fae5',
+    overflow: 'hidden',
+    position: 'relative',
   },
   emojiChoiceActive: {
-    borderColor: '#22543d',
-    backgroundColor: '#dcfce7',
+    transform: [{ scale: 1.03 }],
+  },
+  emojiChoiceHalo: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 32,
+    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+  },
+  emojiChoiceHaloActive: {
+    backgroundColor: 'rgba(34, 197, 94, 0.2)',
+  },
+  emojiChoiceInner: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: 'rgba(15, 118, 110, 0.25)',
+    shadowColor: '#0f766e',
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  emojiChoiceInnerActive: {
+    backgroundColor: '#ecfdf3',
+    borderColor: 'rgba(22, 101, 52, 0.45)',
   },
   emojiChoiceGlyph: {
-    fontSize: 28,
+    fontSize: 30,
+  },
+  emojiChoiceGlyphActive: {
+    transform: [{ scale: 1.05 }],
   },
   emojiEmptyText: {
     fontSize: 13,
@@ -503,17 +546,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#1f6f4a',
     lineHeight: 18,
-  },
-  applyButton: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#14532d',
-    borderRadius: 14,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-  },
-  applyButtonText: {
-    color: '#f0fff4',
-    fontWeight: '700',
   },
   upgradeButton: {
     alignSelf: 'flex-start',

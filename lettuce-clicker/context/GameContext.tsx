@@ -77,7 +77,7 @@ export type PhotoPlacement = PlacementBase & {
   imageUri: string;
 };
 
-export type TextStyleId = 'sprout' | 'bloom' | 'canopy' | 'whisper';
+export type TextStyleId = 'sprout' | 'bloom' | 'canopy' | 'whisper' | 'serif' | 'rounded' | 'script' | 'mono';
 
 export type TextPlacement = PlacementBase & {
   kind: 'text';
@@ -142,7 +142,8 @@ type GameContextValue = {
     text: string,
     position: { x: number; y: number },
     color?: string,
-    style?: TextStyleId
+    style?: TextStyleId,
+    scale?: number
   ) => boolean;
   updatePlacement: (placementId: string, updates: Partial<Placement>) => void;
   removePlacement: (placementId: string) => void;
@@ -453,7 +454,14 @@ const DEFAULT_TEXT_COLOR = '#14532d';
 const DEFAULT_TEXT_STYLE: TextStyleId = 'sprout';
 
 const isTextStyleId = (value: unknown): value is TextStyleId =>
-  value === 'sprout' || value === 'bloom' || value === 'canopy' || value === 'whisper';
+  value === 'sprout' ||
+  value === 'bloom' ||
+  value === 'canopy' ||
+  value === 'whisper' ||
+  value === 'serif' ||
+  value === 'rounded' ||
+  value === 'script' ||
+  value === 'mono';
 
 const normalizePlacement = (entry: unknown): Placement | null => {
   if (!entry || typeof entry !== 'object') {
@@ -990,7 +998,8 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     text: string,
     position: { x: number; y: number },
     color = DEFAULT_TEXT_COLOR,
-    style: TextStyleId = DEFAULT_TEXT_STYLE
+    style: TextStyleId = DEFAULT_TEXT_STYLE,
+    scale = 1
   ) => {
     const trimmed = text.trim();
 
@@ -1000,6 +1009,11 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
 
     const appliedColor = color && color.trim().length > 0 ? color : DEFAULT_TEXT_COLOR;
     const appliedStyle = isTextStyleId(style) ? style : DEFAULT_TEXT_STYLE;
+
+    const sanitizedScale =
+      typeof scale === 'number' && Number.isFinite(scale)
+        ? Math.min(Math.max(scale, 0.5), 3)
+        : 1;
 
     setPlacements((prev) => [
       ...prev,
@@ -1011,7 +1025,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         style: appliedStyle,
         x: position.x,
         y: position.y,
-        scale: 1,
+        scale: sanitizedScale,
         rotation: 0,
       },
     ]);

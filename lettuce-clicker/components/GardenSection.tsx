@@ -7,6 +7,8 @@ import {
   LayoutRectangle,
   ListRenderItem,
   Modal,
+  PanResponder,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,6 +18,7 @@ import {
   Image,
   View,
   Keyboard,
+  useWindowDimensions,
 } from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
 import * as ImagePicker from 'expo-image-picker';
@@ -47,7 +50,8 @@ type Props = {
     text: string,
     position: { x: number; y: number },
     color?: string,
-    style?: TextStyleId
+    style?: TextStyleId,
+    scale?: number
   ) => boolean;
   updatePlacement: (placementId: string, updates: Partial<Placement>) => void;
   removePlacement: (placementId: string) => void;
@@ -75,9 +79,18 @@ const stripVariationSelectors = (value: string) => value.replace(VARIATION_SELEC
 
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+
 const CANVAS_BACKGROUND = '#ffffff';
 const ERASER_COLOR = 'eraser';
 const DEFAULT_TEXT_COLOR = '#14532d';
+const SERIF_FONT_FAMILY = Platform.select({ ios: 'Georgia', android: 'serif', default: 'serif' }) ?? 'serif';
+const ROUNDED_FONT_FAMILY =
+  Platform.select({ ios: 'AvenirNext-DemiBold', android: 'sans-serif-medium', default: 'sans-serif' }) ??
+  'sans-serif';
+const SCRIPT_FONT_FAMILY =
+  Platform.select({ ios: 'Snell Roundhand', android: 'cursive', default: 'cursive' }) ?? 'cursive';
+const MONO_FONT_FAMILY = Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }) ?? 'monospace';
 const QUICK_DRAW_COLORS = [
   '#1f6f4a',
   '#15803d',
@@ -107,6 +120,9 @@ const COLOR_WHEEL_DIAMETER = 160;
 const COLOR_WHEEL_RADIUS = 64;
 const COLOR_WHEEL_SWATCH_SIZE = 34;
 const PEN_SIZES = [3, 5, 8, 12];
+const TEXT_SCALE_MIN = 0.7;
+const TEXT_SCALE_MAX = 2;
+const TEXT_SLIDER_THUMB_SIZE = 24;
 
 const TEXT_STYLE_OPTIONS: { id: TextStyleId; label: string; textStyle: TextStyle; preview: string }[] = [
   { id: 'sprout', label: 'Sprout', textStyle: { fontSize: 18, fontWeight: '600' }, preview: 'Hello' },
@@ -127,6 +143,44 @@ const TEXT_STYLE_OPTIONS: { id: TextStyleId; label: string; textStyle: TextStyle
     label: 'Whisper',
     textStyle: { fontSize: 20, fontStyle: 'italic', fontWeight: '500' },
     preview: 'Calm',
+  },
+  {
+    id: 'serif',
+    label: 'Serif',
+    textStyle: { fontSize: 22, fontWeight: '600', fontFamily: SERIF_FONT_FAMILY },
+    preview: 'Serif',
+  },
+  {
+    id: 'rounded',
+    label: 'Rounded',
+    textStyle: {
+      fontSize: 20,
+      fontWeight: '700',
+      letterSpacing: 0.3,
+      fontFamily: ROUNDED_FONT_FAMILY,
+    },
+    preview: 'Smile',
+  },
+  {
+    id: 'script',
+    label: 'Script',
+    textStyle: {
+      fontSize: 24,
+      fontFamily: SCRIPT_FONT_FAMILY,
+      fontWeight: Platform.OS === 'ios' ? '400' : '500',
+    },
+    preview: 'Flow',
+  },
+  {
+    id: 'mono',
+    label: 'Mono',
+    textStyle: {
+      fontSize: 20,
+      letterSpacing: 1,
+      fontFamily: MONO_FONT_FAMILY,
+      fontWeight: '500',
+    },
+    preview: 'Code',
   },
 ];
 
@@ -204,8 +258,9 @@ export function GardenSection({
   const [isPickingPhoto, setIsPickingPhoto] = useState(false);
   const [textDraft, setTextDraft] = useState('');
   const [selectedTextStyle, setSelectedTextStyle] = useState<TextStyleId>('sprout');
+  const [textScale, setTextScale] = useState(1);
+  const [textSliderWidth, setTextSliderWidth] = useState(0);
   const [isDrawingGestureActive, setIsDrawingGestureActive] = useState(false);
-  const [deleteCandidateId, setDeleteCandidateId] = useState<string | null>(null);
   const [activeDrag, setActiveDrag] = useState<{ id: string; point: { x: number; y: number } } | null>(null);
   const [penButtonLayout, setPenButtonLayout] = useState<LayoutRectangle | null>(null);
   const canvasRef = useRef<View | null>(null);
@@ -226,6 +281,10 @@ export function GardenSection({
       }),
     []
   );
+
+  const { height: windowHeight } = useWindowDimensions();
+  const paletteMaxHeight = Math.max(windowHeight - insets.top - 32, 360);
+  const palettePaddingBottom = 24 + insets.bottom;
 
   const deleteZoneCenter = useMemo(() => {
     if (!penButtonLayout) {
@@ -252,16 +311,13 @@ export function GardenSection({
     [deleteZoneCenter, penButtonLayout]
   );
 
-  const shouldHighlightDeleteZone = useMemo(
-    () =>
-      Boolean(
-        deleteCandidateId &&
-          activeDrag &&
-          deleteCandidateId === activeDrag.id &&
-          isPointInDeleteZone(activeDrag.point)
-      ),
-    [activeDrag, deleteCandidateId, isPointInDeleteZone]
+  const isDragOverDeleteZone = useMemo(
+    () => (activeDrag ? isPointInDeleteZone(activeDrag.point) : false),
+    [activeDrag, isPointInDeleteZone]
   );
+
+  const deleteZoneVisible = Boolean(activeDrag);
+  const shouldHighlightDeleteZone = deleteZoneVisible && isDragOverDeleteZone;
 
   const inventoryList = useMemo(
     () =>
@@ -715,26 +771,55 @@ export function GardenSection({
 
     const color = penColor === ERASER_COLOR ? DEFAULT_TEXT_COLOR : penColor;
     const center = getCanvasCenter();
-    const added = addTextPlacement(trimmed, center, color, selectedTextStyle);
+    const normalizedScale = clamp(textScale, TEXT_SCALE_MIN, TEXT_SCALE_MAX);
+    const added = addTextPlacement(trimmed, center, color, selectedTextStyle, normalizedScale);
 
     if (added) {
       setTextDraft('');
     }
-  }, [addTextPlacement, getCanvasCenter, penColor, selectedTextStyle, textDraft]);
+  }, [addTextPlacement, getCanvasCenter, penColor, selectedTextStyle, textDraft, textScale]);
 
-  const handlePlacementLongPressChange = useCallback((placementId: string, isActive: boolean) => {
-    setDeleteCandidateId((current) => {
-      if (isActive) {
-        return placementId;
+  const handleTextSliderChange = useCallback(
+    (locationX: number) => {
+      if (textSliderWidth <= 0) {
+        return;
       }
 
-      return current === placementId ? null : current;
-    });
-  }, []);
+      const ratio = clamp(locationX / textSliderWidth, 0, 1);
+      const nextScale = TEXT_SCALE_MIN + ratio * (TEXT_SCALE_MAX - TEXT_SCALE_MIN);
+      setTextScale(Number(nextScale.toFixed(2)));
+    },
+    [textSliderWidth]
+  );
 
-  const handlePlacementDragBegin = useCallback((placementId: string, center: { x: number; y: number }) => {
-    setActiveDrag({ id: placementId, point: center });
-  }, []);
+  const textScalePanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: (event) => {
+          handleTextSliderChange(event.nativeEvent.locationX);
+        },
+        onPanResponderMove: (event) => {
+          handleTextSliderChange(event.nativeEvent.locationX);
+        },
+        onPanResponderTerminationRequest: () => false,
+      }),
+    [handleTextSliderChange]
+  );
+
+  const handlePlacementDragBegin = useCallback(
+    (placementId: string, center: { x: number; y: number }) => {
+      const placement = placements.find((item) => item.id === placementId);
+
+      if (placement?.kind === 'photo' && isDrawingMode) {
+        setIsDrawingMode(false);
+      }
+
+      setActiveDrag({ id: placementId, point: center });
+    },
+    [isDrawingMode, placements]
+  );
 
   const handlePlacementDragMove = useCallback((placementId: string, center: { x: number; y: number }) => {
     setActiveDrag({ id: placementId, point: center });
@@ -742,16 +827,15 @@ export function GardenSection({
 
   const handlePlacementDragEnd = useCallback(
     (placementId: string, center: { x: number; y: number }) => {
-      const shouldDelete = deleteCandidateId === placementId && isPointInDeleteZone(center);
+      const shouldDelete = isPointInDeleteZone(center);
 
       if (shouldDelete) {
         removePlacement(placementId);
       }
 
       setActiveDrag(null);
-      setDeleteCandidateId((current) => (current === placementId ? null : current));
     },
-    [deleteCandidateId, isPointInDeleteZone, removePlacement]
+    [isPointInDeleteZone, removePlacement]
   );
 
   const renderStrokeSegments = useCallback(
@@ -915,6 +999,24 @@ export function GardenSection({
     }
   }, [showPalette]);
 
+  const clampedTextScale = clamp(textScale, TEXT_SCALE_MIN, TEXT_SCALE_MAX);
+  const textScaleRatio =
+    TEXT_SCALE_MAX === TEXT_SCALE_MIN
+      ? 0
+      : (clampedTextScale - TEXT_SCALE_MIN) / (TEXT_SCALE_MAX - TEXT_SCALE_MIN);
+  const sliderTrackWidth = Math.max(textSliderWidth - 28, 0);
+  const sliderFillWidth = Math.max(sliderTrackWidth * textScaleRatio, 0);
+  const sliderThumbLeft = clamp(
+    14 + sliderFillWidth - TEXT_SLIDER_THUMB_SIZE / 2,
+    0,
+    Math.max(textSliderWidth - TEXT_SLIDER_THUMB_SIZE, 0)
+  );
+  const textPreviewStyle = TEXT_STYLE_MAP[selectedTextStyle] ?? {};
+  const previewBaseFontSize =
+    typeof textPreviewStyle.fontSize === 'number' ? textPreviewStyle.fontSize : 20;
+  const previewFontSize = previewBaseFontSize * clampedTextScale;
+  const previewColor = penColor === ERASER_COLOR ? DEFAULT_TEXT_COLOR : penColor;
+
   const shouldShowCanvasEmptyState = useMemo(
     () => placements.length === 0 && strokes.length === 0 && !selectedEmoji,
     [placements.length, strokes.length, selectedEmoji]
@@ -934,7 +1036,6 @@ export function GardenSection({
   const bannerTopPadding = insets.top + 24;
   const contentBottomPadding = insets.bottom + 48;
   const canClearGarden = placements.length > 0 || strokes.length > 0;
-  const deleteZoneVisible = deleteCandidateId !== null;
 
   const renderShopItem: ListRenderItem<InventoryEntry> = ({ item }) => {
     const owned = item.owned;
@@ -1153,37 +1254,35 @@ export function GardenSection({
                 }
 
                 return (
-                  <DraggablePlacement
-                    key={placement.id}
-                    placement={placement}
-                    baseSize={EMOJI_SIZE}
-                    onUpdate={(updates) => updatePlacement(placement.id, updates)}
-                    onDragBegin={handlePlacementDragBegin}
-                    onDragMove={handlePlacementDragMove}
-                    onDragEnd={handlePlacementDragEnd}
-                    onLongPressChange={handlePlacementLongPressChange}
-                  >
-                    <Text style={styles.canvasEmojiGlyph}>{emoji.emoji}</Text>
-                  </DraggablePlacement>
-                );
-              }
+                <DraggablePlacement
+                  key={placement.id}
+                  placement={placement}
+                  baseSize={EMOJI_SIZE}
+                  onUpdate={(updates) => updatePlacement(placement.id, updates)}
+                  onDragBegin={handlePlacementDragBegin}
+                  onDragMove={handlePlacementDragMove}
+                  onDragEnd={handlePlacementDragEnd}
+                >
+                  <Text style={styles.canvasEmojiGlyph}>{emoji.emoji}</Text>
+                </DraggablePlacement>
+              );
+            }
 
               if (placement.kind === 'photo') {
                 return (
-                  <DraggablePlacement
-                    key={placement.id}
-                    placement={placement}
-                    baseSize={PHOTO_BASE_SIZE}
-                    onUpdate={(updates) => updatePlacement(placement.id, updates)}
-                    onDragBegin={handlePlacementDragBegin}
-                    onDragMove={handlePlacementDragMove}
-                    onDragEnd={handlePlacementDragEnd}
-                    onLongPressChange={handlePlacementLongPressChange}
-                  >
-                    <View style={styles.canvasPhotoFrame}>
-                      <Image source={{ uri: placement.imageUri }} style={styles.canvasPhotoImage} />
-                    </View>
-                  </DraggablePlacement>
+                <DraggablePlacement
+                  key={placement.id}
+                  placement={placement}
+                  baseSize={PHOTO_BASE_SIZE}
+                  onUpdate={(updates) => updatePlacement(placement.id, updates)}
+                  onDragBegin={handlePlacementDragBegin}
+                  onDragMove={handlePlacementDragMove}
+                  onDragEnd={handlePlacementDragEnd}
+                >
+                  <View style={styles.canvasPhotoFrame}>
+                    <Image source={{ uri: placement.imageUri }} style={styles.canvasPhotoImage} />
+                  </View>
+                </DraggablePlacement>
                 );
               }
 
@@ -1196,19 +1295,16 @@ export function GardenSection({
                   onDragBegin={handlePlacementDragBegin}
                   onDragMove={handlePlacementDragMove}
                   onDragEnd={handlePlacementDragEnd}
-                  onLongPressChange={handlePlacementLongPressChange}
                 >
-                  <View style={styles.canvasTextWrap}>
-                    <Text
-                      style={[
-                        styles.canvasText,
-                        TEXT_STYLE_MAP[placement.style ?? 'sprout'],
-                        { color: placement.color ?? DEFAULT_TEXT_COLOR },
-                      ]}
-                    >
-                      {placement.text}
-                    </Text>
-                  </View>
+                  <Text
+                    style={[
+                      styles.canvasText,
+                      TEXT_STYLE_MAP[placement.style ?? 'sprout'],
+                      { color: placement.color ?? DEFAULT_TEXT_COLOR },
+                    ]}
+                  >
+                    {placement.text}
+                  </Text>
                 </DraggablePlacement>
               );
             })}
@@ -1290,186 +1386,221 @@ export function GardenSection({
       >
         <View style={styles.paletteOverlay}>
           <Pressable style={styles.paletteBackdrop} onPress={() => setShowPalette(false)} />
-          <View style={styles.paletteCard}>
+          <View
+            style={[
+              styles.paletteCard,
+              { maxHeight: paletteMaxHeight, paddingBottom: palettePaddingBottom },
+            ]}
+          >
             <View style={styles.paletteHandle} />
-            <Text style={styles.paletteTitle}>Garden sketchbook</Text>
-            <Text style={styles.paletteSubtitle}>
-              Pick a pen color, explore the color wheel for more shades, and adjust your stroke size before sketching on your
-              garden canvas.
-            </Text>
-            <View style={styles.paletteSection}>
-              <Text style={styles.paletteLabel}>Pen color</Text>
-              <View style={styles.paletteColorRow}>
-                {QUICK_DRAW_COLORS.map((color) => {
-                  const isActive = penColor === color;
-                  return (
-                    <Pressable
-                      key={color}
-                      style={[styles.colorSwatch, { backgroundColor: color }, isActive && styles.colorSwatchActive]}
-                      onPress={() => handleSelectPenColor(color)}
-                      accessibilityLabel={`Set pen color to ${color}`}
-                    />
-                  );
-                })}
-                <Pressable
-                  key="eraser"
-                  style={[styles.eraserSwatch, penColor === ERASER_COLOR && styles.colorSwatchActive]}
-                  onPress={() => handleSelectPenColor(ERASER_COLOR)}
-                  accessibilityLabel="Use eraser"
-                >
-                  <Text style={styles.eraserIcon}>🧽</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.colorWheelButton, showExtendedPalette && styles.colorWheelButtonActive]}
-                  onPress={() => setShowExtendedPalette((prev) => !prev)}
-                  accessibilityLabel={showExtendedPalette ? 'Hide color wheel' : 'Show color wheel'}
-                >
-                  <Text style={styles.colorWheelIcon}>🎨</Text>
-                </Pressable>
-              </View>
-              {showExtendedPalette ? (
-                <View style={styles.colorWheelWrap}>
-                  <View style={styles.colorWheel}>
-                    {colorWheelPositions.map(({ color, left, top }) => {
-                      const isActive = penColor === color;
-                      return (
-                        <Pressable
-                          key={color}
-                          style={[styles.colorWheelSwatch, { backgroundColor: color, left, top }, isActive && styles.colorWheelSwatchActive]}
-                          onPress={() => handleSelectPenColor(color)}
-                          accessibilityLabel={`Set pen color to ${color}`}
-                        />
-                      );
-                    })}
-                    <Pressable
-                      style={styles.colorWheelClose}
-                      onPress={() => setShowExtendedPalette(false)}
-                      accessibilityLabel="Collapse color wheel"
-                    >
-                      <Text style={styles.colorWheelCloseText}>Close</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              ) : null}
-            </View>
-            <View style={styles.paletteSection}>
-              <Text style={styles.paletteLabel}>Pen size</Text>
-              <View style={styles.paletteSizeRow}>
-                {PEN_SIZES.map((size) => (
-                  <Pressable
-                    key={size}
-                    style={[styles.sizeOption, penSize === size && styles.sizeOptionActive]}
-                    onPress={() => setPenSize(size)}
-                    accessibilityLabel={`Set pen size to ${size} pixels`}>
-                    <View
-                      style={[
-                        styles.sizeOptionPreview,
-                        {
-                          width: size * 2,
-                          height: size * 2,
-                          borderRadius: size,
-                          backgroundColor: penColor === ERASER_COLOR ? '#f1f5f9' : penColor,
-                          borderColor: penColor === ERASER_COLOR ? '#94a3b8' : 'transparent',
-                        },
-                      ]}
-                    />
-                    <Text style={styles.sizeOptionLabel}>{size}px</Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-            <View style={styles.paletteSection}>
-              <Text style={styles.paletteLabel}>Sketchbook extras</Text>
-              <View style={styles.additionsRow}>
-                <Pressable
-                  style={[styles.additionCircle, isPickingPhoto && styles.additionCircleDisabled]}
-                  onPress={handleAddPhoto}
-                  disabled={isPickingPhoto}
-                  accessibilityRole="button"
-                  accessibilityLabel="Add a photo decoration"
-                >
-                  <Text style={styles.additionCircleIcon}>🖼️</Text>
-                </Pressable>
-                <View style={styles.additionBody}>
-                  <Text style={styles.additionTitle}>Photo charm</Text>
-                  <Text style={styles.additionCopy}>
-                    Drop a photo from your library onto the canvas.
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.textComposer}>
-                <View style={styles.textStyleRow}>
-                  {TEXT_STYLE_OPTIONS.map((option) => {
-                    const isActive = option.id === selectedTextStyle;
+            <Text style={styles.paletteTitle}>Pen color</Text>
+            <ScrollView
+              style={styles.paletteScroll}
+              contentContainerStyle={styles.paletteScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.paletteSection}>
+                <View style={styles.paletteColorRow}>
+                  {QUICK_DRAW_COLORS.map((color) => {
+                    const isActive = penColor === color;
                     return (
                       <Pressable
-                        key={option.id}
-                        style={[styles.textStyleOption, isActive && styles.textStyleOptionActive]}
-                        onPress={() => setSelectedTextStyle(option.id)}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: isActive }}
-                        accessibilityLabel={`${option.label} text style`}
-                      >
-                        <Text
-                          style={[
-                            styles.textStylePreview,
-                            option.textStyle,
-                            isActive && styles.textStylePreviewActive,
-                          ]}
-                        >
-                          {option.preview}
-                        </Text>
-                        <Text style={[styles.textStyleLabel, isActive && styles.textStyleLabelActive]}>
-                          {option.label}
-                        </Text>
-                      </Pressable>
+                        key={color}
+                        style={[styles.colorSwatch, { backgroundColor: color }, isActive && styles.colorSwatchActive]}
+                        onPress={() => handleSelectPenColor(color)}
+                        accessibilityLabel={`Set pen color to ${color}`}
+                      />
                     );
                   })}
+                  <Pressable
+                    key="eraser"
+                    style={[styles.eraserSwatch, penColor === ERASER_COLOR && styles.colorSwatchActive]}
+                    onPress={() => handleSelectPenColor(ERASER_COLOR)}
+                    accessibilityLabel="Use eraser"
+                  >
+                    <Text style={styles.eraserIcon}>🧽</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.colorWheelButton, showExtendedPalette && styles.colorWheelButtonActive]}
+                    onPress={() => setShowExtendedPalette((prev) => !prev)}
+                    accessibilityLabel={showExtendedPalette ? 'Hide color wheel' : 'Show color wheel'}
+                  >
+                    <Text style={styles.colorWheelIcon}>🎨</Text>
+                  </Pressable>
                 </View>
-                <TextInput
-                  style={styles.textComposerInput}
-                  value={textDraft}
-                  onChangeText={setTextDraft}
-                  placeholder="Write a garden note"
-                  placeholderTextColor="#4a5568"
-                  multiline
-                  blurOnSubmit
-                  returnKeyType="done"
-                  onSubmitEditing={() => {
-                    Keyboard.dismiss();
-                    setTextDraft((prev) => prev.replace(/\n+/g, ' ').trim());
-                  }}
-                  onKeyPress={({ nativeEvent }) => {
-                    if (nativeEvent.key === 'Enter') {
+                {showExtendedPalette ? (
+                  <View style={styles.colorWheelWrap}>
+                    <View style={styles.colorWheel}>
+                      {colorWheelPositions.map(({ color, left, top }) => {
+                        const isActive = penColor === color;
+                        return (
+                          <Pressable
+                            key={color}
+                            style={[styles.colorWheelSwatch, { backgroundColor: color, left, top }, isActive && styles.colorWheelSwatchActive]}
+                            onPress={() => handleSelectPenColor(color)}
+                            accessibilityLabel={`Set pen color to ${color}`}
+                          />
+                        );
+                      })}
+                      <Pressable
+                        style={styles.colorWheelClose}
+                        onPress={() => setShowExtendedPalette(false)}
+                        accessibilityLabel="Collapse color wheel"
+                      >
+                        <Text style={styles.colorWheelCloseText}>Close</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ) : null}
+              </View>
+              <View style={styles.paletteSection}>
+                <Text style={styles.paletteLabel}>Pen size</Text>
+                <View style={styles.paletteSizeRow}>
+                  {PEN_SIZES.map((size) => (
+                    <Pressable
+                      key={size}
+                      style={[styles.sizeOption, penSize === size && styles.sizeOptionActive]}
+                      onPress={() => setPenSize(size)}
+                      accessibilityLabel={`Set pen size to ${size} pixels`}>
+                      <View
+                        style={[
+                          styles.sizeOptionPreview,
+                          {
+                            width: size * 2,
+                            height: size * 2,
+                            borderRadius: size,
+                            backgroundColor: penColor === ERASER_COLOR ? '#f1f5f9' : penColor,
+                            borderColor: penColor === ERASER_COLOR ? '#94a3b8' : 'transparent',
+                          },
+                        ]}
+                      />
+                      <Text style={styles.sizeOptionLabel}>{size}px</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+              <View style={styles.paletteSection}>
+                <Text style={styles.paletteLabel}>Sketchbook extras</Text>
+                <View style={styles.additionsRow}>
+                  <Pressable
+                    style={[styles.additionCircle, isPickingPhoto && styles.additionCircleDisabled]}
+                    onPress={handleAddPhoto}
+                    disabled={isPickingPhoto}
+                    accessibilityRole="button"
+                    accessibilityLabel="Add a photo decoration"
+                  >
+                    <Text style={styles.additionCircleIcon}>🖼️</Text>
+                  </Pressable>
+                  <View style={styles.additionBody}>
+                    <Text style={styles.additionTitle}>Photo charm</Text>
+                    <Text style={styles.additionCopy}>
+                      Drop a photo from your library onto the canvas.
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.textComposer}>
+                  <Text style={styles.paletteLabel}>Text style</Text>
+                  <View style={styles.textStyleRow}>
+                    {TEXT_STYLE_OPTIONS.map((option) => {
+                      const isActive = option.id === selectedTextStyle;
+                      return (
+                        <Pressable
+                          key={option.id}
+                          style={[styles.textStyleOption, isActive && styles.textStyleOptionActive]}
+                          onPress={() => setSelectedTextStyle(option.id)}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: isActive }}
+                          accessibilityLabel={`${option.label} text style`}
+                        >
+                          <Text
+                            style={[
+                              styles.textStylePreview,
+                              option.textStyle,
+                              isActive && styles.textStylePreviewActive,
+                            ]}
+                          >
+                            {option.preview}
+                          </Text>
+                          <Text style={[styles.textStyleLabel, isActive && styles.textStyleLabelActive]}>
+                            {option.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                  <View style={styles.textPreviewWrap}>
+                    <Text
+                      style={[
+                        styles.textPreviewSample,
+                        textPreviewStyle,
+                        { fontSize: previewFontSize, color: previewColor },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      Garden note
+                    </Text>
+                  </View>
+                  <Text style={styles.paletteLabel}>Text size</Text>
+                  <View style={styles.textSizeControls}>
+                    <View
+                      style={styles.textSizeSlider}
+                      onLayout={({ nativeEvent }) => setTextSliderWidth(Math.max(nativeEvent.layout.width, 0))}
+                      {...textScalePanResponder.panHandlers}
+                      accessibilityRole="adjustable"
+                      accessibilityLabel="Adjust text size"
+                      accessibilityValue={{ text: `${Math.round(clampedTextScale * 100)} percent` }}
+                    >
+                      <View style={styles.textSizeSliderTrack} />
+                      <View style={[styles.textSizeSliderFill, { width: sliderFillWidth }]} />
+                      <View style={[styles.textSizeSliderThumb, { left: sliderThumbLeft }]} />
+                    </View>
+                    <Text style={styles.textSizeValue}>{Math.round(clampedTextScale * 100)}%</Text>
+                  </View>
+                  <TextInput
+                    style={styles.textComposerInput}
+                    value={textDraft}
+                    onChangeText={setTextDraft}
+                    placeholder="Write a garden note"
+                    placeholderTextColor="#4a5568"
+                    multiline
+                    blurOnSubmit
+                    returnKeyType="done"
+                    onSubmitEditing={() => {
                       Keyboard.dismiss();
                       setTextDraft((prev) => prev.replace(/\n+/g, ' ').trim());
-                    }
-                  }}
-                />
-                <Pressable
-                  style={[
-                    styles.textComposerButton,
-                    textDraft.trim().length === 0 && styles.textComposerButtonDisabled,
-                  ]}
-                  onPress={handleAddText}
-                  disabled={textDraft.trim().length === 0}
-                  accessibilityRole="button"
-                  accessibilityLabel="Add a text decoration"
-                >
-                  <Text
+                    }}
+                    onKeyPress={({ nativeEvent }) => {
+                      if (nativeEvent.key === 'Enter') {
+                        Keyboard.dismiss();
+                        setTextDraft((prev) => prev.replace(/\n+/g, ' ').trim());
+                      }
+                    }}
+                  />
+                  <Pressable
                     style={[
-                      styles.textComposerButtonText,
-                      textDraft.trim().length === 0 && styles.textComposerButtonTextDisabled,
+                      styles.textComposerButton,
+                      textDraft.trim().length === 0 && styles.textComposerButtonDisabled,
                     ]}
+                    onPress={handleAddText}
+                    disabled={textDraft.trim().length === 0}
+                    accessibilityRole="button"
+                    accessibilityLabel="Add a text decoration"
                   >
-                    Add text
+                    <Text
+                      style={[
+                        styles.textComposerButtonText,
+                        textDraft.trim().length === 0 && styles.textComposerButtonTextDisabled,
+                      ]}
+                    >
+                      Add text
+                    </Text>
+                  </Pressable>
+                  <Text style={styles.textComposerHint}>
+                    Uses the active pen color for the text fill. Swipe the size slider to grow or shrink your note.
                   </Text>
-                </Pressable>
-                <Text style={styles.textComposerHint}>
-                  Uses the active pen color for the text fill.
-                </Text>
+                </View>
               </View>
-            </View>
+            </ScrollView>
             <Pressable
               style={styles.paletteCloseButton}
               onPress={() => setShowPalette(false)}
@@ -2337,16 +2468,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  canvasTextWrap: {
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.85)',
-    borderWidth: 1,
-    borderColor: 'rgba(20, 83, 45, 0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   canvasText: {
     fontSize: 24,
     fontWeight: '700',
@@ -2568,7 +2689,6 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 28,
     paddingHorizontal: 24,
     paddingTop: 16,
-    paddingBottom: 28,
     gap: 16,
     shadowColor: '#0f2e20',
     shadowOpacity: 0.16,
@@ -2586,13 +2706,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#134e32',
-    textAlign: 'center',
+    textAlign: 'left',
   },
-  paletteSubtitle: {
-    fontSize: 13,
-    color: '#2d3748',
-    textAlign: 'center',
-    lineHeight: 18,
+  paletteScroll: {
+    flexGrow: 0,
+  },
+  paletteScrollContent: {
+    paddingBottom: 16,
+    gap: 16,
   },
   paletteSection: {
     gap: 10,
@@ -2789,11 +2910,13 @@ const styles = StyleSheet.create({
   },
   textStyleRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
+    flexWrap: 'wrap',
+    columnGap: 8,
+    rowGap: 8,
   },
   textStyleOption: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: '48%',
     borderRadius: 14,
     paddingHorizontal: 10,
     paddingVertical: 10,
@@ -2822,6 +2945,16 @@ const styles = StyleSheet.create({
   },
   textStyleLabelActive: {
     color: '#0f766e',
+  },
+  textPreviewWrap: {
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  textPreviewSample: {
+    color: '#134e32',
+    fontWeight: '700',
+    textAlign: 'center',
   },
   textComposerInput: {
     width: '100%',
@@ -2857,6 +2990,56 @@ const styles = StyleSheet.create({
   textComposerHint: {
     fontSize: 12,
     color: '#1f2937',
+  },
+  textSizeControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 8,
+  },
+  textSizeSlider: {
+    flex: 1,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(15, 118, 110, 0.08)',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+  },
+  textSizeSliderTrack: {
+    position: 'absolute',
+    left: 14,
+    right: 14,
+    top: 14,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(15, 118, 110, 0.25)',
+  },
+  textSizeSliderFill: {
+    position: 'absolute',
+    left: 14,
+    top: 14,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#0f766e',
+  },
+  textSizeSliderThumb: {
+    position: 'absolute',
+    top: 4,
+    width: TEXT_SLIDER_THUMB_SIZE,
+    height: TEXT_SLIDER_THUMB_SIZE,
+    borderRadius: TEXT_SLIDER_THUMB_SIZE / 2,
+    backgroundColor: '#0f766e',
+    shadowColor: '#0f766e',
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  textSizeValue: {
+    minWidth: 54,
+    textAlign: 'right',
+    fontWeight: '700',
+    color: '#134e32',
   },
   paletteCloseButton: {
     backgroundColor: '#22543d',

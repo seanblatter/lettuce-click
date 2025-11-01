@@ -586,6 +586,23 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const autoPerSecondRef = useRef(autoPerSecond);
   const VARIATION_SELECTOR_REGEX = /[\uFE0E\uFE0F]/g;
 
+  useEffect(() => {
+    setOwnedThemes((prev) => {
+      let updated: Record<HomeEmojiTheme, boolean> | null = null;
+
+      emojiThemeCatalog.forEach((theme) => {
+        if (theme.cost === 0 && !prev[theme.id]) {
+          if (!updated) {
+            updated = { ...prev };
+          }
+          updated[theme.id] = true;
+        }
+      });
+
+      return updated ?? prev;
+    });
+  }, []);
+
   const stripVariationSelectors = useCallback(
     (value: string) => value.replace(VARIATION_SELECTOR_REGEX, ''),
     []

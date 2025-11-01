@@ -38,6 +38,13 @@
             "backgroundColor": "#000000"
           }
         }
+      ],
+      [
+        "expo-ads-admob",
+        {
+          "androidAppId": "ca-app-pub-7849823724462832~3719046909",
+          "iosAppId": "ca-app-pub-7849823724462832~3844111939"
+        }
       ]
     ],
     "experiments": {

@@ -623,7 +623,7 @@ export default function HomeScreen() {
                         <Text style={[styles.menuItemIcon, styles.quickActionIcon]}>🎧</Text>
                       </View>
                       <View style={styles.menuItemBody}>
-                        <Text style={[styles.menuItemTitle, styles.quickActionTitle]}>🥬 Music Lounge</Text>
+                        <Text style={[styles.menuItemTitle, styles.quickActionTitle]}>Music Lounge</Text>
                         <Text style={[styles.menuItemSubtitle, styles.quickActionSubtitle]}>
                           Curated ambience for focus &amp; rest
                         </Text>

@@ -4,38 +4,46 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AppThemeProvider, useAppTheme } from '@/context/ThemeContext';
 import { GameProvider } from '@/context/GameContext';
 
 export const unstable_settings = {
   anchor: '(tabs)',
 };
 
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
+function RootNavigation() {
+  const { colorScheme } = useAppTheme();
 
   return (
+    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      <Stack>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="modal"
+          options={{ presentation: 'modal', title: 'Modal', animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen
+          name="music"
+          options={{ headerShown: false, presentation: 'modal', animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen
+          name="profile"
+          options={{ headerShown: false, presentation: 'modal', animation: 'slide_from_bottom' }}
+        />
+      </Stack>
+      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+    </ThemeProvider>
+  );
+}
+
+export default function RootLayout() {
+  return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <GameProvider>
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <Stack>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen
-              name="modal"
-              options={{ presentation: 'modal', title: 'Modal', animation: 'slide_from_bottom' }}
-            />
-            <Stack.Screen
-              name="music"
-              options={{ headerShown: false, presentation: 'modal', animation: 'slide_from_bottom' }}
-            />
-            <Stack.Screen
-              name="profile"
-              options={{ headerShown: false, presentation: 'modal', animation: 'slide_from_bottom' }}
-            />
-          </Stack>
-          <StatusBar style="auto" />
-        </ThemeProvider>
-      </GameProvider>
+      <AppThemeProvider>
+        <GameProvider>
+          <RootNavigation />
+        </GameProvider>
+      </AppThemeProvider>
     </GestureHandlerRootView>
   );
 }

@@ -1555,7 +1555,7 @@ export function GardenSection({
                       ]}
                       numberOfLines={1}
                     >
-                      Garden note
+                      {textDraft.trim().length > 0 ? textDraft : 'Type to preview'}
                     </Text>
                   </View>
                   <Text style={styles.paletteLabel}>Text size</Text>

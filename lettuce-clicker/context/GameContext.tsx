@@ -866,13 +866,15 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
 
   const setHomeEmojiTheme = useCallback(
     (theme: HomeEmojiTheme) => {
-      if (!ownedThemes[theme]) {
-        return;
-      }
-
+      setOwnedThemes((prev) => {
+        if (prev[theme]) {
+          return prev;
+        }
+        return { ...prev, [theme]: true };
+      });
       setHomeEmojiThemeState(theme);
     },
-    [ownedThemes]
+    []
   );
 
   const purchaseEmojiTheme = useCallback(

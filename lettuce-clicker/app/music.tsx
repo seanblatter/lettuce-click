@@ -13,8 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-// eslint-disable-next-line import/no-unresolved
-import { Audio } from 'expo-av';
+import { useAudioPlayer } from 'expo-audio';
 import { ALARM_CHIME_DATA_URI } from '@/assets/audio/alarmChime';
 import { useAppTheme } from '@/context/ThemeContext';
 
@@ -1131,8 +1130,8 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
   const [alarmPeriod, setAlarmPeriod] = useState<AlarmPeriod>('AM');
   const [sleepCircle, setSleepCircle] = useState<SleepCircleState>(null);
   const [sleepNow, setSleepNow] = useState(() => Date.now());
-  const sleepTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const alarmSoundRef = useRef<Audio.Sound | null>(null);
+  const sleepTimeoutRef = useRef<number | null>(null);
+  const alarmPlayer = useAudioPlayer(ALARM_SOUND_URI);
   const [audioReady, setAudioReady] = useState(false);
   const [audioError, setAudioError] = useState<Error | null>(null);
   const [showAllGroups, setShowAllGroups] = useState(false);
@@ -1146,42 +1145,13 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
-      try {
-        await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, staysActiveInBackground: false });
-        const { sound } = await Audio.Sound.createAsync(
-          { uri: ALARM_SOUND_URI },
-          { shouldPlay: false, volume: 1 },
-        );
-
-        if (cancelled) {
-          await sound.unloadAsync();
-          return;
-        }
-
-        alarmSoundRef.current = sound;
-        setAudioReady(true);
-      } catch (error) {
-        if (!cancelled) {
-          setAudioError(error instanceof Error ? error : new Error('Failed to prepare alarm sound'));
-        }
-      }
-    })();
+    // expo-audio automatically handles audio setup, no manual initialization needed
+    setAudioReady(true);
 
     return () => {
-      cancelled = true;
-
       if (sleepTimeoutRef.current) {
         clearTimeout(sleepTimeoutRef.current);
         sleepTimeoutRef.current = null;
-      }
-
-      const sound = alarmSoundRef.current;
-      if (sound) {
-        sound.unloadAsync().catch(() => {});
-        alarmSoundRef.current = null;
       }
     };
   }, []);
@@ -1320,11 +1290,9 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
       Vibration.vibrate([0, 400, 200, 400], false);
 
       try {
-        const sound = alarmSoundRef.current;
-        if (mode === 'alarm' && sound) {
-          await sound.replayAsync();
-        } else if (mode === 'alarm' && audioError) {
-          console.warn('Alarm sound unavailable', audioError);
+        if (mode === 'alarm') {
+          alarmPlayer.seekTo(0);
+          alarmPlayer.play();
         }
       } catch (error) {
         console.warn('Alarm playback failed', error);
@@ -1337,7 +1305,7 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
           : 'Time to wake up! Your Dream Capsule alarm is sounding.'
       );
     },
-    [audioError]
+    [alarmPlayer]
   );
 
   const scheduleSleepTrigger = useCallback(
@@ -1806,7 +1774,7 @@ function WheelPicker<T extends WheelValue>({
         snapToAlignment="center"
         onMomentumScrollEnd={handleMomentumEnd}
         onScrollEndDrag={handleMomentumEnd}
-        contentOffset={{ y: initialIndex * WHEEL_ITEM_HEIGHT }}
+        contentOffset={{ x: 0, y: initialIndex * WHEEL_ITEM_HEIGHT }}
       >
         {data.map((item) => {
           const formatted = formatValue(item);

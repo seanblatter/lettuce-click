@@ -1030,6 +1030,7 @@ export function GardenSection({
     [selectedTextStyle]
   );
   const textPreviewStyle = TEXT_STYLE_MAP[selectedTextStyle] ?? {};
+  const previewSampleText = selectedTextStyleOption?.preview ?? 'Sample';
   const previewBaseFontSize =
     typeof textPreviewStyle.fontSize === 'number' ? textPreviewStyle.fontSize : 20;
   const previewFontSize = previewBaseFontSize * clampedTextScale;
@@ -1555,7 +1556,7 @@ export function GardenSection({
                       ]}
                       numberOfLines={1}
                     >
-                      Garden note
+                      {previewSampleText}
                     </Text>
                   </View>
                   <Text style={styles.paletteLabel}>Text size</Text>

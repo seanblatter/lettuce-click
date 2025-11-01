@@ -39,6 +39,7 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
   const [emojiInput, setEmojiInput] = useState(customClickEmoji);
   const [accentSelection, setAccentSelection] = useState(premiumAccentColor);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const emojiInputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     setName(profileName);
@@ -193,6 +194,11 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
     }
   }, [onRequestClose]);
 
+  const handleSaveProfile = useCallback(() => {
+    persistProfile();
+    handleClose();
+  }, [handleClose, persistProfile]);
+
   const isModal = mode === 'modal';
   const closeAccessibilityLabel = isModal ? 'Close profile editor' : 'Go back';
   const closeLabel = isModal ? 'Back' : '← Back';
@@ -318,16 +324,23 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
               ) : (
                 <Text style={styles.emojiEmptyText}>Purchase garden decorations to see suggested emoji.</Text>
               )}
-              <TextInput
-                value={emojiInput}
-                onChangeText={handleEmojiInputChange}
-                placeholder="Type any emoji"
-                style={styles.emojiInput}
-                maxLength={6}
-                autoCorrect={false}
-                autoCapitalize="none"
-                returnKeyType="done"
-              />
+              <Pressable
+                style={styles.emojiInputContainer}
+                onPress={() => emojiInputRef.current?.focus()}
+                accessible={false}
+              >
+                <TextInput
+                  ref={emojiInputRef}
+                  value={emojiInput}
+                  onChangeText={handleEmojiInputChange}
+                  placeholder="Type any emoji"
+                  style={styles.emojiInputField}
+                  maxLength={6}
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                  returnKeyType="done"
+                />
+              </Pressable>
               <Text style={styles.emojiNote}>
                 Tip: tap a suggestion or type an emoji to update your click button and menu instantly.
               </Text>
@@ -344,7 +357,11 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
           )}
         </View>
 
-        <Pressable style={[styles.saveButton, isSaving && styles.saveButtonDisabled]} onPress={persistProfile} disabled={isSaving}>
+        <Pressable
+          style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
+          onPress={handleSaveProfile}
+          disabled={isSaving}
+        >
           <Text style={styles.saveButtonText}>{isSaving ? 'Saving…' : 'Save profile'}</Text>
         </Pressable>
       </ScrollView>
@@ -586,14 +603,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#2d3748',
   },
-  emojiInput: {
+  emojiInputContainer: {
     backgroundColor: '#ffffff',
     borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  emojiInputField: {
+    width: '100%',
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#bbf7d0',
+    color: '#22543d',
   },
   emojiNote: {
     fontSize: 12,

@@ -8,7 +8,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
   Vibration,
 } from 'react-native';
@@ -159,35 +158,21 @@ const MUSIC_GROUPS = [
 ] as const;
 
 const MUSIC_SERVICES = [
-  {
-    id: 'apple',
-    name: 'Apple Music',
-    emoji: '🍎',
-    description: 'Link once to pull favourites and saved stations into the lounge.',
-  },
-  {
-    id: 'spotify',
-    name: 'Spotify',
-    emoji: '🟢',
-    description: 'Sync your liked songs and blends for quick playback.',
-  },
+  { id: 'apple', name: 'Apple Music', emoji: '🍎', description: 'Link your personal library and curated stations.' },
+  { id: 'spotify', name: 'Spotify', emoji: '🟢', description: 'Stream playlists and blends from your account.' },
 ] as const;
 
-type StreamingTrack = { id: string; title: string; artist: string };
-
-const SERVICE_SAMPLE_TRACKS: Record<MusicServiceId, StreamingTrack[]> = {
-  apple: [
-    { id: 'apple-morning', title: 'Morning Dew', artist: 'The Orchard Ensemble' },
-    { id: 'apple-halo', title: 'Halo in Bloom', artist: 'Sleepy Conservatory' },
-    { id: 'apple-vines', title: 'Vines & Vinyl', artist: 'LoFi Flora' },
-    { id: 'apple-pulse', title: 'Garden Pulse', artist: 'Estelle Rivers' },
-  ],
-  spotify: [
-    { id: 'spotify-dawn', title: 'Dawn Awake', artist: 'Aurora Drifters' },
-    { id: 'spotify-rain', title: 'Rain Lanterns', artist: 'Moss Harbour' },
-    { id: 'spotify-solstice', title: 'Solstice Steps', artist: 'Atlas Grove' },
-    { id: 'spotify-ember', title: 'Ember Glow', artist: 'Nightshade Notes' },
-  ],
+const SERVICE_NOW_PLAYING: Record<MusicServiceId, { emoji: string; title: string; subtitle: string }> = {
+  apple: {
+    emoji: '🍎',
+    title: 'Morning Bloom Radio',
+    subtitle: 'Playing from your Apple Music connection.',
+  },
+  spotify: {
+    emoji: '🟢',
+    title: 'Focus Flow',
+    subtitle: 'Streaming from your Spotify playlists.',
+  },
 };
 
 const SLEEP_MODE_OPTIONS = [
@@ -239,6 +224,13 @@ type Palette = {
   sleepStatusLabel: string;
   sleepStatusHeadline: string;
   sleepStatusWarning: string;
+  sourcePillBackground: string;
+  sourcePillBorder: string;
+  sourcePillActiveBackground: string;
+  sourcePillActiveBorder: string;
+  sourcePillText: string;
+  sourcePillActiveText: string;
+  sourcePillShadow: string;
   serviceCardBackground: string;
   serviceCardBorder: string;
   serviceCardConnectedBackground: string;
@@ -327,6 +319,13 @@ const DARK_PALETTE: Palette = {
   sleepStatusLabel: '#6ee7b7',
   sleepStatusHeadline: '#e7fff2',
   sleepStatusWarning: '#fcd34d',
+  sourcePillBackground: 'rgba(7, 28, 19, 0.9)',
+  sourcePillBorder: 'rgba(77, 255, 166, 0.3)',
+  sourcePillActiveBackground: '#2dd78f',
+  sourcePillActiveBorder: '#2dd78f',
+  sourcePillText: '#caffd6',
+  sourcePillActiveText: '#062014',
+  sourcePillShadow: '#2dd78f',
   serviceCardBackground: 'rgba(8, 26, 18, 0.9)',
   serviceCardBorder: 'rgba(77, 255, 166, 0.14)',
   serviceCardConnectedBackground: 'rgba(18, 61, 39, 0.92)',
@@ -415,6 +414,13 @@ const LIGHT_PALETTE: Palette = {
   sleepStatusLabel: '#1f7a53',
   sleepStatusHeadline: '#11402c',
   sleepStatusWarning: '#c47f0e',
+  sourcePillBackground: '#f1f9f4',
+  sourcePillBorder: '#caead9',
+  sourcePillActiveBackground: '#2dd78f',
+  sourcePillActiveBorder: '#2dd78f',
+  sourcePillText: '#205c42',
+  sourcePillActiveText: '#073621',
+  sourcePillShadow: 'rgba(45, 215, 143, 0.35)',
   serviceCardBackground: '#ffffff',
   serviceCardBorder: '#d9efe2',
   serviceCardConnectedBackground: '#e6f7ed',
@@ -533,13 +539,14 @@ const createStyles = (palette: Palette, isDark: boolean) =>
     headerActions: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 12,
+      gap: 10,
       flexShrink: 0,
     },
     headerActionButton: {
+      flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'center',
-      paddingHorizontal: 12,
+      gap: 8,
+      paddingHorizontal: 16,
       paddingVertical: 12,
       borderRadius: 999,
       backgroundColor: palette.actionButtonBackground,
@@ -552,9 +559,9 @@ const createStyles = (palette: Palette, isDark: boolean) =>
       elevation: isDark ? 6 : 3,
     },
     headerActionBubble: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
+      width: 40,
+      height: 40,
+      borderRadius: 20,
       backgroundColor: palette.actionBubbleBackground,
       borderWidth: 1,
       borderColor: palette.actionBubbleBorder,
@@ -562,8 +569,13 @@ const createStyles = (palette: Palette, isDark: boolean) =>
       justifyContent: 'center',
     },
     headerActionGlyph: {
-      fontSize: 24,
+      fontSize: 22,
       color: palette.sleepGlyphColor,
+    },
+    headerActionLabel: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: palette.actionIcon,
     },
     nowPlayingCard: {
       backgroundColor: palette.cardBackground,
@@ -596,7 +608,7 @@ const createStyles = (palette: Palette, isDark: boolean) =>
       color: palette.nowPlayingMeta,
     },
     nowPlayingRow: {
-      flexDirection: 'column',
+      flexDirection: 'row',
       alignItems: 'center',
       gap: 18,
     },
@@ -614,19 +626,16 @@ const createStyles = (palette: Palette, isDark: boolean) =>
     nowPlayingBody: {
       flex: 1,
       gap: 6,
-      alignItems: 'center',
     },
     nowPlayingTitle: {
       fontSize: 20,
       fontWeight: '800',
       color: palette.nowPlayingTitle,
-      textAlign: 'center',
     },
     nowPlayingSubtitle: {
       fontSize: 13,
       lineHeight: 18,
       color: palette.nowPlayingSubtitle,
-      textAlign: 'center',
     },
     sleepStatusBlock: {
       gap: 4,
@@ -651,6 +660,36 @@ const createStyles = (palette: Palette, isDark: boolean) =>
     sleepStatusWarning: {
       fontSize: 12,
       color: palette.sleepStatusWarning,
+    },
+    nowPlayingSources: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+    },
+    sourcePill: {
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: palette.sourcePillBorder,
+      backgroundColor: palette.sourcePillBackground,
+    },
+    sourcePillActive: {
+      backgroundColor: palette.sourcePillActiveBackground,
+      borderColor: palette.sourcePillActiveBorder,
+      shadowColor: palette.sourcePillShadow,
+      shadowOpacity: isDark ? 0.35 : 0.18,
+      shadowRadius: isDark ? 10 : 8,
+      shadowOffset: { width: 0, height: isDark ? 6 : 4 },
+      elevation: isDark ? 4 : 2,
+    },
+    sourcePillText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: palette.sourcePillText,
+    },
+    sourcePillTextActive: {
+      color: palette.sourcePillActiveText,
     },
     serviceSection: {
       gap: 12,
@@ -720,82 +759,6 @@ const createStyles = (palette: Palette, isDark: boolean) =>
     },
     serviceStatusConnected: {
       color: palette.serviceStatusConnected,
-    },
-    streamingSection: {
-      gap: 12,
-      backgroundColor: palette.cardBackground,
-      borderRadius: 28,
-      padding: 22,
-      borderWidth: 1,
-      borderColor: palette.cardBorder,
-      shadowColor: palette.cardShadow,
-      shadowOpacity: isDark ? 0.4 : 0.2,
-      shadowRadius: isDark ? 24 : 16,
-      shadowOffset: { width: 0, height: isDark ? 14 : 10 },
-      elevation: isDark ? 7 : 4,
-    },
-    streamingHeading: {
-      fontSize: 17,
-      fontWeight: '700',
-      color: palette.groupTitle,
-    },
-    streamingSubheading: {
-      fontSize: 13,
-      lineHeight: 18,
-      color: palette.groupDescription,
-    },
-    streamingSearchInput: {
-      borderRadius: 16,
-      borderWidth: 1,
-      borderColor: palette.sleepTimerBorder,
-      backgroundColor: palette.sleepTimerBackground,
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      fontSize: 15,
-      color: palette.groupTitle,
-    },
-    streamingList: {
-      gap: 10,
-    },
-    streamingItem: {
-      borderRadius: 18,
-      borderWidth: 1,
-      borderColor: palette.serviceCardBorder,
-      backgroundColor: palette.serviceCardBackground,
-      paddingHorizontal: 18,
-      paddingVertical: 14,
-      gap: 4,
-    },
-    streamingItemMeta: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    },
-    streamingItemTitle: {
-      fontSize: 16,
-      fontWeight: '700',
-      color: palette.optionName,
-    },
-    streamingItemArtist: {
-      fontSize: 13,
-      color: palette.optionDescription,
-    },
-    streamingEmpty: {
-      fontSize: 12,
-      color: palette.groupDescription,
-    },
-    streamingBadge: {
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-      borderRadius: 999,
-      backgroundColor: palette.optionEmojiBackground,
-    },
-    streamingBadgeText: {
-      fontSize: 11,
-      fontWeight: '700',
-      color: palette.optionNameActive,
-      letterSpacing: 0.6,
-      textTransform: 'uppercase',
     },
     groupSection: {
       gap: 14,
@@ -1129,8 +1092,7 @@ const formatDurationCompact = (minutes: number) => {
 
 type MusicOption = (typeof MUSIC_OPTIONS)[number];
 type MusicServiceId = (typeof MUSIC_SERVICES)[number]['id'];
-type MusicServiceProfile = { connected: boolean; favorites: StreamingTrack[] };
-type StreamingSelection = { service: MusicServiceId; track: StreamingTrack };
+type MusicSource = 'mix' | MusicServiceId;
 type SleepMode = (typeof SLEEP_MODE_OPTIONS)[number]['id'];
 type AlarmPeriod = 'AM' | 'PM';
 
@@ -1142,25 +1104,25 @@ type SleepCircleState =
 type MusicContentProps = {
   mode?: 'screen' | 'modal';
   onRequestClose?: () => void;
-  defaultSleepOpen?: boolean;
 };
 
-export function MusicContent({ mode = 'screen', onRequestClose, defaultSleepOpen = false }: MusicContentProps) {
+export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentProps) {
   const insets = useSafeAreaInsets();
   const { colorScheme, toggleColorScheme } = useAppTheme();
-  const palette = colorScheme === 'dark' ? DARK_PALETTE : LIGHT_PALETTE;
-  const styles = useMemo(() => createStyles(palette, colorScheme === 'dark'), [colorScheme, palette]);
-  const themeToggleHint = colorScheme === 'dark' ? 'Switch lounge to light mode' : 'Switch lounge to dark mode';
-  const themeToggleIcon = '🌙';
+  const styles = useMemo(
+    () => createStyles(colorScheme === 'dark' ? DARK_PALETTE : LIGHT_PALETTE, colorScheme === 'dark'),
+    [colorScheme]
+  );
+  const themeLabel = colorScheme === 'dark' ? 'Dark mode' : 'Light mode';
+  const themeToggleIcon = colorScheme === 'dark' ? '🌞' : '🌙';
+  const themeToggleHint = colorScheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
   const [selectedTrackId, setSelectedTrackId] = useState<MusicOption['id']>(MUSIC_OPTIONS[0].id);
-  const [serviceProfiles, setServiceProfiles] = useState<Record<MusicServiceId, MusicServiceProfile>>({
-    apple: { connected: false, favorites: [] },
-    spotify: { connected: false, favorites: [] },
+  const [connectedServices, setConnectedServices] = useState<Record<MusicServiceId, boolean>>({
+    apple: false,
+    spotify: false,
   });
-  const [activeFavorite, setActiveFavorite] = useState<StreamingSelection | null>(null);
-  const [streamSearchQuery, setStreamSearchQuery] = useState('');
-  const [sleepModalOpen, setSleepModalOpen] = useState(defaultSleepOpen);
-  const streamingPlaceholderColor = palette.sleepTimerText;
+  const [nowPlayingSource, setNowPlayingSource] = useState<MusicSource>('mix');
+  const [sleepModalOpen, setSleepModalOpen] = useState(false);
   const [sleepMode, setSleepMode] = useState<SleepMode>('timer');
   const [sleepTimerMinutes, setSleepTimerMinutes] = useState<number>(30);
   const [alarmHour, setAlarmHour] = useState<number>(7);
@@ -1173,12 +1135,6 @@ export function MusicContent({ mode = 'screen', onRequestClose, defaultSleepOpen
   const [audioReady, setAudioReady] = useState(false);
   const [audioError, setAudioError] = useState<Error | null>(null);
   const [showAllGroups, setShowAllGroups] = useState(false);
-
-  useEffect(() => {
-    if (defaultSleepOpen) {
-      setSleepModalOpen(true);
-    }
-  }, [defaultSleepOpen]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -1230,70 +1186,41 @@ export function MusicContent({ mode = 'screen', onRequestClose, defaultSleepOpen
     [selectedTrackId]
   );
 
+  useEffect(() => {
+    if (nowPlayingSource !== 'mix' && !connectedServices[nowPlayingSource]) {
+      setNowPlayingSource('mix');
+    }
+  }, [connectedServices, nowPlayingSource]);
+
+  const availableSources = useMemo(() => {
+    const sources: { id: MusicSource; label: string }[] = [{ id: 'mix', label: 'Garden mix' }];
+    MUSIC_SERVICES.forEach((service) => {
+      if (connectedServices[service.id]) {
+        sources.push({ id: service.id, label: service.name });
+      }
+    });
+    return sources;
+  }, [connectedServices]);
+
   const nowPlayingDetails = useMemo(() => {
-    if (activeFavorite) {
-      const service = MUSIC_SERVICES.find((entry) => entry.id === activeFavorite.service);
+    if (nowPlayingSource === 'mix') {
       return {
-        emoji: '🎧',
-        title: activeFavorite.track.title,
-        subtitle: `${activeFavorite.track.artist}${service ? ` · ${service.name}` : ''}`,
+        emoji: selectedTrack.emoji,
+        title: selectedTrack.name,
+        subtitle: selectedTrack.description,
       };
     }
 
-    return {
-      emoji: selectedTrack.emoji,
-      title: selectedTrack.name,
-      subtitle: selectedTrack.description,
-    };
-  }, [activeFavorite, selectedTrack]);
-
-  const serviceNameMap = useMemo(
-    () =>
-      MUSIC_SERVICES.reduce<Record<MusicServiceId, string>>((acc, service) => {
-        acc[service.id] = service.name;
-        return acc;
-      }, {} as Record<MusicServiceId, string>),
-    []
-  );
-
-  const connectedFavorites = useMemo(() => {
-    const entries: StreamingSelection[] = [];
-    (Object.keys(serviceProfiles) as MusicServiceId[]).forEach((serviceId) => {
-      const profile = serviceProfiles[serviceId];
-      if (!profile?.connected) {
-        return;
-      }
-
-      profile.favorites.forEach((track) => {
-        entries.push({ service: serviceId, track });
-      });
-    });
-    return entries;
-  }, [serviceProfiles]);
-
-  const normalizedSearch = streamSearchQuery.trim().toLowerCase();
-  const searchResults = useMemo(() => {
-    if (!normalizedSearch) {
-      return [] as StreamingSelection[];
+    if (!connectedServices[nowPlayingSource]) {
+      return {
+        emoji: selectedTrack.emoji,
+        title: selectedTrack.name,
+        subtitle: selectedTrack.description,
+      };
     }
 
-    return connectedFavorites.filter(({ track }) => {
-      const title = track.title.toLowerCase();
-      const artist = track.artist.toLowerCase();
-      return title.includes(normalizedSearch) || artist.includes(normalizedSearch);
-    });
-  }, [connectedFavorites, normalizedSearch]);
-
-  const hasSearch = normalizedSearch.length > 0;
-  const displayedFavorites = useMemo(() => {
-    if (hasSearch) {
-      return searchResults;
-    }
-    return connectedFavorites.slice(0, 8);
-  }, [connectedFavorites, hasSearch, searchResults]);
-
-  const hasStreamingConnection = connectedFavorites.length > 0;
-  const searchEmpty = hasSearch && searchResults.length === 0;
+    return SERVICE_NOW_PLAYING[nowPlayingSource];
+  }, [connectedServices, nowPlayingSource, selectedTrack]);
 
   const sleepSummary = useMemo(() => {
     if (!sleepCircle) {
@@ -1339,33 +1266,23 @@ export function MusicContent({ mode = 'screen', onRequestClose, defaultSleepOpen
 
   const handleSelectTrack = useCallback((trackId: MusicOption['id']) => {
     setSelectedTrackId(trackId);
-    setActiveFavorite(null);
+    setNowPlayingSource('mix');
   }, []);
 
-  const handleConnectService = useCallback((serviceId: MusicServiceId) => {
-    setServiceProfiles((prev) => {
-      const current = prev[serviceId];
-      if (current?.connected) {
-        return prev;
-      }
-
-      const favourites = SERVICE_SAMPLE_TRACKS[serviceId] ?? [];
-      const nextProfile: MusicServiceProfile = { connected: true, favorites: favourites };
-      return { ...prev, [serviceId]: nextProfile };
-    });
-
-    setActiveFavorite((existing) => {
-      if (existing) {
-        return existing;
-      }
-      const sample = SERVICE_SAMPLE_TRACKS[serviceId]?.[0];
-      return sample ? { service: serviceId, track: sample } : null;
-    });
-  }, []);
-
-  const handlePlayFavorite = useCallback((serviceId: MusicServiceId, track: StreamingTrack) => {
-    setActiveFavorite({ service: serviceId, track });
-  }, []);
+  const handleToggleService = useCallback(
+    (serviceId: MusicServiceId) => {
+      setConnectedServices((prev) => {
+        const next = { ...prev, [serviceId]: !prev[serviceId] };
+        if (next[serviceId]) {
+          setNowPlayingSource(serviceId);
+        } else if (nowPlayingSource === serviceId) {
+          setNowPlayingSource('mix');
+        }
+        return next;
+      });
+    },
+    [nowPlayingSource]
+  );
 
   const handleSleepComplete = useCallback(
     async (mode: SleepMode) => {
@@ -1498,14 +1415,15 @@ export function MusicContent({ mode = 'screen', onRequestClose, defaultSleepOpen
               onPress={toggleColorScheme}
               style={styles.headerActionButton}
               accessibilityRole="button"
-              accessibilityLabel="Toggle lounge theme"
-            accessibilityHint={themeToggleHint}
-            accessibilityValue={{ text: colorScheme === 'dark' ? 'Dark mode active' : 'Light mode active' }}
-          >
-            <View style={styles.headerActionBubble}>
-              <Text style={styles.headerActionGlyph}>{themeToggleIcon}</Text>
-            </View>
-          </Pressable>
+              accessibilityLabel="Toggle light or dark mode"
+              accessibilityHint={themeToggleHint}
+              accessibilityValue={{ text: `${themeLabel} active` }}
+            >
+              <View style={styles.headerActionBubble}>
+                <Text style={styles.headerActionGlyph}>{themeToggleIcon}</Text>
+              </View>
+              <Text style={styles.headerActionLabel}>{themeLabel}</Text>
+            </Pressable>
             <Pressable
               onPress={handleOpenSleepModal}
               style={styles.headerActionButton}
@@ -1517,6 +1435,7 @@ export function MusicContent({ mode = 'screen', onRequestClose, defaultSleepOpen
               <View style={styles.headerActionBubble}>
                 <Text style={styles.headerActionGlyph}>⏰</Text>
               </View>
+              <Text style={styles.headerActionLabel}>Dream Capsule</Text>
             </Pressable>
           </View>
         </View>
@@ -1544,6 +1463,25 @@ export function MusicContent({ mode = 'screen', onRequestClose, defaultSleepOpen
               </Text>
             ) : null}
           </View>
+          <View style={styles.nowPlayingSources}>
+            {availableSources.map((source) => {
+              const isActive = nowPlayingSource === source.id;
+              return (
+                <Pressable
+                  key={source.id}
+                  style={[styles.sourcePill, isActive && styles.sourcePillActive]}
+                  onPress={() => setNowPlayingSource(source.id)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isActive }}
+                  accessibilityLabel={`Play from ${source.label}`}
+                >
+                  <Text style={[styles.sourcePillText, isActive && styles.sourcePillTextActive]}>
+                    {source.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
 
         <View style={styles.serviceSection}>
@@ -1553,27 +1491,15 @@ export function MusicContent({ mode = 'screen', onRequestClose, defaultSleepOpen
           </Text>
           <View style={styles.serviceList}>
             {MUSIC_SERVICES.map((service) => {
-              const profile = serviceProfiles[service.id];
-              const connected = profile?.connected ?? false;
-              const favouriteCount = profile?.favorites.length ?? 0;
+              const connected = connectedServices[service.id];
               return (
                 <Pressable
                   key={service.id}
                   style={[styles.serviceCard, connected && styles.serviceCardConnected]}
-                  onPress={() => handleConnectService(service.id)}
+                  onPress={() => handleToggleService(service.id)}
                   accessibilityRole="button"
-                  accessibilityState={{ disabled: connected }}
-                  accessibilityLabel={
-                    connected
-                      ? `${service.name} connected`
-                      : `Connect ${service.name}`
-                  }
-                  accessibilityHint={
-                    connected
-                      ? `${favouriteCount} favourites ready in the lounge`
-                      : 'Opens secure sign-in to import favourites'
-                  }
-                  disabled={connected}
+                  accessibilityState={{ selected: connected }}
+                  accessibilityLabel={connected ? `Disconnect ${service.name}` : `Connect ${service.name}`}
                 >
                   <View
                     style={[styles.serviceIconWrap, connected && styles.serviceIconWrapConnected]}
@@ -1587,69 +1513,12 @@ export function MusicContent({ mode = 'screen', onRequestClose, defaultSleepOpen
                     </Text>
                     <Text style={styles.serviceDescription}>{service.description}</Text>
                     <Text style={[styles.serviceStatus, connected && styles.serviceStatusConnected]}>
-                      {connected
-                        ? `Connected · ${favouriteCount} favourite${favouriteCount === 1 ? '' : 's'}`
-                        : 'Connect once to import favourites'}
+                      {connected ? 'Connected · tap to switch sources' : 'Tap to connect'}
                     </Text>
                   </View>
                 </Pressable>
               );
             })}
-          </View>
-        </View>
-
-        <View style={styles.streamingSection}>
-          <Text style={styles.streamingHeading}>Streaming favourites</Text>
-          <Text style={styles.streamingSubheading}>
-            Explore songs pulled from your connected accounts. Search to jump to a specific artist or
-            track.
-          </Text>
-          <TextInput
-            value={streamSearchQuery}
-            onChangeText={setStreamSearchQuery}
-            placeholder={hasStreamingConnection ? 'Search songs or artists' : 'Connect a service to begin'}
-            placeholderTextColor={streamingPlaceholderColor}
-            editable={hasStreamingConnection}
-            style={styles.streamingSearchInput}
-            accessibilityLabel={
-              hasStreamingConnection ? 'Search your streaming favourites' : 'Streaming search disabled'
-            }
-            accessibilityState={{ disabled: !hasStreamingConnection }}
-          />
-          <View style={styles.streamingList}>
-            {hasStreamingConnection ? (
-              searchEmpty ? (
-                <Text style={styles.streamingEmpty}>No matches yet—try a different song or artist.</Text>
-              ) : (
-                displayedFavorites.map((entry) => {
-                  const { track, service: serviceId } = entry;
-                  const badge = serviceNameMap[serviceId] ?? 'Streaming';
-                  const isActive = activeFavorite?.track.id === track.id && activeFavorite.service === serviceId;
-                  return (
-                    <Pressable
-                      key={`${serviceId}-${track.id}`}
-                      style={styles.streamingItem}
-                      onPress={() => handlePlayFavorite(serviceId, track)}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: isActive }}
-                      accessibilityLabel={`Play ${track.title} by ${track.artist}`}
-                    >
-                      <View style={styles.streamingItemMeta}>
-                        <Text style={styles.streamingItemTitle}>{track.title}</Text>
-                        <View style={styles.streamingBadge} pointerEvents="none">
-                          <Text style={styles.streamingBadgeText}>{badge}</Text>
-                        </View>
-                      </View>
-                      <Text style={styles.streamingItemArtist}>{track.artist}</Text>
-                    </Pressable>
-                  );
-                })
-              )
-            ) : (
-              <Text style={styles.streamingEmpty}>
-                Connect Apple Music or Spotify above to pull in a handful of your favourites.
-              </Text>
-            )}
           </View>
         </View>
 
@@ -1659,7 +1528,7 @@ export function MusicContent({ mode = 'screen', onRequestClose, defaultSleepOpen
             <Text style={styles.groupDescription}>{group.intro}</Text>
             <View style={styles.optionList}>
               {group.options.map((option) => {
-                const isActive = option.id === selectedTrackId && !activeFavorite;
+                const isActive = option.id === selectedTrackId && nowPlayingSource === 'mix';
                 return (
                   <Pressable
                     key={option.id}
@@ -1700,7 +1569,7 @@ export function MusicContent({ mode = 'screen', onRequestClose, defaultSleepOpen
                     <Text style={styles.groupDescription}>{group.intro}</Text>
                     <View style={styles.optionList}>
                       {group.options.map((option) => {
-                        const isActive = option.id === selectedTrackId && !activeFavorite;
+                        const isActive = option.id === selectedTrackId && nowPlayingSource === 'mix';
                         return (
                           <Pressable
                             key={option.id}

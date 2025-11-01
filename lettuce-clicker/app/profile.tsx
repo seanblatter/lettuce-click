@@ -39,7 +39,6 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
   const [emojiInput, setEmojiInput] = useState(customClickEmoji);
   const [accentSelection, setAccentSelection] = useState(premiumAccentColor);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const emojiInputRef = useRef<TextInput | null>(null);
 
   useEffect(() => {
     setName(profileName);
@@ -72,11 +71,8 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
     saveTimeoutRef.current = setTimeout(() => {
       setIsSaving(false);
       saveTimeoutRef.current = null;
-      if (onRequestClose) {
-        onRequestClose();
-      }
     }, 320);
-  }, [name, onRequestClose, setProfileName, setProfileUsername, username]);
+  }, [name, username, setProfileName, setProfileUsername]);
 
   useEffect(
     () => () => {
@@ -322,35 +318,11 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
               ) : (
                 <Text style={styles.emojiEmptyText}>Purchase garden decorations to see suggested emoji.</Text>
               )}
-              <Pressable
-                style={styles.emojiInputButton}
-                onPress={() => {
-                  if (!hasPremiumUpgrade) {
-                    Alert.alert('Upgrade required', 'Upgrade to change your click emoji.');
-                    return;
-                  }
-                  emojiInputRef.current?.focus();
-                }}
-                accessibilityRole="button"
-                accessibilityLabel="Enter a custom emoji"
-                accessibilityHint="Opens the keyboard so you can type any emoji"
-              >
-                <Text style={styles.emojiInputLabel}>Custom emoji</Text>
-                <Text
-                  style={[
-                    styles.emojiInputValue,
-                    emojiInput ? styles.emojiInputValueActive : styles.emojiInputValuePlaceholder,
-                  ]}
-                >
-                  {emojiInput || 'Tap to add'}
-                </Text>
-              </Pressable>
               <TextInput
-                ref={emojiInputRef}
                 value={emojiInput}
                 onChangeText={handleEmojiInputChange}
                 placeholder="Type any emoji"
-                style={styles.hiddenEmojiInput}
+                style={styles.emojiInput}
                 maxLength={6}
                 autoCorrect={false}
                 autoCapitalize="none"
@@ -614,38 +586,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#2d3748',
   },
-  emojiInputButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  emojiInput: {
     backgroundColor: '#ffffff',
     borderRadius: 14,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 12,
+    fontSize: 16,
     borderWidth: 1,
     borderColor: '#bbf7d0',
-  },
-  emojiInputLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#14532d',
-  },
-  emojiInputValue: {
-    fontSize: 26,
-    fontWeight: '600',
-  },
-  emojiInputValueActive: {
-    color: '#0f172a',
-  },
-  emojiInputValuePlaceholder: {
-    color: '#6b7280',
-    fontStyle: 'italic',
-  },
-  hiddenEmojiInput: {
-    position: 'absolute',
-    height: 0,
-    width: 0,
-    opacity: 0,
   },
   emojiNote: {
     fontSize: 12,

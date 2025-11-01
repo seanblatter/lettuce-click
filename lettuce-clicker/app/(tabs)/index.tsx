@@ -87,7 +87,6 @@ export default function HomeScreen() {
   const [showDailyBonus, setShowDailyBonus] = useState(false);
   const [showProfileQuickAction, setShowProfileQuickAction] = useState(false);
   const [showMusicQuickAction, setShowMusicQuickAction] = useState(false);
-  const [musicModalIntent, setMusicModalIntent] = useState<'lounge' | 'dream'>('lounge');
   const [availableBonusSpins, setAvailableBonusSpins] = useState(0);
   const [bonusMessage, setBonusMessage] = useState<string | null>(null);
   const [lastBonusReward, setLastBonusReward] = useState<number | null>(null);
@@ -252,19 +251,11 @@ export default function HomeScreen() {
 
   const handleOpenMusic = useCallback(() => {
     setMenuOpen(false);
-    setMusicModalIntent('lounge');
-    setShowMusicQuickAction(true);
-  }, []);
-
-  const handleOpenDreamCapsule = useCallback(() => {
-    setMenuOpen(false);
-    setMusicModalIntent('dream');
     setShowMusicQuickAction(true);
   }, []);
 
   const handleCloseMusicQuickAction = useCallback(() => {
     setShowMusicQuickAction(false);
-    setMusicModalIntent('lounge');
   }, []);
 
   const handleSelectTheme = useCallback(
@@ -609,7 +600,7 @@ export default function HomeScreen() {
                       <View style={styles.menuItemBody}>
                         <Text style={[styles.menuItemTitle, styles.quickActionTitle]}>Profile</Text>
                         <Text style={[styles.menuItemSubtitle, styles.quickActionSubtitle]}>
-                          Touch up your Lettuce
+                          Refresh your gardener details
                         </Text>
                       </View>
                       <View style={[styles.menuItemMeta, styles.quickActionMeta]} pointerEvents="none">
@@ -635,31 +626,6 @@ export default function HomeScreen() {
                         <Text style={[styles.menuItemTitle, styles.quickActionTitle]}>Music Lounge</Text>
                         <Text style={[styles.menuItemSubtitle, styles.quickActionSubtitle]}>
                           Curated ambience for focus &amp; rest
-                        </Text>
-                      </View>
-                      <View style={[styles.menuItemMeta, styles.quickActionMeta]} pointerEvents="none">
-                        <Text style={[styles.menuItemChevron, styles.quickActionChevron]}>›</Text>
-                      </View>
-                    </Pressable>
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.menuItemCard,
-                        styles.quickActionCard,
-                        pressed && styles.menuItemCardPressed,
-                      ]}
-                      onPress={handleOpenDreamCapsule}
-                      accessibilityRole="button"
-                    >
-                      <View
-                        style={[styles.menuItemIconWrap, styles.quickActionIconWrap]}
-                        pointerEvents="none"
-                      >
-                        <Text style={[styles.menuItemIcon, styles.quickActionIcon]}>⏰</Text>
-                      </View>
-                      <View style={styles.menuItemBody}>
-                        <Text style={[styles.menuItemTitle, styles.quickActionTitle]}>Dream Capsule</Text>
-                        <Text style={[styles.menuItemSubtitle, styles.quickActionSubtitle]}>
-                          Alarms &amp; sleep timers
                         </Text>
                       </View>
                       <View style={[styles.menuItemMeta, styles.quickActionMeta]} pointerEvents="none">
@@ -937,11 +903,7 @@ export default function HomeScreen() {
         animationType="slide"
         onRequestClose={handleCloseMusicQuickAction}
       >
-        <MusicContent
-          mode="modal"
-          onRequestClose={handleCloseMusicQuickAction}
-          defaultSleepOpen={musicModalIntent === 'dream'}
-        />
+        <MusicContent mode="modal" onRequestClose={handleCloseMusicQuickAction} />
       </Modal>
 
     </SafeAreaView>

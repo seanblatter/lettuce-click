@@ -245,7 +245,7 @@ export function GardenSection({
   const [activeSheet, setActiveSheet] = useState<'shop' | 'inventory' | null>(null);
   const [shopFilter, setShopFilter] = useState('');
   const [showPalette, setShowPalette] = useState(false);
-  const [fontPickerVisible, setFontPickerVisible] = useState(false);
+  const [isFontDropdownOpen, setFontDropdownOpen] = useState(false);
   const [showExtendedPalette, setShowExtendedPalette] = useState(false);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [penColor, setPenColor] = useState<string>(QUICK_DRAW_COLORS[0]);
@@ -1009,7 +1009,7 @@ export function GardenSection({
   useEffect(() => {
     if (!showPalette) {
       setShowExtendedPalette(false);
-      setFontPickerVisible(false);
+      setFontDropdownOpen(false);
     }
   }, [showPalette]);
 
@@ -1029,12 +1029,6 @@ export function GardenSection({
     () => TEXT_STYLE_OPTIONS.find((option) => option.id === selectedTextStyle) ?? TEXT_STYLE_OPTIONS[0],
     [selectedTextStyle]
   );
-  const textPreviewStyle = TEXT_STYLE_MAP[selectedTextStyle] ?? {};
-  const previewSampleText = selectedTextStyleOption?.preview ?? 'Sample';
-  const previewBaseFontSize =
-    typeof textPreviewStyle.fontSize === 'number' ? textPreviewStyle.fontSize : 20;
-  const previewFontSize = previewBaseFontSize * clampedTextScale;
-  const previewColor = penColor === ERASER_COLOR ? DEFAULT_TEXT_COLOR : penColor;
 
   const shouldShowCanvasEmptyState = useMemo(
     () => placements.length === 0 && strokes.length === 0 && !selectedEmoji,
@@ -1525,10 +1519,14 @@ export function GardenSection({
                 </View>
                 <View style={styles.textComposer}>
                   <Pressable
-                    style={styles.fontPickerButton}
-                    onPress={() => setFontPickerVisible(true)}
+                    style={[
+                      styles.fontPickerButton,
+                      isFontDropdownOpen && styles.fontPickerButtonActive,
+                    ]}
+                    onPress={() => setFontDropdownOpen((prev) => !prev)}
                     accessibilityRole="button"
                     accessibilityLabel="Choose text style"
+                    accessibilityState={{ expanded: isFontDropdownOpen }}
                   >
                     <View style={styles.fontPickerIconBubble}>
                       <Text style={styles.fontPickerIcon}>🔠</Text>
@@ -1545,20 +1543,45 @@ export function GardenSection({
                         {selectedTextStyleOption.preview}
                       </Text>
                     </View>
-                    <Text style={styles.fontPickerCaret}>▾</Text>
+                    <Text style={styles.fontPickerCaret}>{isFontDropdownOpen ? '▴' : '▾'}</Text>
                   </Pressable>
-                  <View style={styles.textPreviewCard}>
-                    <Text
-                      style={[
-                        styles.textPreviewSample,
-                        textPreviewStyle,
-                        { fontSize: previewFontSize, color: previewColor },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {previewSampleText}
-                    </Text>
-                  </View>
+                  {isFontDropdownOpen ? (
+                    <View style={styles.fontDropdownMenu}>
+                      {TEXT_STYLE_OPTIONS.map((option) => {
+                        const isActive = option.id === selectedTextStyle;
+                        return (
+                          <Pressable
+                            key={option.id}
+                            style={[
+                              styles.fontOption,
+                              styles.fontDropdownOption,
+                              isActive && styles.fontOptionActive,
+                            ]}
+                            onPress={() => {
+                              setSelectedTextStyle(option.id);
+                              setFontDropdownOpen(false);
+                            }}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: isActive }}
+                            accessibilityLabel={`${option.label} text style`}
+                          >
+                            <Text
+                              style={[option.textStyle, styles.fontOptionPreview]}
+                              numberOfLines={1}
+                            >
+                              {option.preview}
+                            </Text>
+                            <Text
+                              style={[styles.fontOptionLabel, isActive && styles.fontOptionLabelActive]}
+                              numberOfLines={1}
+                            >
+                              {option.label}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  ) : null}
                   <Text style={styles.paletteLabel}>Text size</Text>
                   <View style={styles.textSizeControls}>
                     <Text style={styles.textSizeGlyphSmall}>A</Text>
@@ -1624,58 +1647,7 @@ export function GardenSection({
           </View>
         </View>
       </Modal>
-      <Modal
-        visible={fontPickerVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setFontPickerVisible(false)}
-      >
-        <View style={styles.fontPickerOverlay}>
-          <Pressable style={styles.fontPickerBackdrop} onPress={() => setFontPickerVisible(false)} />
-          <View style={[styles.fontPickerCard, { paddingBottom: 16 + insets.bottom }]}>
-            <Text style={styles.fontPickerHeading}>Choose text style</Text>
-            <ScrollView
-              style={styles.fontPickerScroll}
-              contentContainerStyle={styles.fontPickerList}
-              showsVerticalScrollIndicator={false}
-            >
-              {TEXT_STYLE_OPTIONS.map((option) => {
-                const isActive = option.id === selectedTextStyle;
-                return (
-                  <Pressable
-                    key={option.id}
-                    style={[styles.fontOption, isActive && styles.fontOptionActive]}
-                    onPress={() => {
-                      setSelectedTextStyle(option.id);
-                      setFontPickerVisible(false);
-                    }}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: isActive }}
-                    accessibilityLabel={`${option.label} text style`}
-                  >
-                    <Text
-                      style={[option.textStyle, styles.fontOptionPreview]}
-                      numberOfLines={1}
-                    >
-                      {option.preview}
-                    </Text>
-                    <Text style={[styles.fontOptionLabel, isActive && styles.fontOptionLabelActive]}>
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-            <Pressable
-              style={styles.fontPickerClose}
-              onPress={() => setFontPickerVisible(false)}
-              accessibilityLabel="Close text style picker"
-            >
-              <Text style={styles.fontPickerCloseText}>Done</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+      
       <Modal
         visible={activeSheet === 'shop'}
         animationType="slide"
@@ -3119,6 +3091,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     elevation: 2,
   },
+  fontPickerButtonActive: {
+    borderColor: '#0f766e',
+    shadowOpacity: 0.1,
+    backgroundColor: '#f0fdfa',
+  },
   fontPickerIconBubble: {
     width: 44,
     height: 44,
@@ -3153,18 +3130,23 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#134e32',
   },
-  textPreviewCard: {
-    marginTop: 2,
-    borderRadius: 14,
-    backgroundColor: '#ecfdf5',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    alignItems: 'center',
+  fontDropdownMenu: {
+    marginTop: 8,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    backgroundColor: '#ffffff',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    gap: 6,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
-  textPreviewSample: {
-    color: '#134e32',
-    fontWeight: '700',
-    textAlign: 'center',
+  fontDropdownOption: {
+    width: '100%',
   },
   textComposerInput: {
     width: '100%',
@@ -3196,42 +3178,6 @@ const styles = StyleSheet.create({
   },
   textComposerButtonTextDisabled: {
     color: '#166534',
-  },
-  fontPickerOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(15, 31, 23, 0.55)',
-    paddingHorizontal: 24,
-  },
-  fontPickerBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  fontPickerCard: {
-    width: '90%',
-    maxWidth: 360,
-    backgroundColor: '#f8fffb',
-    borderRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    gap: 12,
-    shadowColor: '#0f2e20',
-    shadowOpacity: 0.18,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 6,
-  },
-  fontPickerHeading: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#134e32',
-    textAlign: 'center',
-  },
-  fontPickerScroll: {
-    maxHeight: 260,
-  },
-  fontPickerList: {
-    gap: 10,
   },
   fontOption: {
     borderRadius: 14,
@@ -3266,16 +3212,6 @@ const styles = StyleSheet.create({
   },
   fontOptionLabelActive: {
     color: '#0f766e',
-  },
-  fontPickerClose: {
-    borderRadius: 14,
-    paddingVertical: 10,
-    backgroundColor: '#22543d',
-  },
-  fontPickerCloseText: {
-    textAlign: 'center',
-    color: '#f0fff4',
-    fontWeight: '700',
   },
   textSizeControls: {
     flexDirection: 'row',

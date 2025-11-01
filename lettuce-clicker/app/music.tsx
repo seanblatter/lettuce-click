@@ -226,7 +226,6 @@ type Palette = {
   headerBackBorder: string;
   headerBackText: string;
   headerTitle: string;
-  headerSubtitle: string;
   actionButtonBackground: string;
   actionButtonBorder: string;
   actionButtonShadow: string;
@@ -321,7 +320,6 @@ const DARK_PALETTE: Palette = {
   headerBackBorder: 'rgba(77, 255, 166, 0.35)',
   headerBackText: '#86f3c1',
   headerTitle: '#f6fff6',
-  headerSubtitle: '#9edfb6',
   actionButtonBackground: 'rgba(18, 61, 39, 0.85)',
   actionButtonBorder: 'rgba(77, 255, 166, 0.32)',
   actionButtonShadow: '#03140d',
@@ -416,7 +414,6 @@ const LIGHT_PALETTE: Palette = {
   headerBackBorder: '#bfe5d3',
   headerBackText: '#1f7a53',
   headerTitle: '#0f3d2b',
-  headerSubtitle: '#527c66',
   actionButtonBackground: '#ffffff',
   actionButtonBorder: '#caead9',
   actionButtonShadow: 'rgba(20, 70, 45, 0.12)',
@@ -552,47 +549,30 @@ const createStyles = (palette: Palette, isDark: boolean) =>
       color: palette.headerTitle,
       textAlign: 'center',
     },
-    headerSubtitle: {
-      fontSize: 14,
-      lineHeight: 20,
-      color: palette.headerSubtitle,
-      textAlign: 'center',
-    },
     headerActions: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 10,
+      gap: 6,
       flexShrink: 0,
     },
     headerActionButton: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 0,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-      borderRadius: 999,
-      backgroundColor: palette.actionButtonBackground,
-      borderWidth: 1,
-      borderColor: palette.actionButtonBorder,
-      shadowColor: palette.actionButtonShadow,
-      shadowOpacity: isDark ? 0.35 : 0.16,
-      shadowRadius: isDark ? 16 : 10,
-      shadowOffset: { width: 0, height: isDark ? 8 : 5 },
-      elevation: isDark ? 6 : 3,
-    },
-    headerActionBubble: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 18,
       backgroundColor: palette.actionBubbleBackground,
       borderWidth: 1,
       borderColor: palette.actionBubbleBorder,
-      alignItems: 'center',
-      justifyContent: 'center',
+      shadowColor: palette.actionButtonShadow,
+      shadowOpacity: isDark ? 0.28 : 0.14,
+      shadowRadius: isDark ? 18 : 12,
+      shadowOffset: { width: 0, height: isDark ? 10 : 6 },
+      elevation: isDark ? 6 : 3,
     },
     headerActionGlyph: {
-      fontSize: 22,
+      fontSize: 20,
       color: palette.sleepGlyphColor,
     },
     nowPlayingCard: {
@@ -1160,8 +1140,6 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
   const sleepTimeoutRef = useRef<number | null>(null);
   const ambientPlayer = useAudioPlayer(MUSIC_AUDIO_MAP[selectedTrackId]);
   const alarmPlayer = useAudioPlayer(ALARM_SOUND_URI);
-  const [audioReady, setAudioReady] = useState(false);
-  const [audioError, setAudioError] = useState<Error | null>(null);
   const [ambientError, setAmbientError] = useState<Error | null>(null);
   const [showAllGroups, setShowAllGroups] = useState(false);
 
@@ -1174,9 +1152,6 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
   }, []);
 
   useEffect(() => {
-    // expo-audio automatically handles audio setup, no manual initialization needed
-    setAudioReady(true);
-
     return () => {
       if (sleepTimeoutRef.current) {
         clearTimeout(sleepTimeoutRef.current);
@@ -1292,11 +1267,6 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
       detail: `Rings in ${formatDurationLong(minutes)}`,
     };
   }, [sleepCircle, sleepNow]);
-
-  const handleSelectTrack = useCallback((trackId: MusicOption['id']) => {
-    setSelectedTrackId(trackId);
-    setNowPlayingSource('mix');
-  }, []);
 
   const handleToggleService = useCallback(
     (serviceId: MusicServiceId) => {
@@ -1414,12 +1384,12 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
   }, []);
 
   const ensureLoopingPlayback = useCallback(
-    async (source: number) => {
+    async (source: number, shouldPlayOverride?: boolean) => {
       const player: any = ambientPlayer;
       try {
         const playbackOptions = {
           isLooping: true,
-          shouldPlay: nowPlayingSource === 'mix',
+          shouldPlay: shouldPlayOverride ?? (nowPlayingSource === 'mix'),
         };
 
         let startedWithSource = false;
@@ -1444,7 +1414,8 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
             await Promise.resolve(player.updateStatus({ isLooping: true }));
           }
 
-          if (nowPlayingSource === 'mix') {
+          const shouldPlay = shouldPlayOverride ?? (nowPlayingSource === 'mix');
+          if (shouldPlay) {
             if (!startedWithSource) {
               player.seekTo?.(0);
               player.play?.();
@@ -1480,6 +1451,21 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
 
     ensureLoopingPlayback(source);
   }, [ambientPlayer, ensureLoopingPlayback, nowPlayingSource, selectedTrackId]);
+
+  const handleSelectTrack = useCallback(
+    (trackId: MusicOption['id']) => {
+      setSelectedTrackId(trackId);
+      setNowPlayingSource('mix');
+
+      const source = MUSIC_AUDIO_MAP[trackId];
+      if (source) {
+        ensureLoopingPlayback(source, true).catch((error) => {
+          console.warn('Playback failed to start', error);
+        });
+      }
+    },
+    [ensureLoopingPlayback]
+  );
 
   useEffect(() => {
     const player: any = ambientPlayer;
@@ -1517,7 +1503,6 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
           </Pressable>
           <View style={styles.headerCenter}>
             <Text style={styles.headerTitle}>Music Lounge</Text>
-            <Text style={styles.headerSubtitle}>Curated ambience for focus &amp; rest.</Text>
           </View>
           <View style={styles.headerActions}>
             <Pressable
@@ -1528,9 +1513,7 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
               accessibilityHint={themeToggleHint}
               accessibilityValue={{ text: themeAccessibilityValue }}
             >
-              <View style={styles.headerActionBubble}>
-                <Text style={styles.headerActionGlyph}>🌙</Text>
-              </View>
+              <Text style={styles.headerActionGlyph}>🌙</Text>
             </Pressable>
             <Pressable
               onPress={handleOpenSleepModal}
@@ -1540,9 +1523,7 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
               accessibilityHint="Set timers or wake alarms"
               accessibilityValue={{ text: sleepSummary.headline }}
             >
-              <View style={styles.headerActionBubble}>
-                <Text style={styles.headerActionGlyph}>⏰</Text>
-              </View>
+              <Text style={styles.headerActionGlyph}>⏰</Text>
             </Pressable>
           </View>
         </View>
@@ -1564,11 +1545,6 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
           <View style={styles.sleepStatusBlock}>
             <Text style={styles.sleepStatusLabel}>Dream Capsule</Text>
             <Text style={styles.sleepStatusHeadline}>{sleepSummary.detail}</Text>
-            {!audioReady && audioError ? (
-              <Text style={styles.sleepStatusWarning}>
-                Alarm chime installs with expo-av. Until then, we’ll vibrate instead.
-              </Text>
-            ) : null}
             {ambientError ? (
               <Text style={styles.sleepStatusWarning}>
                 Ambient mix playback is unavailable. Try another sound or reconnect audio.

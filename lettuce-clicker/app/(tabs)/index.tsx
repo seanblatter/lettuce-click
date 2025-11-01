@@ -18,6 +18,7 @@ import { MusicContent } from '@/app/music';
 import { ProfileContent } from '@/app/profile';
 import { useGame } from '@/context/GameContext';
 import type { HomeEmojiTheme } from '@/context/GameContext';
+import { preloadRewardedAd, showRewardedAd } from '@/lib/rewardedAd';
 
 const MODAL_STORAGE_KEY = 'lettuce-click:grow-your-park-dismissed';
 const DAILY_BONUS_LAST_CLAIM_KEY = 'lettuce-click:daily-bonus-last-claim';
@@ -208,6 +209,10 @@ export default function HomeScreen() {
       .catch(() => {
         setShowGrowModal(true);
       });
+  }, []);
+
+  useEffect(() => {
+    preloadRewardedAd();
   }, []);
 
   useEffect(() => {
@@ -411,20 +416,32 @@ export default function HomeScreen() {
     isSpinningBonus,
   ]);
 
-  const handleWatchBonusAd = useCallback(() => {
+  const handleWatchBonusAd = useCallback(async () => {
     if (hasWatchedBonusAd || isWatchingAd) {
       Alert.alert('Advertisement already viewed', 'Check back tomorrow for more free spins.');
       return;
     }
 
     setIsWatchingAd(true);
-    setBonusMessage('Watching advertisement…');
-    setTimeout(() => {
-      setAvailableBonusSpins((prev) => prev + BONUS_ADDITIONAL_SPINS);
-      setHasWatchedBonusAd(true);
+    setBonusMessage('Loading advertisement…');
+
+    try {
+      const outcome = await showRewardedAd();
+      if (outcome === 'earned') {
+        setAvailableBonusSpins((prev) => prev + BONUS_ADDITIONAL_SPINS);
+        setHasWatchedBonusAd(true);
+        setBonusMessage('You unlocked two more spins!');
+      } else if (outcome === 'closed') {
+        setBonusMessage('Ad closed before completion. Try again when you can watch the full clip.');
+      } else {
+        setBonusMessage('Ad is unavailable right now. Please try again later.');
+      }
+    } catch (error) {
+      console.warn('Failed to show rewarded advertisement', error);
+      setBonusMessage('Ad is unavailable right now. Please try again later.');
+    } finally {
       setIsWatchingAd(false);
-      setBonusMessage('You unlocked two more spins!');
-    }, 1200);
+    }
   }, [hasWatchedBonusAd, isWatchingAd]);
 
   const handlePurchaseSpinWithHarvest = useCallback(() => {

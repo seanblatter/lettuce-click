@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Dimensions, Easing, StyleSheet, Text, View } from 'react-native';
+import {
+  Animated,
+  Dimensions,
+  Easing,
+  StyleProp,
+  StyleSheet,
+  Text,
+  TextStyle,
+  View,
+} from 'react-native';
 
 import type { HomeEmojiTheme, OrbitingEmoji } from '@/context/GameContext';
 
@@ -80,12 +89,30 @@ type OrbitingUpgradeEmojisProps = {
   theme?: HomeEmojiTheme;
 };
 
+const DEFAULT_EMOJI_COLOR = '#14532d';
+const THEME_EMOJI_COLORS: Partial<Record<HomeEmojiTheme, string>> = {
+  matrix: '#bbf7d0',
+  confetti: '#fb923c',
+  laser: '#f5d0fe',
+  aurora: '#c4b5fd',
+  firefly: '#fef08a',
+  starlight: '#ede9fe',
+  nebula: '#dbeafe',
+  supernova: '#fecdd3',
+};
+
+function getEmojiColorForTheme(theme: HomeEmojiTheme) {
+  return THEME_EMOJI_COLORS[theme] ?? DEFAULT_EMOJI_COLOR;
+}
+
 export function OrbitingUpgradeEmojis({
   emojis,
   radius = DEFAULT_RADIUS,
   theme = 'circle',
 }: OrbitingUpgradeEmojisProps) {
   const limited = useMemo(() => emojis.slice(0, 96), [emojis]);
+  const emojiColor = useMemo(() => getEmojiColorForTheme(theme), [theme]);
+  const emojiStyle = useMemo<StyleProp<TextStyle>>(() => ({ color: emojiColor }), [emojiColor]);
 
   if (limited.length === 0 || theme === 'clear') {
     return null;
@@ -93,43 +120,44 @@ export function OrbitingUpgradeEmojis({
 
   switch (theme) {
     case 'circle':
-      return <CircleOrbit emojis={limited} radius={radius} />;
+      return <CircleOrbit emojis={limited} radius={radius} emojiStyle={emojiStyle} />;
     case 'spiral':
-      return <SpiralOrbit emojis={limited} radius={radius} />;
+      return <SpiralOrbit emojis={limited} radius={radius} emojiStyle={emojiStyle} />;
     case 'matrix':
       return <MatrixEmojiRain emojis={limited} radius={radius} variant="matrix" />;
     case 'bubble':
-      return <BubbleSwirl emojis={limited} radius={radius} />;
+      return <BubbleSwirl emojis={limited} radius={radius} emojiStyle={emojiStyle} />;
     case 'bubble-pop':
-      return <BubblePopBurst emojis={limited} radius={radius} />;
+      return <BubblePopBurst emojis={limited} radius={radius} emojiStyle={emojiStyle} />;
     case 'wave':
-      return <WaveRibbon emojis={limited} radius={radius} />;
+      return <WaveRibbon emojis={limited} radius={radius} emojiStyle={emojiStyle} />;
     case 'lake':
-      return <LakePool emojis={limited} radius={radius} />;
+      return <LakePool emojis={limited} radius={radius} emojiStyle={emojiStyle} />;
     case 'echo':
-      return <EchoPulse emojis={limited} radius={radius} />;
+      return <EchoPulse emojis={limited} radius={radius} emojiStyle={emojiStyle} />;
     case 'confetti':
-      return <ConfettiStream emojis={limited} radius={radius} />;
+      return <ConfettiStream emojis={limited} radius={radius} emojiStyle={emojiStyle} />;
     case 'laser':
-      return <LaserSweep emojis={limited} radius={radius} />;
+      return <LaserSweep emojis={limited} radius={radius} emojiStyle={emojiStyle} />;
     case 'aurora':
-      return <AuroraVeil emojis={limited} radius={radius} />;
+      return <AuroraVeil emojis={limited} radius={radius} emojiStyle={emojiStyle} />;
     case 'firefly':
-      return <FireflyField emojis={limited} radius={radius} />;
+      return <FireflyField emojis={limited} radius={radius} emojiStyle={emojiStyle} />;
     case 'starlight':
-      return <StarlightHalo emojis={limited} radius={radius} />;
+      return <StarlightHalo emojis={limited} radius={radius} emojiStyle={emojiStyle} />;
     case 'nebula':
-      return <NebulaSwirl emojis={limited} radius={radius} />;
+      return <NebulaSwirl emojis={limited} radius={radius} emojiStyle={emojiStyle} />;
     case 'supernova':
-      return <SupernovaBurst emojis={limited} radius={radius} />;
+      return <SupernovaBurst emojis={limited} radius={radius} emojiStyle={emojiStyle} />;
     default:
-      return <CircleOrbit emojis={limited} radius={radius} />;
+      return <CircleOrbit emojis={limited} radius={radius} emojiStyle={emojiStyle} />;
   }
 }
 
 type BasePatternProps = {
   emojis: OrbitingEmoji[];
   radius: number;
+  emojiStyle: StyleProp<TextStyle>;
 };
 
 function useLoopingValue(duration: number, delay = 0, easing: (value: number) => number = Easing.linear) {
@@ -165,7 +193,7 @@ function useLoopingValue(duration: number, delay = 0, easing: (value: number) =>
   return animated;
 }
 
-function CircleOrbit({ emojis, radius }: BasePatternProps) {
+function CircleOrbit({ emojis, radius, emojiStyle }: BasePatternProps) {
   const rotation = useLoopingValue(12000);
   const rotate = useMemo(
     () =>
@@ -201,7 +229,7 @@ function CircleOrbit({ emojis, radius }: BasePatternProps) {
               },
             ]}
           >
-            <Text style={styles.emoji}>{emoji}</Text>
+            <Text style={[styles.emoji, emojiStyle]}>{emoji}</Text>
           </View>
         ))
       }</Animated.View>
@@ -216,7 +244,7 @@ type SpiralPlacement = OrbitingEmoji & {
   stepIndex: number;
 };
 
-function SpiralOrbit({ emojis, radius }: BasePatternProps) {
+function SpiralOrbit({ emojis, radius, emojiStyle }: BasePatternProps) {
   const rotation = useLoopingValue(16000);
 
   const rotate = useMemo(
@@ -345,7 +373,7 @@ function SpiralOrbit({ emojis, radius }: BasePatternProps) {
                 },
               ]}
             >
-              <Text style={[styles.emoji, styles.emojiSpiral]}>{emoji}</Text>
+            <Text style={[styles.emoji, emojiStyle, styles.emojiSpiral]}>{emoji}</Text>
             </Animated.View>
           );
         })}
@@ -370,7 +398,7 @@ type LakeParticle = {
   swayRange: number;
 };
 
-function LakePool({ emojis, radius }: BasePatternProps) {
+function LakePool({ emojis, radius, emojiStyle }: BasePatternProps) {
   const limit = useMemo(() => emojis.slice(0, 50), [emojis]);
   const particles = useMemo<LakeParticle[]>(
     () =>
@@ -538,7 +566,7 @@ function LakePool({ emojis, radius }: BasePatternProps) {
               },
             ]}
           >
-            <Text style={[styles.emoji, styles.emojiLake]}>{particle.emoji}</Text>
+            <Text style={[styles.emoji, emojiStyle, styles.emojiLake]}>{particle.emoji}</Text>
           </Animated.View>
         );
       })}
@@ -722,7 +750,7 @@ function getMatrixDelay(column: number, variant: HomeEmojiTheme) {
   return column * step;
 }
 
-function BubbleSwirl({ emojis, radius }: BasePatternProps) {
+function BubbleSwirl({ emojis, radius, emojiStyle }: BasePatternProps) {
   const ringConfigs = useMemo(
     () => [
       { radius: radius * 0.55, speed: 18000, scaleFrom: 0.94, scaleTo: 1.08 },
@@ -829,7 +857,7 @@ function BubbleSwirl({ emojis, radius }: BasePatternProps) {
                     },
                   ]}
                 >
-                  <Text style={[styles.emoji, styles.emojiBubble]}>{item.emoji}</Text>
+                  <Text style={[styles.emoji, emojiStyle, styles.emojiBubble]}>{item.emoji}</Text>
                 </View>
               );
             })}
@@ -840,7 +868,7 @@ function BubbleSwirl({ emojis, radius }: BasePatternProps) {
   );
 }
 
-function BubblePopBurst({ emojis, radius }: BasePatternProps) {
+function BubblePopBurst({ emojis, radius, emojiStyle }: BasePatternProps) {
   const limit = useMemo(() => emojis.slice(0, 48), [emojis]);
   const burstValues = useMemo(() => limit.map((item, index) => ({
     value: new Animated.Value(0),
@@ -905,7 +933,7 @@ function BubblePopBurst({ emojis, radius }: BasePatternProps) {
               },
             ]}
           >
-            <Text style={[styles.emoji, styles.emojiBubblePop]}>{emoji.emoji}</Text>
+            <Text style={[styles.emoji, emojiStyle, styles.emojiBubblePop]}>{emoji.emoji}</Text>
           </Animated.View>
         );
       })}
@@ -913,7 +941,7 @@ function BubblePopBurst({ emojis, radius }: BasePatternProps) {
   );
 }
 
-function WaveRibbon({ emojis, radius }: BasePatternProps) {
+function WaveRibbon({ emojis, radius, emojiStyle }: BasePatternProps) {
   const limit = useMemo(() => emojis.slice(0, 42), [emojis]);
   const wave = useLoopingValue(WAVE_DURATION);
   const width = radius * 2.8;
@@ -952,7 +980,7 @@ function WaveRibbon({ emojis, radius }: BasePatternProps) {
               },
             ]}
           >
-            <Text style={[styles.emoji, styles.emojiWave]}>{emoji.emoji}</Text>
+            <Text style={[styles.emoji, emojiStyle, styles.emojiWave]}>{emoji.emoji}</Text>
           </Animated.View>
         );
       })}
@@ -960,7 +988,7 @@ function WaveRibbon({ emojis, radius }: BasePatternProps) {
   );
 }
 
-function EchoPulse({ emojis, radius }: BasePatternProps) {
+function EchoPulse({ emojis, radius, emojiStyle }: BasePatternProps) {
   const rings = useMemo(
     () => [radius * 0.5, radius * 0.85, radius * 1.2],
     [radius]
@@ -1035,7 +1063,7 @@ function EchoPulse({ emojis, radius }: BasePatternProps) {
                     },
                   ]}
                 >
-                  <Text style={[styles.emoji, styles.emojiEcho]}>{item.emoji}</Text>
+                  <Text style={[styles.emoji, emojiStyle, styles.emojiEcho]}>{item.emoji}</Text>
                 </View>
               );
             })}
@@ -1046,7 +1074,7 @@ function EchoPulse({ emojis, radius }: BasePatternProps) {
   );
 }
 
-function ConfettiStream({ emojis, radius }: BasePatternProps) {
+function ConfettiStream({ emojis, radius, emojiStyle }: BasePatternProps) {
   const limit = useMemo(() => emojis.slice(0, 36), [emojis]);
   const streams = useMemo(
     () => limit.map((item, index) => ({
@@ -1118,7 +1146,7 @@ function ConfettiStream({ emojis, radius }: BasePatternProps) {
               { transform: [{ translateX }, { translateY }, { rotate }] },
             ]}
           >
-            <Text style={[styles.emoji, styles.emojiConfetti]}>{stream.emoji}</Text>
+            <Text style={[styles.emoji, emojiStyle, styles.emojiConfetti]}>{stream.emoji}</Text>
           </Animated.View>
         );
       })}
@@ -1126,7 +1154,7 @@ function ConfettiStream({ emojis, radius }: BasePatternProps) {
   );
 }
 
-function LaserSweep({ emojis, radius }: BasePatternProps) {
+function LaserSweep({ emojis, radius, emojiStyle }: BasePatternProps) {
   const limit = useMemo(() => emojis.slice(0, 54), [emojis]);
   const rotation = useLoopingValue(10000);
   const rotate = rotation.interpolate({
@@ -1162,7 +1190,7 @@ function LaserSweep({ emojis, radius }: BasePatternProps) {
                     },
                   ]}
                 >
-                  <Text style={[styles.emoji, styles.emojiLaser]}>{emoji.emoji}</Text>
+                  <Text style={[styles.emoji, emojiStyle, styles.emojiLaser]}>{emoji.emoji}</Text>
                 </View>
               );
             })
@@ -1173,7 +1201,7 @@ function LaserSweep({ emojis, radius }: BasePatternProps) {
   );
 }
 
-function AuroraVeil({ emojis, radius }: BasePatternProps) {
+function AuroraVeil({ emojis, radius, emojiStyle }: BasePatternProps) {
   const columns = useMemo(() => Math.max(2, Math.min(5, Math.ceil(emojis.length / 4))), [emojis.length]);
   const columnWidth = radius * 2.4;
   const segmentHeight = radius * 0.45;
@@ -1214,7 +1242,7 @@ function AuroraVeil({ emojis, radius }: BasePatternProps) {
             <View style={[styles.columnInner, { transform: [{ skewY: skew }] }]}> 
               {columnItems.map((emoji, rowIndex) => (
                 <View key={emoji.id} style={[styles.columnEmoji, { top: rowIndex * segmentHeight }]}> 
-                  <Text style={[styles.emoji, styles.emojiAurora]}>{emoji.emoji}</Text>
+                  <Text style={[styles.emoji, emojiStyle, styles.emojiAurora]}>{emoji.emoji}</Text>
                 </View>
               ))}
             </View>
@@ -1225,7 +1253,7 @@ function AuroraVeil({ emojis, radius }: BasePatternProps) {
   );
 }
 
-function FireflyField({ emojis, radius }: BasePatternProps) {
+function FireflyField({ emojis, radius, emojiStyle }: BasePatternProps) {
   const limit = useMemo(() => emojis.slice(0, 40), [emojis]);
   const flickers = useMemo(
     () => limit.map((item, index) => ({
@@ -1294,7 +1322,7 @@ function FireflyField({ emojis, radius }: BasePatternProps) {
               },
             ]}
           >
-            <Text style={[styles.emoji, styles.emojiFirefly]}>{emoji.emoji}</Text>
+            <Text style={[styles.emoji, emojiStyle, styles.emojiFirefly]}>{emoji.emoji}</Text>
           </Animated.View>
         );
       })}
@@ -1302,7 +1330,7 @@ function FireflyField({ emojis, radius }: BasePatternProps) {
   );
 }
 
-function StarlightHalo({ emojis, radius }: BasePatternProps) {
+function StarlightHalo({ emojis, radius, emojiStyle }: BasePatternProps) {
   const limit = useMemo(() => emojis.slice(0, 50), [emojis]);
   const rotation = useLoopingValue(20000);
   const rotate = rotation.interpolate({
@@ -1349,7 +1377,7 @@ function StarlightHalo({ emojis, radius }: BasePatternProps) {
               },
             ]}
           >
-            <Text style={[styles.emoji, styles.emojiStarlight]}>{emoji}</Text>
+            <Text style={[styles.emoji, emojiStyle, styles.emojiStarlight]}>{emoji}</Text>
           </View>
         ))
       }</Animated.View>
@@ -1357,7 +1385,7 @@ function StarlightHalo({ emojis, radius }: BasePatternProps) {
   );
 }
 
-function NebulaSwirl({ emojis, radius }: BasePatternProps) {
+function NebulaSwirl({ emojis, radius, emojiStyle }: BasePatternProps) {
   const limit = useMemo(() => emojis.slice(0, 64), [emojis]);
   const rotation = useLoopingValue(NEBULA_DURATION, 0, Easing.inOut(Easing.quad));
   const rotate = rotation.interpolate({
@@ -1403,7 +1431,7 @@ function NebulaSwirl({ emojis, radius }: BasePatternProps) {
                 },
               ]}
             >
-              <Text style={[styles.emoji, styles.emojiNebula]}>{emoji}</Text>
+              <Text style={[styles.emoji, emojiStyle, styles.emojiNebula]}>{emoji}</Text>
             </Animated.View>
           );
         })
@@ -1412,7 +1440,7 @@ function NebulaSwirl({ emojis, radius }: BasePatternProps) {
   );
 }
 
-function SupernovaBurst({ emojis, radius }: BasePatternProps) {
+function SupernovaBurst({ emojis, radius, emojiStyle }: BasePatternProps) {
   const limit = useMemo(() => emojis.slice(0, 40), [emojis]);
   const progress = useLoopingValue(SUPER_NOVA_DURATION, 0, Easing.inOut(Easing.quad));
 
@@ -1445,7 +1473,7 @@ function SupernovaBurst({ emojis, radius }: BasePatternProps) {
               },
             ]}
           >
-            <Text style={[styles.emoji, styles.emojiSupernova]}>{emoji.emoji}</Text>
+            <Text style={[styles.emoji, emojiStyle, styles.emojiSupernova]}>{emoji.emoji}</Text>
           </Animated.View>
         );
       })}

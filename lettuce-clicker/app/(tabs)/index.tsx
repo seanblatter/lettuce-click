@@ -600,7 +600,7 @@ export default function HomeScreen() {
                       <View style={styles.menuItemBody}>
                         <Text style={[styles.menuItemTitle, styles.quickActionTitle]}>Profile</Text>
                         <Text style={[styles.menuItemSubtitle, styles.quickActionSubtitle]}>
-                          Refresh your gardener details
+                          Touch up your Lettuce
                         </Text>
                       </View>
                       <View style={[styles.menuItemMeta, styles.quickActionMeta]} pointerEvents="none">

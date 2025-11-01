@@ -15,6 +15,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router';
 import { useAudioPlayer } from 'expo-audio';
 import { ALARM_CHIME_DATA_URI } from '@/assets/audio/alarmChime';
+import type { ColorScheme } from '@/context/ThemeContext';
 import { useAppTheme } from '@/context/ThemeContext';
 
 const MUSIC_OPTIONS = [
@@ -145,6 +146,27 @@ const MUSIC_OPTIONS = [
     family: 'night' as const,
   },
 ] as const;
+
+const MUSIC_AUDIO_MAP = {
+  'white-hush': require('@/assets/audio/soft-soothing-deep-white-noise-378857.mp3'),
+  'white-waves': require('@/assets/audio/heavy-rain-white-noise-159772.mp3'),
+  'white-sparks': require('@/assets/audio/large-industrial-fan-running-constantly-in-warehouse-environment-339216.mp3'),
+  'grey-mist': require('@/assets/audio/kitchen-fan-71401.mp3'),
+  'grey-embers': require('@/assets/audio/fire-place-189399.mp3'),
+  'grey-lanterns': require('@/assets/audio/street-ambience-traffic-410714.mp3'),
+  'rain-mist': require('@/assets/audio/gentle-rain-for-relaxation-and-sleep-337279.mp3'),
+  'rain-thunder': require('@/assets/audio/copyright-free-rain-sounds-331497.mp3'),
+  'ocean-tide': require('@/assets/audio/rowing-river-sounds-215254.mp3'),
+  'ocean-depths': require('@/assets/audio/river-sounds-420904.mp3'),
+  'forest-dawn': require('@/assets/audio/chirping-birds-ambience-217410-1.mp3'),
+  'forest-twilight': require('@/assets/audio/avala-trail-forest-nature-246779.mp3'),
+  'static-amber': require('@/assets/audio/large-industrial-fan-running-constantly-in-warehouse-environment-339216.mp3'),
+  'static-stars': require('@/assets/audio/soft-soothing-deep-white-noise-378857.mp3'),
+  'keys-glass': require('@/assets/audio/river-sounds-420904.mp3'),
+  'keys-nocturne': require('@/assets/audio/street-ambience-traffic-410714.mp3'),
+  'night-orbit': require('@/assets/audio/soft-soothing-deep-white-noise-378857.mp3'),
+  'night-halo': require('@/assets/audio/gentle-rain-for-relaxation-and-sleep-337279.mp3'),
+} as const satisfies Record<(typeof MUSIC_OPTIONS)[number]['id'], number>;
 
 const MUSIC_GROUPS = [
   { id: 'forest', label: 'Forest Echoes', intro: 'Leaves, birds, and twilight breezes between the vines.' },
@@ -545,8 +567,9 @@ const createStyles = (palette: Palette, isDark: boolean) =>
     headerActionButton: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
-      paddingHorizontal: 16,
+      justifyContent: 'center',
+      gap: 0,
+      paddingHorizontal: 14,
       paddingVertical: 12,
       borderRadius: 999,
       backgroundColor: palette.actionButtonBackground,
@@ -571,11 +594,6 @@ const createStyles = (palette: Palette, isDark: boolean) =>
     headerActionGlyph: {
       fontSize: 22,
       color: palette.sleepGlyphColor,
-    },
-    headerActionLabel: {
-      fontSize: 13,
-      fontWeight: '700',
-      color: palette.actionIcon,
     },
     nowPlayingCard: {
       backgroundColor: palette.cardBackground,
@@ -1108,14 +1126,23 @@ type MusicContentProps = {
 
 export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentProps) {
   const insets = useSafeAreaInsets();
-  const { colorScheme, toggleColorScheme } = useAppTheme();
+  const { colorScheme: appColorScheme } = useAppTheme();
+  const [musicColorScheme, setMusicColorScheme] = useState<ColorScheme>(appColorScheme);
+  useEffect(() => {
+    setMusicColorScheme(appColorScheme);
+  }, [appColorScheme]);
   const styles = useMemo(
-    () => createStyles(colorScheme === 'dark' ? DARK_PALETTE : LIGHT_PALETTE, colorScheme === 'dark'),
-    [colorScheme]
+    () =>
+      createStyles(
+        musicColorScheme === 'dark' ? DARK_PALETTE : LIGHT_PALETTE,
+        musicColorScheme === 'dark'
+      ),
+    [musicColorScheme]
   );
-  const themeLabel = colorScheme === 'dark' ? 'Dark mode' : 'Light mode';
-  const themeToggleIcon = colorScheme === 'dark' ? '🌞' : '🌙';
-  const themeToggleHint = colorScheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+  const themeToggleHint =
+    musicColorScheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+  const themeAccessibilityValue =
+    musicColorScheme === 'dark' ? 'Dark mode active' : 'Light mode active';
   const [selectedTrackId, setSelectedTrackId] = useState<MusicOption['id']>(MUSIC_OPTIONS[0].id);
   const [connectedServices, setConnectedServices] = useState<Record<MusicServiceId, boolean>>({
     apple: false,
@@ -1131,9 +1158,11 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
   const [sleepCircle, setSleepCircle] = useState<SleepCircleState>(null);
   const [sleepNow, setSleepNow] = useState(() => Date.now());
   const sleepTimeoutRef = useRef<number | null>(null);
+  const ambientPlayer = useAudioPlayer(MUSIC_AUDIO_MAP[selectedTrackId]);
   const alarmPlayer = useAudioPlayer(ALARM_SOUND_URI);
   const [audioReady, setAudioReady] = useState(false);
   const [audioError, setAudioError] = useState<Error | null>(null);
+  const [ambientError, setAmbientError] = useState<Error | null>(null);
   const [showAllGroups, setShowAllGroups] = useState(false);
 
   useEffect(() => {
@@ -1380,6 +1409,86 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
     setSleepModalOpen(false);
   }, []);
 
+  const handleToggleMusicTheme = useCallback(() => {
+    setMusicColorScheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  }, []);
+
+  const ensureLoopingPlayback = useCallback(
+    async (source: number) => {
+      const player: any = ambientPlayer;
+      try {
+        const playbackOptions = {
+          isLooping: true,
+          shouldPlay: nowPlayingSource === 'mix',
+        };
+
+        let startedWithSource = false;
+        if (player && typeof player.replace === 'function') {
+          await Promise.resolve(player.replace(source, playbackOptions));
+          startedWithSource = true;
+        } else if (player && typeof player.loadAsync === 'function') {
+          await Promise.resolve(player.stop?.());
+          await Promise.resolve(player.unloadAsync?.());
+          await Promise.resolve(player.loadAsync(source, playbackOptions));
+        } else if (player && typeof player.play === 'function' && player.play.length >= 1) {
+          await Promise.resolve(player.play(source, playbackOptions));
+          startedWithSource = true;
+        } else if (player && typeof player.setSource === 'function') {
+          await Promise.resolve(player.setSource(source));
+        }
+
+        if (player) {
+          if (typeof player.setStatus === 'function') {
+            await Promise.resolve(player.setStatus({ isLooping: true }));
+          } else if (typeof player.updateStatus === 'function') {
+            await Promise.resolve(player.updateStatus({ isLooping: true }));
+          }
+
+          if (nowPlayingSource === 'mix') {
+            if (!startedWithSource) {
+              player.seekTo?.(0);
+              player.play?.();
+            }
+          } else {
+            player.pause?.();
+          }
+        }
+
+        setAmbientError(null);
+      } catch (error) {
+        console.warn('Ambient playback failed', error);
+        setAmbientError(
+          error instanceof Error ? error : new Error('Ambient playback failed to start')
+        );
+      }
+    },
+    [ambientPlayer, nowPlayingSource]
+  );
+
+  useEffect(() => {
+    if (nowPlayingSource !== 'mix') {
+      const player: any = ambientPlayer;
+      player?.pause?.();
+      setAmbientError(null);
+      return;
+    }
+
+    const source = MUSIC_AUDIO_MAP[selectedTrackId];
+    if (!source) {
+      return;
+    }
+
+    ensureLoopingPlayback(source);
+  }, [ambientPlayer, ensureLoopingPlayback, nowPlayingSource, selectedTrackId]);
+
+  useEffect(() => {
+    const player: any = ambientPlayer;
+    return () => {
+      player?.stop?.();
+      player?.unloadAsync?.();
+    };
+  }, [ambientPlayer]);
+
   const handleClose = useCallback(() => {
     if (onRequestClose) {
       onRequestClose();
@@ -1412,17 +1521,16 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
           </View>
           <View style={styles.headerActions}>
             <Pressable
-              onPress={toggleColorScheme}
+              onPress={handleToggleMusicTheme}
               style={styles.headerActionButton}
               accessibilityRole="button"
               accessibilityLabel="Toggle light or dark mode"
               accessibilityHint={themeToggleHint}
-              accessibilityValue={{ text: `${themeLabel} active` }}
+              accessibilityValue={{ text: themeAccessibilityValue }}
             >
               <View style={styles.headerActionBubble}>
-                <Text style={styles.headerActionGlyph}>{themeToggleIcon}</Text>
+                <Text style={styles.headerActionGlyph}>🌙</Text>
               </View>
-              <Text style={styles.headerActionLabel}>{themeLabel}</Text>
             </Pressable>
             <Pressable
               onPress={handleOpenSleepModal}
@@ -1435,7 +1543,6 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
               <View style={styles.headerActionBubble}>
                 <Text style={styles.headerActionGlyph}>⏰</Text>
               </View>
-              <Text style={styles.headerActionLabel}>Dream Capsule</Text>
             </Pressable>
           </View>
         </View>
@@ -1460,6 +1567,11 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
             {!audioReady && audioError ? (
               <Text style={styles.sleepStatusWarning}>
                 Alarm chime installs with expo-av. Until then, we’ll vibrate instead.
+              </Text>
+            ) : null}
+            {ambientError ? (
+              <Text style={styles.sleepStatusWarning}>
+                Ambient mix playback is unavailable. Try another sound or reconnect audio.
               </Text>
             ) : null}
           </View>

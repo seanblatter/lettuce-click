@@ -162,10 +162,8 @@ export function UpgradeSection({
         {activeWorkshop === 'automation' ? (
           <View style={styles.workshopPanel}>
             <View style={styles.panelHeaderRow}>
+              <Text style={styles.panelHeaderEmoji}>🤖</Text>
               <Text style={styles.panelTitle}>Automation Workshop</Text>
-              <Text style={styles.panelSubtitle}>
-                Purchase equipment to boost idle income and attract new orbiting emojis.
-              </Text>
             </View>
             <View style={styles.workshopList}>
               {upgrades.map((upgrade) => {
@@ -201,10 +199,13 @@ export function UpgradeSection({
         ) : (
           <View style={styles.workshopPanel}>
             <View style={styles.panelHeaderRow}>
-              <Text style={styles.panelTitle}>Emoji Theme Studio</Text>
-              <Text style={styles.panelSubtitle}>
-                Unlock premium orbit styles, then apply them instantly to your garden centerpiece.
-              </Text>
+              <Text style={styles.panelHeaderEmoji}>🎨</Text>
+              <Text style={styles.panelTitle}>Themes Workshop</Text>
+              {lockedThemes.length ? (
+                <View style={styles.panelHeaderBadge}>
+                  <Text style={styles.panelHeaderBadgeText}>{lockedThemes.length} to unlock</Text>
+                </View>
+              ) : null}
             </View>
             {activeTheme ? (
               <View style={styles.themeSummaryCard}>
@@ -476,17 +477,33 @@ const styles = StyleSheet.create({
     gap: 18,
   },
   panelHeaderRow: {
-    gap: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginBottom: 8,
   },
   panelTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: '#0f172a',
+    textAlign: 'center',
   },
-  panelSubtitle: {
-    fontSize: 14,
-    color: '#475569',
-    lineHeight: 20,
+  panelHeaderEmoji: {
+    fontSize: 40,
+    textAlign: 'center',
+    color: '#0f172a',
+  },
+  panelHeaderBadge: {
+    marginTop: 2,
+    backgroundColor: '#bbf7d0',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  panelHeaderBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#166534',
   },
   workshopList: {
     gap: 16,

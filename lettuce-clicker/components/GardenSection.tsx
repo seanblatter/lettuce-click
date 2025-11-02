@@ -244,6 +244,7 @@ export function GardenSection({
   const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null);
   const [activeSheet, setActiveSheet] = useState<'shop' | 'inventory' | null>(null);
   const [shopFilter, setShopFilter] = useState('');
+  const [priceSortOrder, setPriceSortOrder] = useState<'asc' | 'desc'>('asc');
   const [showPalette, setShowPalette] = useState(false);
   const [isFontDropdownOpen, setFontDropdownOpen] = useState(false);
   const [showExtendedPalette, setShowExtendedPalette] = useState(false);
@@ -446,13 +447,31 @@ export function GardenSection({
 
   const filteredShopInventory = useMemo(() => {
     const filtered = inventoryList.filter((item) => matchesCategory(item) && matchesFilter(item));
+    const baseList =
+      filtered.length === 0 && normalizedFilter && normalizedEmojiTokens.length === 0
+        ? inventoryList.filter((item) => matchesCategory(item))
+        : filtered;
 
-    if (filtered.length === 0 && normalizedFilter && normalizedEmojiTokens.length === 0) {
-      return inventoryList.filter((item) => matchesCategory(item));
-    }
+    const sorter = (a: InventoryEntry, b: InventoryEntry) => {
+      if (a.cost === b.cost) {
+        if (a.popularity === b.popularity) {
+          return a.name.localeCompare(b.name);
+        }
+        return a.popularity - b.popularity;
+      }
 
-    return filtered;
-  }, [inventoryList, matchesCategory, matchesFilter, normalizedEmojiTokens, normalizedFilter]);
+      return priceSortOrder === 'asc' ? a.cost - b.cost : b.cost - a.cost;
+    };
+
+    return [...baseList].sort(sorter);
+  }, [
+    inventoryList,
+    matchesCategory,
+    matchesFilter,
+    normalizedEmojiTokens.length,
+    normalizedFilter,
+    priceSortOrder,
+  ]);
   const filteredOwnedInventory = useMemo(() => {
     const filtered = ownedInventory.filter((item) => matchesCategory(item) && matchesFilter(item));
 
@@ -1029,6 +1048,10 @@ export function GardenSection({
     setActiveEmojiPicker(null);
   }, []);
   const handleOpenSheet = useCallback((sheet: 'shop' | 'inventory') => setActiveSheet(sheet), []);
+  const togglePriceSortOrder = useCallback(
+    () => setPriceSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc')),
+    []
+  );
   const handleChangeCategory = useCallback(
     (category: CategoryFilter) => {
       setActiveCategory(category);
@@ -1100,18 +1123,17 @@ export function GardenSection({
               {formatClickValue(item.cost)} clicks
             </Text>
           </View>
-          {owned ? (
-            <View style={styles.emojiTileBadge}>
-              <Text style={styles.emojiTileBadgeText}>Unlocked</Text>
-            </View>
-          ) : null}
         </Pressable>
         <View style={styles.tileActionRow}>
-          {owned ? (
-            <View style={[styles.tileActionButton, styles.tileActionUnlocked]} accessibilityRole="text">
-              <Text style={[styles.tileActionButtonText, styles.tileActionUnlockedText]}>Unlocked</Text>
-            </View>
-          ) : (
+          <Text
+            style={[
+              styles.tileStatusText,
+              owned ? styles.tileStatusUnlocked : styles.tileStatusLocked,
+            ]}
+          >
+            {owned ? 'Unlocked' : 'Locked'}
+          </Text>
+          {!owned ? (
             <Pressable
               style={[styles.tileActionButton, !canAfford && styles.disabledSecondary]}
               onPress={() => handlePurchase(item.id)}
@@ -1121,10 +1143,11 @@ export function GardenSection({
                 canAfford
                   ? 'Unlocks this decoration for unlimited placements.'
                   : 'Gather more clicks to unlock this decoration.'
-              }>
+              }
+            >
               <Text style={[styles.tileActionButtonText, !canAfford && styles.disabledText]}>Unlock</Text>
             </Pressable>
-          )}
+          ) : null}
         </View>
       </View>
     );
@@ -1721,6 +1744,23 @@ export function GardenSection({
                   </Pressable>
                 ) : null}
               </View>
+              <View style={styles.sortRow}>
+                <Text style={styles.sortLabel}>Price</Text>
+                <Pressable
+                  style={styles.sortToggle}
+                  onPress={togglePriceSortOrder}
+                  accessibilityRole="button"
+                  accessibilityLabel="Toggle price sorting"
+                  accessibilityValue={{
+                    text: priceSortOrder === 'asc' ? 'Low to high' : 'High to low',
+                  }}
+                >
+                  <Text style={styles.sortIcon}>{priceSortOrder === 'asc' ? '↑' : '↓'}</Text>
+                  <Text style={styles.sortToggleText}>
+                    {priceSortOrder === 'asc' ? 'Low to high' : 'High to low'}
+                  </Text>
+                </Pressable>
+              </View>
             </View>
             <View style={styles.categoryFilterBlock}>
               <ScrollView
@@ -1753,7 +1793,7 @@ export function GardenSection({
               keyExtractor={keyExtractor}
               numColumns={3}
               columnWrapperStyle={styles.sheetColumn}
-              showsVerticalScrollIndicator={false}
+              showsVerticalScrollIndicator
               contentContainerStyle={styles.sheetListContent}
               ListEmptyComponent={
                 <View style={styles.emptyState}>
@@ -1872,7 +1912,7 @@ export function GardenSection({
               keyExtractor={keyExtractor}
               numColumns={3}
               columnWrapperStyle={styles.sheetColumn}
-              showsVerticalScrollIndicator={false}
+              showsVerticalScrollIndicator
               contentContainerStyle={styles.sheetListContent}
               scrollEnabled={!draggingInventoryId}
               ListEmptyComponent={
@@ -2017,12 +2057,7 @@ function InventoryTileItem({
               <Text style={[styles.emojiGlyphLarge, isSelected && styles.emojiGlyphSelected]}>{item.emoji}</Text>
             </View>
           </View>
-          {item.owned ? (
-            <View style={styles.emojiTileBadge}>
-              <Text style={styles.emojiTileBadgeText}>Unlocked</Text>
-            </View>
-          ) : null}
-          <Text style={styles.emojiTileLabel} numberOfLines={1}>
+          <Text style={styles.emojiTileLabel} numberOfLines={2}>
             {item.name}
           </Text>
           <View style={styles.emojiTileFooter}>
@@ -2030,7 +2065,7 @@ function InventoryTileItem({
               {categoryLabel}
             </Text>
             <Text style={[styles.emojiTileMeta, styles.inventoryMeta]} numberOfLines={1}>
-              {item.owned ? 'Unlimited use' : 'Locked'}
+              {item.owned ? 'Unlocked' : 'Locked'}
             </Text>
           </View>
         </Pressable>
@@ -2428,16 +2463,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#134e32',
     textAlign: 'center',
-    width: '100%',
+    alignSelf: 'stretch',
     lineHeight: 16,
     minHeight: 32,
     paddingHorizontal: 4,
+    flexShrink: 1,
   },
   emojiTileFooter: {
     marginTop: 'auto',
     width: '100%',
     flexDirection: 'column',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: 4,
   },
   emojiTileMeta: {
@@ -2763,12 +2799,45 @@ const styles = StyleSheet.create({
   sheetSearchBlock: {
     gap: 8,
   },
+  sortRow: {
+    marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sortLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0f766e',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  sortToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#ecfdf3',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  sortToggleText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#134e32',
+  },
+  sortIcon: {
+    fontSize: 14,
+    color: '#0f766e',
+  },
   sheetColumn: {
     gap: 12,
     marginBottom: 12,
   },
   sheetList: {
-    flexGrow: 0,
+    flexGrow: 1,
   },
   sheetListContent: {
     paddingBottom: 24,
@@ -2813,15 +2882,15 @@ const styles = StyleSheet.create({
   tileActionRow: {
     flexDirection: 'row',
     gap: 8,
-    marginTop: 8,
+    marginTop: 12,
     width: '100%',
-    justifyContent: 'center',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   tileActionButton: {
-    flex: 1,
-    width: '100%',
     borderRadius: 12,
-    paddingVertical: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#22543d',
@@ -2829,6 +2898,17 @@ const styles = StyleSheet.create({
   tileActionButtonText: {
     color: '#f0fff4',
     fontWeight: '700',
+  },
+  tileStatusText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#134e32',
+  },
+  tileStatusUnlocked: {
+    color: '#047857',
+  },
+  tileStatusLocked: {
+    color: '#b91c1c',
   },
   tileActionUnlocked: {
     backgroundColor: '#d1fae5',

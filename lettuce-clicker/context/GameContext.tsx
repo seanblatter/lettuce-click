@@ -137,6 +137,7 @@ type GameContextValue = {
   purchaseUpgrade: (upgradeId: string) => boolean;
   purchaseEmojiTheme: (themeId: HomeEmojiTheme) => boolean;
   purchaseEmoji: (emojiId: string) => boolean;
+  grantEmojiUnlock: (emojiId: string) => boolean;
   placeEmoji: (emojiId: string, position: { x: number; y: number }) => boolean;
   addPhotoPlacement: (imageUri: string, position: { x: number; y: number }) => boolean;
   addTextPlacement: (
@@ -976,6 +977,24 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     [emojiInventory, findEmojiDefinition, spendHarvest]
   );
 
+  const grantEmojiUnlock = useCallback((emojiId: string) => {
+    let unlocked = false;
+    setEmojiInventory((prev) => {
+      if (prev[emojiId]) {
+        unlocked = false;
+        return prev;
+      }
+
+      unlocked = true;
+      return {
+        ...prev,
+        [emojiId]: true,
+      };
+    });
+
+    return unlocked;
+  }, []);
+
   const placeEmoji = useCallback(
     (emojiId: string, position: { x: number; y: number }) => {
       if (!emojiInventory[emojiId]) {
@@ -1132,6 +1151,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     purchaseUpgrade,
     purchaseEmojiTheme,
     purchaseEmoji,
+    grantEmojiUnlock,
     placeEmoji,
     addPhotoPlacement,
     addTextPlacement,
@@ -1176,6 +1196,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     purchasePremiumUpgrade,
     purchaseEmojiTheme,
     purchaseEmoji,
+    grantEmojiUnlock,
     placeEmoji,
     setPremiumAccentColor,
     setCustomClickEmoji,

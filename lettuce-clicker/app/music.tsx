@@ -22,6 +22,7 @@ import { MUSIC_GROUPS, MUSIC_OPTIONS, type MusicOption } from '@/constants/music
 import { useAmbientAudio } from '@/context/AmbientAudioContext';
 import type { ColorScheme } from '@/context/ThemeContext';
 import { useAppTheme } from '@/context/ThemeContext';
+import { useGame } from '@/context/GameContext';
 
 
 const SLEEP_MODE_OPTIONS = [
@@ -1034,12 +1035,23 @@ type MusicContentProps = {
 export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentProps) {
   const insets = useSafeAreaInsets();
   const { colorScheme: appColorScheme } = useAppTheme();
+  const { gardenBackgroundColor } = useGame();
   const [musicColorScheme, setMusicColorScheme] = useState<ColorScheme>(appColorScheme);
   useEffect(() => {
     setMusicColorScheme(appColorScheme);
   }, [appColorScheme]);
   const isDark = musicColorScheme === 'dark';
-  const palette = isDark ? DARK_PALETTE : LIGHT_PALETTE;
+  const gardenSurface = useMemo(
+    () =>
+      gardenBackgroundColor && gardenBackgroundColor.trim().length > 0
+        ? gardenBackgroundColor
+        : LIGHT_PALETTE.background,
+    [gardenBackgroundColor]
+  );
+  const palette = useMemo(
+    () => (isDark ? DARK_PALETTE : { ...LIGHT_PALETTE, background: gardenSurface }),
+    [gardenSurface, isDark]
+  );
   const styles = useMemo(
     () =>
       createStyles(

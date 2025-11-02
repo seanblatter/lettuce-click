@@ -28,6 +28,7 @@ const DAILY_BONUS_LAST_CLAIM_KEY = 'lettuce-click:daily-bonus-last-claim';
 const BONUS_REWARD_OPTIONS = [75, 125, 200, 325, 500, 650];
 const BONUS_ADDITIONAL_SPINS = 2;
 const DAILY_BONUS_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const LEDGER_COLORS = ['#ffffff', '#f4ede1', '#e2e8f0'] as const;
 
 const lightenColor = (hex: string, factor: number) => {
   const normalized = hex.replace('#', '');
@@ -110,6 +111,7 @@ export default function HomeScreen() {
   const [dailyCountdown, setDailyCountdown] = useState<string | null>(null);
   const [hasDoubledPassiveHarvest, setHasDoubledPassiveHarvest] = useState(false);
   const [isWatchingResumeOffer, setIsWatchingResumeOffer] = useState(false);
+  const [ledgerToneIndex, setLedgerToneIndex] = useState(0);
   const insets = useSafeAreaInsets();
   const flipAnimation = useRef(new Animated.Value(0)).current;
   const { isPlaying: isAmbientPlaying } = useAmbientAudio();
@@ -154,6 +156,10 @@ export default function HomeScreen() {
     () => audioPulsePrimary.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] }),
     [audioPulsePrimary]
   );
+  const ledgerBackground = useMemo(
+    () => LEDGER_COLORS[ledgerToneIndex % LEDGER_COLORS.length],
+    [ledgerToneIndex]
+  );
   const quickActionRotations = useMemo(
     () => ({
       profile: quickActionWiggles.profile.interpolate({ inputRange: [-1, 1], outputRange: ['-10deg', '10deg'] }),
@@ -171,6 +177,9 @@ export default function HomeScreen() {
       }),
     [flipAnimation]
   );
+  const handleCycleLedgerColor = useCallback(() => {
+    setLedgerToneIndex((prev) => (prev + 1) % LEDGER_COLORS.length);
+  }, []);
   useEffect(() => {
     let primaryLoop: Animated.CompositeAnimation | null = null;
     let secondaryLoop: Animated.CompositeAnimation | null = null;
@@ -768,21 +777,31 @@ export default function HomeScreen() {
             </Pressable>
           </View>
 
-          <View style={styles.statsCard}>
-            <Text style={styles.statsTitle}>Harvest Ledger</Text>
-            <View style={styles.statRow}>
-              <Text style={styles.statLabel}>Available harvest</Text>
-              <Text style={styles.statValue}>{harvest.toLocaleString()}</Text>
-            </View>
-            <View style={styles.statRow}>
-              <Text style={styles.statLabel}>Lifetime harvest</Text>
-              <Text style={styles.statValue}>{lifetimeHarvest.toLocaleString()}</Text>
-            </View>
-            <View style={styles.statRow}>
-              <Text style={styles.statLabel}>Auto clicks /s</Text>
-              <Text style={styles.statValue}>{autoPerSecond.toLocaleString()}</Text>
-            </View>
+        <Pressable
+          style={({ pressed }) => [
+            styles.statsCard,
+            { backgroundColor: ledgerBackground },
+            pressed && styles.statsCardPressed,
+          ]}
+          onPress={handleCycleLedgerColor}
+          accessibilityRole="button"
+          accessibilityLabel="Harvest Ledger"
+          accessibilityHint="Tap to cycle the ledger background color"
+        >
+          <Text style={styles.statsTitle}>Harvest Ledger</Text>
+          <View style={styles.statRow}>
+            <Text style={styles.statLabel}>Available harvest</Text>
+            <Text style={styles.statValue}>{harvest.toLocaleString()}</Text>
           </View>
+          <View style={styles.statRow}>
+            <Text style={styles.statLabel}>Lifetime harvest</Text>
+            <Text style={styles.statValue}>{lifetimeHarvest.toLocaleString()}</Text>
+          </View>
+          <View style={styles.statRow}>
+            <Text style={styles.statLabel}>Auto clicks /s</Text>
+            <Text style={styles.statValue}>{autoPerSecond.toLocaleString()}</Text>
+          </View>
+        </Pressable>
         </View>
 
         <Modal
@@ -1418,6 +1437,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     shadowRadius: 12,
     elevation: 4,
+  },
+  statsCardPressed: {
+    opacity: 0.94,
   },
   statsTitle: {
     fontSize: 20,

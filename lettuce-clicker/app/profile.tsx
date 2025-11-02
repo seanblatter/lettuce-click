@@ -32,9 +32,9 @@ const BACKGROUND_WHEEL_COLORS = [
   '#e2e8f0',
   '#1f2937',
 ];
-const BACKGROUND_WHEEL_DIAMETER = 160;
-const BACKGROUND_WHEEL_RADIUS = 64;
-const BACKGROUND_WHEEL_SWATCH_SIZE = 36;
+const BACKGROUND_WHEEL_DIAMETER = 200;
+const BACKGROUND_WHEEL_RADIUS = 80;
+const BACKGROUND_WHEEL_SWATCH_SIZE = 44;
 
 type ProfileContentProps = {
   mode?: 'screen' | 'modal';
@@ -70,9 +70,12 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
   const [isSaving, setIsSaving] = useState(false);
   const [emojiInput, setEmojiInput] = useState(customClickEmoji);
   const [accentSelection, setAccentSelection] = useState(premiumAccentColor);
-  const [showBackgroundPalette, setShowBackgroundPalette] = useState(false);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const emojiInputRef = useRef<TextInput>(null);
+  const displayName = useMemo(() => {
+    const trimmed = name.trim();
+    return trimmed.length > 0 ? trimmed : 'Gardener';
+  }, [name]);
 
   useEffect(() => {
     setName(profileName);
@@ -150,11 +153,12 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
       if (!result.canceled) {
         const asset = result.assets[0];
         setProfileImageUri(asset.uri);
+        setProfilePhotoWidgetEnabled(true);
       }
     } catch {
       Alert.alert('Something went wrong', 'Unable to open the photo library right now.');
     }
-  }, [setProfileImageUri]);
+  }, [setProfileImageUri, setProfilePhotoWidgetEnabled]);
 
   const handleRemoveImage = useCallback(() => {
     setProfileImageUri(null);
@@ -188,10 +192,6 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
     },
     [hasPremiumUpgrade, setPremiumAccentColor]
   );
-
-  const handleToggleBackgroundPalette = useCallback(() => {
-    setShowBackgroundPalette((prev) => !prev);
-  }, []);
 
   const handleSelectBackgroundColor = useCallback(
     (color: string) => {
@@ -275,10 +275,8 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
   const widgetDisabled = !profileImageUri;
   const widgetValue = widgetDisabled ? false : profilePhotoWidgetEnabled;
   const widgetDescription = widgetDisabled
-    ? 'Add a photo to enable the widget preview.'
-    : Platform.OS === 'ios'
-      ? 'Pin your garden photo to the iOS Home Screen widget.'
-      : 'Keep your garden photo handy with a quick-look widget.';
+    ? 'Add a photo to sync it with quick actions and your profile preview.'
+    : 'Keep your quick actions refreshed with your latest garden photo.';
   const widgetThumbColor =
     Platform.OS === 'android'
       ? widgetValue
@@ -311,8 +309,8 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
               <Text style={styles.avatarPlaceholder}>📸</Text>
             )}
           </Pressable>
-          <Text style={styles.headerTitle}>Garden Profile</Text>
-          <Text style={styles.headerSubtitle}>Personalize your profile and celebrate your harvest!</Text>
+          <Text style={styles.headerTitle}>Welcome, {displayName}!</Text>
+          <Text style={styles.headerSubtitle}>Personalize your profile and celebrate your harvest.</Text>
           {profileImageUri && (
             <Pressable onPress={handleRemoveImage} style={styles.removePhotoButton} accessibilityLabel="Remove profile image">
               <Text style={styles.removePhotoText}>Remove photo</Text>
@@ -320,7 +318,10 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
           )}
           <View style={styles.widgetCard}>
             <View style={styles.widgetHeader}>
-              <Text style={styles.widgetTitle}>Photo widget</Text>
+              <View style={styles.widgetHeaderText}>
+                <Text style={styles.widgetTitle}>Quick actions photo</Text>
+                <Text style={styles.widgetCopy}>{widgetDescription}</Text>
+              </View>
               <Switch
                 value={widgetValue}
                 onValueChange={setProfilePhotoWidgetEnabled}
@@ -330,14 +331,22 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
                 thumbColor={widgetThumbColor}
               />
             </View>
-            <Text style={styles.widgetCopy}>{widgetDescription}</Text>
-            <View style={[styles.widgetPreview, widgetDisabled && styles.widgetPreviewEmpty]}>
+            <View style={[styles.widgetPreviewFrame, widgetDisabled && styles.widgetPreviewEmpty]}>
               {profileImageUri ? (
                 <Image source={{ uri: profileImageUri }} style={styles.widgetPreviewImage} />
               ) : (
-                <Text style={styles.widgetPreviewPlaceholder}>Add a photo to preview your widget</Text>
+                <Text style={styles.widgetPreviewPlaceholder}>Add a photo to preview your quick action</Text>
               )}
             </View>
+            {profileImageUri ? (
+              <Pressable
+                style={styles.widgetChangeButton}
+                onPress={handlePickImage}
+                accessibilityLabel="Update quick action photo"
+              >
+                <Text style={styles.widgetChangeButtonText}>Update photo</Text>
+              </Pressable>
+            ) : null}
           </View>
         </View>
 
@@ -396,52 +405,36 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
                 })}
               </View>
               <View style={styles.backgroundSection}>
-                <View style={styles.backgroundHeaderRow}>
-                  <Text style={styles.backgroundTitle}>Garden background</Text>
-                  <Pressable
-                    onPress={handleToggleBackgroundPalette}
-                    accessibilityLabel="Toggle background color palette"
-                    style={styles.backgroundToggleButton}
-                  >
-                    <Text style={styles.backgroundToggleText}>
-                      {showBackgroundPalette ? 'Hide palette' : 'Choose color'}
-                    </Text>
-                  </Pressable>
-                </View>
+                <Text style={styles.backgroundTitle}>Garden background</Text>
                 <Text style={styles.backgroundCopy}>Set the color that surrounds your garden canvas.</Text>
-                <View style={[styles.backgroundPreviewFrame, { backgroundColor: gardenBackgroundColor }]}>
-                  <Text style={styles.backgroundPreviewText}>{gardenBackgroundColor.toUpperCase()}</Text>
-                </View>
-                {showBackgroundPalette ? (
-                  <View style={styles.backgroundWheelContainer}>
-                    <View style={styles.backgroundWheel}>
-                      {backgroundWheelPositions.map(({ color, left, top }) => {
-                        const isActive = gardenBackgroundColor === color;
-                        return (
-                          <Pressable
-                            key={color}
-                            style={[
-                              styles.backgroundWheelSwatch,
-                              { backgroundColor: color, left, top },
-                              isActive && styles.backgroundWheelSwatchActive,
-                            ]}
-                            onPress={() => handleSelectBackgroundColor(color)}
-                            accessibilityLabel={`Set garden background to ${color}`}
-                            accessibilityState={{ selected: isActive }}
-                          />
-                        );
-                      })}
-                      <View style={[styles.backgroundWheelCenter, { backgroundColor: gardenBackgroundColor }]} />
-                    </View>
-                    <Pressable
-                      style={styles.backgroundResetButton}
-                      onPress={handleResetBackground}
-                      accessibilityLabel="Reset background color"
-                    >
-                      <Text style={styles.backgroundResetText}>Reset to original</Text>
-                    </Pressable>
+                <View style={styles.backgroundWheelContainer}>
+                  <View style={styles.backgroundWheel}>
+                    {backgroundWheelPositions.map(({ color, left, top }) => {
+                      const isActive = gardenBackgroundColor === color;
+                      return (
+                        <Pressable
+                          key={color}
+                          style={[
+                            styles.backgroundWheelSwatch,
+                            { backgroundColor: color, left, top },
+                            isActive && styles.backgroundWheelSwatchActive,
+                          ]}
+                          onPress={() => handleSelectBackgroundColor(color)}
+                          accessibilityLabel={`Set garden background to ${color}`}
+                          accessibilityState={{ selected: isActive }}
+                        />
+                      );
+                    })}
+                    <View style={[styles.backgroundWheelCenter, { backgroundColor: gardenBackgroundColor }]} />
                   </View>
-                ) : null}
+                </View>
+                <Pressable
+                  style={styles.backgroundResetButton}
+                  onPress={handleResetBackground}
+                  accessibilityLabel="Reset background color"
+                >
+                  <Text style={styles.backgroundResetText}>Reset to original</Text>
+                </Pressable>
               </View>
               <Text style={styles.upgradeCopy}>Pick the emoji that appears on the home canvas and menu.</Text>
               {emojiOptions.length > 0 ? (
@@ -605,6 +598,79 @@ const styles = StyleSheet.create({
     color: '#f0fff4',
     fontWeight: '600',
   },
+  widgetCard: {
+    width: '100%',
+    backgroundColor: 'rgba(240, 255, 244, 0.9)',
+    borderRadius: 20,
+    padding: 18,
+    gap: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(187, 247, 208, 0.65)',
+    shadowColor: '#0f5132',
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+  },
+  widgetHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 16,
+  },
+  widgetHeaderText: {
+    flex: 1,
+    gap: 4,
+  },
+  widgetTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f5132',
+  },
+  widgetCopy: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#14532d',
+  },
+  widgetPreviewFrame: {
+    width: '100%',
+    height: 164,
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  widgetPreviewImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  widgetPreviewPlaceholder: {
+    fontSize: 13,
+    color: '#1f6f4a',
+    textAlign: 'center',
+    paddingHorizontal: 12,
+  },
+  widgetPreviewEmpty: {
+    backgroundColor: '#ecfdf3',
+    borderStyle: 'dashed',
+    borderColor: '#86efac',
+  },
+  widgetChangeButton: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 14,
+    backgroundColor: '#0f5132',
+  },
+  widgetChangeButtonText: {
+    color: '#f0fff4',
+    fontWeight: '700',
+    fontSize: 13,
+  },
   formSection: {
     gap: 8,
   },
@@ -700,45 +766,15 @@ const styles = StyleSheet.create({
     marginTop: 12,
     gap: 10,
   },
-  backgroundHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
   backgroundTitle: {
     fontSize: 15,
     fontWeight: '700',
     color: '#14532d',
   },
-  backgroundToggleButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
-    backgroundColor: '#bbf7d0',
-  },
-  backgroundToggleText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0f5132',
-  },
   backgroundCopy: {
     fontSize: 13,
     color: '#22543d',
     lineHeight: 18,
-  },
-  backgroundPreviewFrame: {
-    height: 60,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#bbf7d0',
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-    paddingHorizontal: 14,
-  },
-  backgroundPreviewText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0f3d2b',
   },
   backgroundWheelContainer: {
     gap: 12,
@@ -777,9 +813,9 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   backgroundWheelCenter: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     borderWidth: 2,
     borderColor: '#bbf7d0',
   },

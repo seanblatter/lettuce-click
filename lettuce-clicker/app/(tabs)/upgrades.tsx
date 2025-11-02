@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScrollView, StyleSheet } from 'react-native';
 
@@ -16,12 +17,20 @@ export default function UpgradesScreen() {
     purchaseEmojiTheme,
     homeEmojiTheme,
     setHomeEmojiTheme,
+    gardenBackgroundColor,
   } = useGame();
+  const surfaceColor = useMemo(
+    () =>
+      gardenBackgroundColor && gardenBackgroundColor.trim().length > 0
+        ? gardenBackgroundColor
+        : '#f0fff4',
+    [gardenBackgroundColor]
+  );
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: surfaceColor }]}>
       <ScrollView
-        style={styles.scroll}
+        style={[styles.scroll, { backgroundColor: surfaceColor }]}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator
         alwaysBounceVertical

@@ -127,37 +127,31 @@ export function UpgradeSection({
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ selected: activeWorkshop === 'automation' }}
-          accessibilityHint="Show automation upgrades"
           onPress={() => setActiveWorkshop('automation')}
           style={[styles.workshopToggleCard, activeWorkshop === 'automation' && styles.workshopToggleActive]}
         >
-          <Text
-            style={[styles.workshopToggleEmoji, activeWorkshop === 'automation' && styles.workshopToggleEmojiActive]}
-          >
-            🤖
-          </Text>
           <Text style={[styles.workshopToggleLabel, activeWorkshop === 'automation' && styles.workshopToggleLabelActive]}>
             Automation Workshop
+          </Text>
+          <Text style={[styles.workshopToggleHint, activeWorkshop === 'automation' && styles.workshopToggleHintActive]}>
+            Boost idle harvest engines with greenhouse tech.
           </Text>
         </Pressable>
 
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ selected: activeWorkshop === 'themes' }}
-          accessibilityHint={themeToggleHint}
           onPress={() => setActiveWorkshop('themes')}
           style={[styles.workshopToggleCard, activeWorkshop === 'themes' && styles.workshopToggleActive]}
         >
-          <Text
-            style={[styles.workshopToggleEmoji, activeWorkshop === 'themes' && styles.workshopToggleEmojiActive]}
-          >
-            🎨
-          </Text>
           <Text style={[styles.workshopToggleLabel, activeWorkshop === 'themes' && styles.workshopToggleLabelActive]}>
             Themes Workshop
           </Text>
+          <Text style={[styles.workshopToggleHint, activeWorkshop === 'themes' && styles.workshopToggleHintActive]}>
+            {themeToggleHint}
+          </Text>
           {lockedThemes.length ? (
-            <View style={[styles.workshopToggleBadge, activeWorkshop === 'themes' && styles.workshopToggleBadgeActive]}>
+            <View style={styles.workshopToggleBadge}>
               <Text style={styles.workshopToggleBadgeText}>{lockedThemes.length} to unlock</Text>
             </View>
           ) : null}
@@ -421,7 +415,6 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 22,
     padding: 18,
-    alignItems: 'center',
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: 'rgba(22, 101, 52, 0.22)',
@@ -430,7 +423,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     shadowRadius: 16,
     elevation: 3,
-    gap: 10,
+    gap: 8,
   },
   workshopToggleActive: {
     borderColor: '#14532d',
@@ -439,31 +432,29 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     elevation: 4,
   },
-  workshopToggleEmoji: {
-    fontSize: 32,
-  },
-  workshopToggleEmojiActive: {
-    transform: [{ scale: 1.05 }],
-  },
   workshopToggleLabel: {
     fontSize: 16,
     fontWeight: '700',
     color: '#14532d',
-    textAlign: 'center',
   },
   workshopToggleLabelActive: {
     color: '#0f766e',
   },
+  workshopToggleHint: {
+    fontSize: 13,
+    color: '#276749',
+    lineHeight: 18,
+  },
+  workshopToggleHintActive: {
+    color: '#0f766e',
+  },
   workshopToggleBadge: {
-    alignSelf: 'center',
-    marginTop: 8,
+    alignSelf: 'flex-start',
+    marginTop: 6,
     backgroundColor: '#bbf7d0',
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 4,
-  },
-  workshopToggleBadgeActive: {
-    backgroundColor: '#86efac',
   },
   workshopToggleBadgeText: {
     fontSize: 12,

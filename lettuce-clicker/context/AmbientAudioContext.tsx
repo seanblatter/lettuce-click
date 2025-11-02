@@ -1,19 +1,9 @@
 
 import type { ReactNode } from 'react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Audio } from 'expo-av';
 
 import { MUSIC_AUDIO_MAP, MUSIC_OPTIONS, type MusicOption } from '@/constants/music';
-
-type SleepAlertTone = 'timer' | 'alarm';
-
-type SleepAlertState = {
-  tone: SleepAlertTone;
-  title: string;
-  message: string;
-  onDismiss?: () => void;
-};
 
 type AmbientAudioContextValue = {
   selectedTrackId: MusicOption['id'];
@@ -23,9 +13,6 @@ type AmbientAudioContextValue = {
   togglePlayback: () => void;
   play: () => void;
   pause: () => void;
-  sleepAlert: SleepAlertState | null;
-  showSleepAlert: (alert: SleepAlertState) => void;
-  dismissSleepAlert: () => void;
 };
 
 const AmbientAudioContext = createContext<AmbientAudioContextValue | undefined>(undefined);
@@ -38,7 +25,6 @@ export function AmbientAudioProvider({ children }: ProviderProps) {
   const [selectedTrackId, setSelectedTrackId] = useState<MusicOption['id']>(MUSIC_OPTIONS[0].id);
   const [isPlaying, setIsPlaying] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const [sleepAlert, setSleepAlert] = useState<SleepAlertState | null>(null);
   const isPlayingRef = useRef(isPlaying);
   const trackRef = useRef(selectedTrackId);
   const soundRef = useRef<Audio.Sound | null>(null);
@@ -179,24 +165,6 @@ export function AmbientAudioProvider({ children }: ProviderProps) {
     setIsPlaying((prev) => !prev);
   }, []);
 
-  const showSleepAlert = useCallback((alert: SleepAlertState) => {
-    setSleepAlert(alert);
-  }, []);
-
-  const dismissSleepAlert = useCallback(() => {
-    setSleepAlert((current) => {
-      if (current?.onDismiss) {
-        try {
-          current.onDismiss();
-        } catch (caught) {
-          console.warn('Sleep alert dismissal failed', caught);
-        }
-      }
-
-      return null;
-    });
-  }, []);
-
   const value = useMemo(
     () => ({
       selectedTrackId,
@@ -206,103 +174,12 @@ export function AmbientAudioProvider({ children }: ProviderProps) {
       togglePlayback,
       play,
       pause,
-      sleepAlert,
-      showSleepAlert,
-      dismissSleepAlert,
     }),
-    [
-      dismissSleepAlert,
-      error,
-      isPlaying,
-      pause,
-      play,
-      selectTrack,
-      selectedTrackId,
-      showSleepAlert,
-      sleepAlert,
-      togglePlayback,
-    ]
+    [error, isPlaying, pause, play, selectTrack, selectedTrackId, togglePlayback]
   );
 
-  return (
-    <AmbientAudioContext.Provider value={value}>
-      {children}
-      <Modal
-        transparent
-        animationType="fade"
-        visible={Boolean(sleepAlert)}
-        onRequestClose={dismissSleepAlert}
-      >
-        <View style={sleepAlertStyles.overlay}>
-          <View style={sleepAlertStyles.card}>
-            <Text style={sleepAlertStyles.title}>{sleepAlert?.title ?? 'Dream Capsule'}</Text>
-            <Text style={sleepAlertStyles.message}>{sleepAlert?.message ?? ''}</Text>
-            <Pressable
-              style={sleepAlertStyles.button}
-              onPress={dismissSleepAlert}
-              accessibilityRole="button"
-              accessibilityLabel="Dismiss Dream Capsule alert"
-            >
-              <Text style={sleepAlertStyles.buttonText}>
-                {sleepAlert?.tone === 'alarm' ? 'Stop alarm' : 'Dismiss'}
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-    </AmbientAudioContext.Provider>
-  );
+  return <AmbientAudioContext.Provider value={value}>{children}</AmbientAudioContext.Provider>;
 }
-
-const sleepAlertStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  card: {
-    width: '100%',
-    maxWidth: 360,
-    borderRadius: 22,
-    backgroundColor: '#ecfdf3',
-    borderWidth: 1,
-    borderColor: '#bbf7d0',
-    padding: 20,
-    alignItems: 'center',
-    gap: 12,
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.2,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 10,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#14532d',
-    textAlign: 'center',
-  },
-  message: {
-    fontSize: 14,
-    color: '#1f2937',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  button: {
-    marginTop: 4,
-    borderRadius: 12,
-    backgroundColor: '#14532d',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-  },
-  buttonText: {
-    color: '#f0fff4',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-});
 
 export function useAmbientAudio() {
   const context = useContext(AmbientAudioContext);

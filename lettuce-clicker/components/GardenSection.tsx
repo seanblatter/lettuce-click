@@ -74,7 +74,8 @@ type Stroke = {
 };
 
 const VARIATION_SELECTOR_REGEX = /[\uFE0E\uFE0F]/g;
-const EMOJI_SEQUENCE_REGEX = /\p{Extended_Pictographic}(?:\u200d\p{Extended_Pictographic})*/gu;
+const EMOJI_SEQUENCE_REGEX =
+  /\p{Extended_Pictographic}(?:[\uFE0E\uFE0F])?(?:\u200d\p{Extended_Pictographic}(?:[\uFE0E\uFE0F])?)*|[#*0-9](?:\uFE0F)?\u20E3/gu;
 
 const stripVariationSelectors = (value: string) => value.replace(VARIATION_SELECTOR_REGEX, '');
 
@@ -202,7 +203,7 @@ const CATEGORY_LABELS: Record<EmojiDefinition['category'], string> = {
 type CategoryFilter = 'all' | EmojiDefinition['category'];
 
 const CATEGORY_OPTIONS: { id: CategoryFilter; label: string; icon: string }[] = [
-  { id: 'all', label: 'All favorites', icon: '🌼' },
+  { id: 'all', label: 'All Items', icon: '🌼' },
   { id: 'plants', label: 'Plants', icon: '🪴' },
   { id: 'scenery', label: 'Scenery', icon: '🌅' },
   { id: 'creatures', label: 'Creatures', icon: '🦋' },
@@ -1180,37 +1181,27 @@ export function GardenSection({
           </View>
         </Pressable>
         <View style={styles.tileFooterRow}>
-          <View
-            style={[
-              styles.tileStatusPill,
-              owned ? styles.tileStatusPillUnlocked : styles.tileStatusPillLocked,
-            ]}
-          >
-            <Text
-              style={[
-                styles.tileStatusText,
-                owned ? styles.tileStatusTextUnlocked : styles.tileStatusTextLocked,
-              ]}
-            >
-              {owned ? 'Unlocked' : 'Locked'}
-            </Text>
-          </View>
           {!owned ? (
-            <Pressable
-              style={[styles.tileUnlockButton, !canAfford && styles.tileUnlockButtonDisabled]}
-              onPress={() => handlePurchase(item.id)}
-              disabled={!canAfford}
-              accessibilityLabel={`Unlock ${item.name}`}
-              accessibilityHint={
-                canAfford
-                  ? 'Unlocks this decoration for unlimited placements.'
-                  : 'Gather more clicks to unlock this decoration.'
-              }
-            >
-              <Text style={styles.tileUnlockButtonText}>Unlock</Text>
-            </Pressable>
+            <>
+              <View style={[styles.tileStatusPill, styles.tileStatusPillLocked]}>
+                <Text style={[styles.tileStatusText, styles.tileStatusTextLocked]}>Locked</Text>
+              </View>
+              <Pressable
+                style={[styles.tileUnlockButton, !canAfford && styles.tileUnlockButtonDisabled]}
+                onPress={() => handlePurchase(item.id)}
+                disabled={!canAfford}
+                accessibilityLabel={`Unlock ${item.name}`}
+                accessibilityHint={
+                  canAfford
+                    ? 'Unlocks this decoration for unlimited placements.'
+                    : 'Gather more clicks to unlock this decoration.'
+                }
+              >
+                <Text style={styles.tileUnlockButtonText}>Unlock</Text>
+              </Pressable>
+            </>
           ) : (
-            <Text style={styles.tileOwnedHint}>Ready in inventory</Text>
+            <View style={styles.tileFooterSpacer} />
           )}
         </View>
       </View>
@@ -3020,19 +3011,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#fef3c7',
     borderColor: '#fcd34d',
   },
-  tileStatusPillUnlocked: {
-    backgroundColor: '#dcfce7',
-    borderColor: '#34d399',
-  },
   tileStatusText: {
     fontSize: 12,
     fontWeight: '700',
   },
   tileStatusTextLocked: {
     color: '#92400e',
-  },
-  tileStatusTextUnlocked: {
-    color: '#047857',
   },
   tileUnlockButton: {
     borderRadius: 14,
@@ -3049,10 +3033,9 @@ const styles = StyleSheet.create({
     color: '#f0fff4',
     fontWeight: '700',
   },
-  tileOwnedHint: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#134e32',
+  tileFooterSpacer: {
+    flex: 1,
+    height: 32,
   },
   sheetCloseButton: {
     marginTop: 12,

@@ -1,7 +1,9 @@
-import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type {
+  EmojiDefinition,
   EmojiThemeDefinition,
   HomeEmojiTheme,
   UpgradeDefinition,
@@ -18,6 +20,8 @@ type Props = {
   purchaseEmojiTheme: (themeId: HomeEmojiTheme) => boolean;
   homeEmojiTheme: HomeEmojiTheme;
   setHomeEmojiTheme: (theme: HomeEmojiTheme) => void;
+  emojiCatalog: EmojiDefinition[];
+  emojiInventory: Record<string, boolean>;
   title?: string;
 };
 
@@ -32,8 +36,12 @@ export function UpgradeSection({
   purchaseEmojiTheme,
   homeEmojiTheme,
   setHomeEmojiTheme,
+  emojiCatalog,
+  emojiInventory,
   title = 'Conservatory Upgrades',
 }: Props) {
+  const insets = useSafeAreaInsets();
+
   const ownedUpgradeCount = useMemo(
     () =>
       Object.values(purchasedUpgrades).reduce((total, value) => {
@@ -43,6 +51,15 @@ export function UpgradeSection({
         return total + value;
       }, 0),
     [purchasedUpgrades]
+  );
+
+  const lockedAutomationCount = useMemo(
+    () =>
+      upgrades.reduce((total, upgrade) => {
+        const owned = purchasedUpgrades[upgrade.id] ?? 0;
+        return total + (owned > 0 ? 0 : 1);
+      }, 0),
+    [purchasedUpgrades, upgrades]
   );
 
   const sortedThemes = useMemo(
@@ -57,6 +74,7 @@ export function UpgradeSection({
   );
 
   const [activeWorkshop, setActiveWorkshop] = useState<'automation' | 'themes'>('automation');
+  const [activeSheet, setActiveSheet] = useState<'automation' | 'themes' | null>(null);
 
   const ownedThemeCount = useMemo(
     () => sortedThemes.filter((theme) => ownedThemes[theme.id]).length,
@@ -70,21 +88,50 @@ export function UpgradeSection({
 
   const nextThemeCost = lockedThemes.find((theme) => theme.cost > 0)?.cost ?? null;
   const themeToggleHint = lockedThemes.length
-    ? 'Preview and expand your orbit styles.'
+    ? nextThemeCost
+      ? `Next unlock costs ${nextThemeCost.toLocaleString()} harvest`
+      : 'Preview and expand your orbit styles.'
     : 'Showcase every orbit style you own';
   const activeTheme = useMemo(
     () => sortedThemes.find((theme) => theme.id === homeEmojiTheme) ?? null,
     [homeEmojiTheme, sortedThemes]
   );
 
+  const unlockedEmojis = useMemo(
+    () =>
+      emojiCatalog
+        .filter((emoji) => emojiInventory[emoji.id])
+        .map((emoji) => emoji.emoji),
+    [emojiCatalog, emojiInventory]
+  );
+
+  const emojiPreview = useMemo(() => unlockedEmojis.slice(0, 8), [unlockedEmojis]);
+  const remainingEmojiCount = Math.max(unlockedEmojis.length - emojiPreview.length, 0);
+
   const heroStats = useMemo(
     () => [
       { label: 'Auto clicks /s', value: autoPerSecond.toLocaleString() },
       { label: 'Upgrades owned', value: ownedUpgradeCount.toLocaleString() },
-      { label: 'Themes unlocked', value: ownedThemeCount.toLocaleString() },
+      { label: 'Emoji unlocked', value: unlockedEmojis.length.toLocaleString() },
     ],
-    [autoPerSecond, ownedThemeCount, ownedUpgradeCount]
+    [autoPerSecond, ownedUpgradeCount, unlockedEmojis.length]
   );
+
+  const automationToggleHint = lockedAutomationCount
+    ? `${lockedAutomationCount} upgrade${lockedAutomationCount === 1 ? '' : 's'} ready to unlock`
+    : 'Reinvest to amplify automation';
+
+  const handleOpenSheet = useCallback(
+    (sheet: 'automation' | 'themes') => {
+      setActiveWorkshop(sheet);
+      setActiveSheet(sheet);
+    },
+    []
+  );
+
+  const handleCloseSheet = useCallback(() => {
+    setActiveSheet(null);
+  }, []);
 
   return (
     <View style={styles.section}>
@@ -118,6 +165,30 @@ export function UpgradeSection({
               </View>
             ))}
           </View>
+          <View style={styles.collectionBlock}>
+            <View style={styles.collectionHeaderRow}>
+              <Text style={styles.collectionLabel}>Emoji collection</Text>
+              <Text style={styles.collectionCount}>{unlockedEmojis.length.toLocaleString()} unlocked</Text>
+            </View>
+            {emojiPreview.length === 0 ? (
+              <Text style={styles.collectionEmpty}>
+                Unlock Garden Shop emojis to fill your conservatory showcase.
+              </Text>
+            ) : (
+              <View style={styles.collectionPreviewRow}>
+                {emojiPreview.map((emoji, index) => (
+                  <View key={`${emoji}-${index}`} style={styles.collectionBadge}>
+                    <Text style={styles.collectionEmoji}>{emoji}</Text>
+                  </View>
+                ))}
+                {remainingEmojiCount > 0 ? (
+                  <View style={[styles.collectionBadge, styles.collectionBadgeMore]}>
+                    <Text style={styles.collectionMoreText}>+{remainingEmojiCount}</Text>
+                  </View>
+                ) : null}
+              </View>
+            )}
+          </View>
         </View>
       </View>
 
@@ -125,164 +196,184 @@ export function UpgradeSection({
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ selected: activeWorkshop === 'automation' }}
-          onPress={() => setActiveWorkshop('automation')}
+          onPress={() => handleOpenSheet('automation')}
           style={[styles.workshopToggleCard, activeWorkshop === 'automation' && styles.workshopToggleActive]}
         >
           <Text style={[styles.workshopToggleLabel, activeWorkshop === 'automation' && styles.workshopToggleLabelActive]}>
-            Automation Workshop
+            Automation Upgrades
           </Text>
           <Text style={[styles.workshopToggleHint, activeWorkshop === 'automation' && styles.workshopToggleHintActive]}>
-            🤖 Automation upgrades at the ready.
+            {automationToggleHint}
           </Text>
+          <View style={styles.workshopToggleBadge}>
+            <Text style={styles.workshopToggleBadgeText}>⚙️ {ownedUpgradeCount.toLocaleString()} owned</Text>
+          </View>
         </Pressable>
 
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ selected: activeWorkshop === 'themes' }}
-          onPress={() => setActiveWorkshop('themes')}
+          onPress={() => handleOpenSheet('themes')}
           style={[styles.workshopToggleCard, activeWorkshop === 'themes' && styles.workshopToggleActive]}
         >
           <Text style={[styles.workshopToggleLabel, activeWorkshop === 'themes' && styles.workshopToggleLabelActive]}>
-            Themes Workshop
+            Themes Conservatory
           </Text>
           <Text style={[styles.workshopToggleHint, activeWorkshop === 'themes' && styles.workshopToggleHintActive]}>
             {themeToggleHint}
           </Text>
-          {lockedThemes.length ? (
-            <View style={styles.workshopToggleBadge}>
-              <Text style={styles.workshopToggleBadgeText}>🎨 {lockedThemes.length} to unlock</Text>
-            </View>
-          ) : null}
+          <View style={styles.workshopToggleBadge}>
+            <Text style={styles.workshopToggleBadgeText}>
+              🎨 {lockedThemes.length ? `${lockedThemes.length} locked` : `${ownedThemeCount.toLocaleString()} owned`}
+            </Text>
+          </View>
         </Pressable>
       </View>
 
-      <View style={styles.panelContainer}>
-        {activeWorkshop === 'automation' ? (
-          <View style={styles.workshopPanel}>
-            <View style={styles.panelHeaderRow}>
-              <Text style={styles.panelHeaderEmoji}>🤖</Text>
-              <Text style={styles.panelTitle}>Automation Workshop</Text>
-            </View>
-            <View style={styles.workshopList}>
-              {upgrades.map((upgrade) => {
-                const owned = purchasedUpgrades[upgrade.id] ?? 0;
-                const canAfford = harvest >= upgrade.cost;
-                return (
-                  <View key={upgrade.id} style={styles.upgradeCard}>
-                    <View style={styles.upgradeHeader}>
-                      <View style={styles.upgradeTitleGroup}>
-                        <Text style={styles.upgradeEmoji}>{upgrade.emoji}</Text>
-                        <Text style={styles.upgradeTitle}>{upgrade.name}</Text>
-                      </View>
-                      <Text style={styles.upgradeCost}>{upgrade.cost.toLocaleString()} harvest</Text>
-                    </View>
-                    <Text style={styles.upgradeDescription}>{upgrade.description}</Text>
-                    <Text style={styles.upgradeBoost}>+{upgrade.increment.toLocaleString()} auto clicks /s</Text>
-                    <Text style={styles.upgradeOwned}>Owned: {owned}</Text>
-                    <Pressable
-                      accessibilityLabel={`Purchase ${upgrade.name}`}
-                      disabled={!canAfford}
-                      onPress={() => purchaseUpgrade(upgrade.id)}
-                      style={[styles.upgradeButton, !canAfford && styles.upgradeButtonDisabled]}
-                    >
-                      <Text style={styles.upgradeButtonText}>
-                        {canAfford ? 'Purchase upgrade' : 'Need more harvest'}
-                      </Text>
-                    </Pressable>
+      <Modal
+        visible={activeSheet !== null}
+        animationType="slide"
+        transparent
+        onRequestClose={handleCloseSheet}
+      >
+        <View style={styles.sheetOverlay}>
+          <Pressable style={styles.sheetBackdrop} onPress={handleCloseSheet} />
+          <View style={[styles.sheetCard, { paddingBottom: insets.bottom + 16 }]}>
+            <View style={styles.sheetHandle} />
+            <ScrollView
+              style={styles.sheetScroll}
+              contentContainerStyle={styles.sheetContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {activeSheet === 'automation' ? (
+                <View style={styles.workshopPanel}>
+                  <View style={styles.panelHeaderRow}>
+                    <Text style={styles.panelHeaderEmoji}>🤖</Text>
+                    <Text style={styles.panelTitle}>Automation Workshop</Text>
                   </View>
-                );
-              })}
-            </View>
-          </View>
-        ) : (
-          <View style={styles.workshopPanel}>
-            <View style={styles.panelHeaderRow}>
-              <Text style={styles.panelHeaderEmoji}>🎨</Text>
-              <Text style={styles.panelTitle}>Themes Workshop</Text>
-              {lockedThemes.length ? (
-                <View style={styles.panelHeaderBadge}>
-                  <Text style={styles.panelHeaderBadgeText}>{lockedThemes.length} to unlock</Text>
+                  <View style={styles.workshopList}>
+                    {upgrades.map((upgrade) => {
+                      const owned = purchasedUpgrades[upgrade.id] ?? 0;
+                      const canAfford = harvest >= upgrade.cost;
+                      return (
+                        <View key={upgrade.id} style={styles.upgradeCard}>
+                          <View style={styles.upgradeHeader}>
+                            <View style={styles.upgradeTitleGroup}>
+                              <Text style={styles.upgradeEmoji}>{upgrade.emoji}</Text>
+                              <Text style={styles.upgradeTitle}>{upgrade.name}</Text>
+                            </View>
+                            <Text style={styles.upgradeCost}>{upgrade.cost.toLocaleString()} harvest</Text>
+                          </View>
+                          <Text style={styles.upgradeDescription}>{upgrade.description}</Text>
+                          <Text style={styles.upgradeBoost}>+{upgrade.increment.toLocaleString()} auto clicks /s</Text>
+                          <Text style={styles.upgradeOwned}>Owned: {owned}</Text>
+                          <Pressable
+                            accessibilityLabel={`Purchase ${upgrade.name}`}
+                            disabled={!canAfford}
+                            onPress={() => purchaseUpgrade(upgrade.id)}
+                            style={[styles.upgradeButton, !canAfford && styles.upgradeButtonDisabled]}
+                          >
+                            <Text style={styles.upgradeButtonText}>
+                              {canAfford ? 'Purchase upgrade' : 'Need more harvest'}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              ) : activeSheet === 'themes' ? (
+                <View style={styles.workshopPanel}>
+                  <View style={styles.panelHeaderRow}>
+                    <Text style={styles.panelHeaderEmoji}>🎨</Text>
+                    <Text style={styles.panelTitle}>Themes Workshop</Text>
+                    {lockedThemes.length ? (
+                      <View style={styles.panelHeaderBadge}>
+                        <Text style={styles.panelHeaderBadgeText}>{lockedThemes.length} to unlock</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  {activeTheme ? (
+                    <View style={styles.themeSummaryCard}>
+                      <View style={styles.themeSummaryBadge}>
+                        <Text style={styles.themeSummaryEmoji}>{activeTheme.emoji}</Text>
+                      </View>
+                      <View style={styles.themeSummaryBody}>
+                        <Text style={styles.themeSummaryTitle}>{activeTheme.name}</Text>
+                        <Text style={styles.themeSummaryCopy}>Currently orbiting your lettuce centerpiece.</Text>
+                      </View>
+                    </View>
+                  ) : null}
+                  <View style={styles.themeList}>
+                    {sortedThemes.map((theme) => {
+                      const owned = ownedThemes[theme.id] ?? false;
+                      const isActive = homeEmojiTheme === theme.id;
+                      const canAfford = harvest >= theme.cost || theme.cost === 0;
+                      const statusLabel = isActive ? 'Active' : owned ? 'Owned' : 'Locked';
+                      const costLabel = theme.cost === 0 ? 'Free starter' : `${theme.cost.toLocaleString()} harvest`;
+
+                      return (
+                        <View key={theme.id} style={[styles.themeCard, isActive && styles.themeCardActive]}>
+                          <View style={styles.themeHeader}>
+                            <Text style={styles.themeEmoji}>{theme.emoji}</Text>
+                            <View style={styles.themeTitleBlock}>
+                              <Text style={styles.themeName}>{theme.name}</Text>
+                              <Text style={styles.themeCost}>{costLabel}</Text>
+                            </View>
+                            <View
+                              style={[
+                                styles.themeStatusPill,
+                                isActive && styles.themeStatusPillActive,
+                                owned && !isActive && styles.themeStatusPillOwned,
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.themeStatusText,
+                                  isActive && styles.themeStatusTextActive,
+                                  owned && !isActive && styles.themeStatusTextOwned,
+                                ]}
+                              >
+                                {statusLabel}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={styles.themeDescription}>{theme.description}</Text>
+                          <View style={styles.themeActions}>
+                            {owned ? (
+                              <Pressable
+                                accessibilityLabel={`Apply ${theme.name}`}
+                                style={[styles.themeApplyButton, isActive && styles.themeApplyButtonDisabled]}
+                                onPress={() => setHomeEmojiTheme(theme.id)}
+                                disabled={isActive}
+                              >
+                                <Text style={[styles.themeApplyText, isActive && styles.themeApplyTextDisabled]}>
+                                  {isActive ? 'In use' : 'Apply theme'}
+                                </Text>
+                              </Pressable>
+                            ) : (
+                              <Pressable
+                                accessibilityLabel={`Purchase ${theme.name}`}
+                                style={[styles.themePurchaseButton, !canAfford && styles.themePurchaseButtonDisabled]}
+                                onPress={() => purchaseEmojiTheme(theme.id)}
+                                disabled={!canAfford}
+                              >
+                                <Text style={[styles.themePurchaseText, !canAfford && styles.themePurchaseTextDisabled]}>
+                                  {canAfford ? 'Purchase theme' : 'Need more harvest'}
+                                </Text>
+                              </Pressable>
+                            )}
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
                 </View>
               ) : null}
-            </View>
-            {activeTheme ? (
-              <View style={styles.themeSummaryCard}>
-                <View style={styles.themeSummaryBadge}>
-                  <Text style={styles.themeSummaryEmoji}>{activeTheme.emoji}</Text>
-                </View>
-                <View style={styles.themeSummaryBody}>
-                  <Text style={styles.themeSummaryTitle}>{activeTheme.name}</Text>
-                  <Text style={styles.themeSummaryCopy}>Currently orbiting your lettuce centerpiece.</Text>
-                </View>
-              </View>
-            ) : null}
-            <View style={styles.themeList}>
-              {sortedThemes.map((theme) => {
-                const owned = ownedThemes[theme.id] ?? false;
-                const isActive = homeEmojiTheme === theme.id;
-                const canAfford = harvest >= theme.cost || theme.cost === 0;
-                const statusLabel = isActive ? 'Active' : owned ? 'Owned' : 'Locked';
-                const costLabel = theme.cost === 0 ? 'Free starter' : `${theme.cost.toLocaleString()} harvest`;
-
-                return (
-                  <View key={theme.id} style={[styles.themeCard, isActive && styles.themeCardActive]}>
-                    <View style={styles.themeHeader}>
-                      <Text style={styles.themeEmoji}>{theme.emoji}</Text>
-                      <View style={styles.themeTitleBlock}>
-                        <Text style={styles.themeName}>{theme.name}</Text>
-                        <Text style={styles.themeCost}>{costLabel}</Text>
-                      </View>
-                      <View
-                        style={[
-                          styles.themeStatusPill,
-                          isActive && styles.themeStatusPillActive,
-                          owned && !isActive && styles.themeStatusPillOwned,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.themeStatusText,
-                            isActive && styles.themeStatusTextActive,
-                            owned && !isActive && styles.themeStatusTextOwned,
-                          ]}
-                        >
-                          {statusLabel}
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={styles.themeDescription}>{theme.description}</Text>
-                    <View style={styles.themeActions}>
-                      {owned ? (
-                        <Pressable
-                          accessibilityLabel={`Apply ${theme.name}`}
-                          style={[styles.themeApplyButton, isActive && styles.themeApplyButtonDisabled]}
-                          onPress={() => setHomeEmojiTheme(theme.id)}
-                          disabled={isActive}
-                        >
-                          <Text style={[styles.themeApplyText, isActive && styles.themeApplyTextDisabled]}>
-                            {isActive ? 'In use' : 'Apply theme'}
-                          </Text>
-                        </Pressable>
-                      ) : (
-                        <Pressable
-                          accessibilityLabel={`Purchase ${theme.name}`}
-                          style={[styles.themePurchaseButton, !canAfford && styles.themePurchaseButtonDisabled]}
-                          onPress={() => purchaseEmojiTheme(theme.id)}
-                          disabled={!canAfford}
-                        >
-                          <Text style={[styles.themePurchaseText, !canAfford && styles.themePurchaseTextDisabled]}>
-                            {canAfford ? 'Purchase theme' : 'Need more harvest'}
-                          </Text>
-                        </Pressable>
-                      )}
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
+            </ScrollView>
           </View>
-        )}
-      </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -383,6 +474,64 @@ const styles = StyleSheet.create({
     columnGap: 18,
     rowGap: 12,
   },
+  collectionBlock: {
+    marginTop: 16,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: 'rgba(11, 101, 63, 0.35)',
+    borderWidth: 1,
+    borderColor: 'rgba(186, 230, 200, 0.45)',
+    gap: 10,
+  },
+  collectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  collectionLabel: {
+    fontSize: 13,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    fontWeight: '700',
+    color: '#bbf7d0',
+  },
+  collectionCount: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#dcfce7',
+  },
+  collectionPreviewRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  collectionBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(236, 253, 245, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(209, 250, 229, 0.45)',
+  },
+  collectionEmoji: {
+    fontSize: 20,
+  },
+  collectionBadgeMore: {
+    backgroundColor: 'rgba(16, 185, 129, 0.18)',
+    borderColor: 'rgba(16, 185, 129, 0.45)',
+  },
+  collectionMoreText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#bbf7d0',
+  },
+  collectionEmpty: {
+    fontSize: 13,
+    color: '#d1fae5',
+    lineHeight: 18,
+  },
   heroStat: {
     flex: 1,
     minWidth: 110,
@@ -460,9 +609,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#166534',
   },
-  panelContainer: {
-    gap: 24,
-  },
   workshopPanel: {
     backgroundColor: '#f8fafc',
     borderRadius: 24,
@@ -502,6 +648,39 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#166534',
+  },
+  sheetOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(15, 31, 23, 0.55)',
+  },
+  sheetBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  sheetCard: {
+    backgroundColor: '#f8fffb',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingTop: 16,
+    paddingHorizontal: 20,
+    maxHeight: 620,
+    alignSelf: 'center',
+    width: '100%',
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 48,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: '#cbd5f5',
+    marginBottom: 12,
+  },
+  sheetScroll: {
+    flexGrow: 0,
+  },
+  sheetContent: {
+    paddingBottom: 32,
+    gap: 20,
   },
   workshopList: {
     gap: 16,

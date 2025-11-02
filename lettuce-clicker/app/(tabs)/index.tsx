@@ -28,7 +28,12 @@ const DAILY_BONUS_LAST_CLAIM_KEY = 'lettuce-click:daily-bonus-last-claim';
 const BONUS_REWARD_OPTIONS = [75, 125, 200, 325, 500, 650];
 const BONUS_ADDITIONAL_SPINS = 2;
 const DAILY_BONUS_INTERVAL_MS = 24 * 60 * 60 * 1000;
-const LEDGER_COLORS = ['#ffffff', '#f4ede1', '#e2e8f0'] as const;
+const LEDGER_THEMES = [
+  { backgroundColor: '#ffffff', borderColor: 'rgba(226, 232, 240, 0.7)' },
+  { backgroundColor: '#f4ede1', borderColor: 'rgba(210, 188, 154, 0.65)' },
+  { backgroundColor: '#e2e8f0', borderColor: 'rgba(148, 163, 184, 0.6)' },
+  { backgroundColor: 'rgba(255, 255, 255, 0.28)', borderColor: 'rgba(226, 232, 240, 0.45)' },
+] as const;
 
 const lightenColor = (hex: string, factor: number) => {
   const normalized = hex.replace('#', '');
@@ -156,9 +161,13 @@ export default function HomeScreen() {
     () => audioPulsePrimary.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] }),
     [audioPulsePrimary]
   );
-  const ledgerBackground = useMemo(
-    () => LEDGER_COLORS[ledgerToneIndex % LEDGER_COLORS.length],
+  const ledgerTheme = useMemo(
+    () => LEDGER_THEMES[ledgerToneIndex % LEDGER_THEMES.length],
     [ledgerToneIndex]
+  );
+  const emojiCollectionCount = useMemo(
+    () => Object.values(emojiInventory).filter(Boolean).length,
+    [emojiInventory]
   );
   const quickActionRotations = useMemo(
     () => ({
@@ -178,7 +187,7 @@ export default function HomeScreen() {
     [flipAnimation]
   );
   const handleCycleLedgerColor = useCallback(() => {
-    setLedgerToneIndex((prev) => (prev + 1) % LEDGER_COLORS.length);
+    setLedgerToneIndex((prev) => (prev + 1) % LEDGER_THEMES.length);
   }, []);
   useEffect(() => {
     let primaryLoop: Animated.CompositeAnimation | null = null;
@@ -780,7 +789,7 @@ export default function HomeScreen() {
         <Pressable
           style={({ pressed }) => [
             styles.statsCard,
-            { backgroundColor: ledgerBackground },
+            ledgerTheme,
             pressed && styles.statsCardPressed,
           ]}
           onPress={handleCycleLedgerColor}
@@ -800,6 +809,10 @@ export default function HomeScreen() {
           <View style={styles.statRow}>
             <Text style={styles.statLabel}>Auto clicks /s</Text>
             <Text style={styles.statValue}>{autoPerSecond.toLocaleString()}</Text>
+          </View>
+          <View style={styles.statRow}>
+            <Text style={styles.statLabel}>Emoji collection</Text>
+            <Text style={styles.statValue}>{emojiCollectionCount.toLocaleString()}</Text>
           </View>
         </Pressable>
         </View>
@@ -1428,7 +1441,6 @@ const styles = StyleSheet.create({
     fontSize: 76,
   },
   statsCard: {
-    backgroundColor: '#ffffff',
     borderRadius: 26,
     padding: 22,
     gap: 14,
@@ -1437,6 +1449,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     shadowRadius: 12,
     elevation: 4,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    overflow: 'hidden',
   },
   statsCardPressed: {
     opacity: 0.94,

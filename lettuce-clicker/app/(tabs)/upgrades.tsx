@@ -17,6 +17,8 @@ export default function UpgradesScreen() {
     purchaseEmojiTheme,
     homeEmojiTheme,
     setHomeEmojiTheme,
+    emojiCatalog,
+    emojiInventory,
     gardenBackgroundColor,
   } = useGame();
   const surfaceColor = useMemo(
@@ -46,6 +48,8 @@ export default function UpgradesScreen() {
           purchaseEmojiTheme={purchaseEmojiTheme}
           homeEmojiTheme={homeEmojiTheme}
           setHomeEmojiTheme={setHomeEmojiTheme}
+          emojiCatalog={emojiCatalog}
+          emojiInventory={emojiInventory}
         />
       </ScrollView>
     </SafeAreaView>

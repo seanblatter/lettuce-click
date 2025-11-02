@@ -97,7 +97,16 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
     const sorted = [...emojiCatalog].sort(
       (a, b) => Number(Boolean(emojiInventory[b.id])) - Number(Boolean(emojiInventory[a.id]))
     );
-    return sorted.slice(0, 18);
+    const base = sorted.slice(0, 24);
+    const mapleLeaf = sorted.find((entry) => entry.emoji === '🍁');
+    const prioritized = mapleLeaf ? [mapleLeaf, ...base] : base;
+    const deduped: typeof sorted = [];
+    prioritized.forEach((entry) => {
+      if (!deduped.some((item) => item.id === entry.id)) {
+        deduped.push(entry);
+      }
+    });
+    return deduped.slice(0, 24);
   }, [emojiCatalog, emojiInventory]);
   const backgroundWheelPositions = useMemo(
     () =>
@@ -446,7 +455,7 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
                         key={option.id}
                         style={[styles.emojiChoice, isSelected && styles.emojiChoiceActive]}
                         onPress={() => handleChooseEmoji(option.emoji)}
-                        accessibilityLabel={`Use ${option.emoji} as your click emoji`}
+                        accessibilityLabel={`Use ${option.name} as your click emoji`}
                         accessibilityState={{ selected: isSelected }}
                       >
                         <View style={[styles.emojiChoiceHalo, isSelected && styles.emojiChoiceHaloActive]} />

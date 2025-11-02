@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { Feather } from '@expo/vector-icons';
 import { useAudioPlayer } from 'expo-audio';
 import { ALARM_CHIME_DATA_URI } from '@/assets/audio/alarmChime';
 import { MUSIC_GROUPS, MUSIC_OPTIONS, type MusicOption } from '@/constants/music';
@@ -517,31 +518,30 @@ const createStyles = (palette: Palette, isDark: boolean) =>
       justifyContent: 'center',
     },
     nowPlayingControlButton: {
-      width: 66,
-      height: 66,
-      borderRadius: 33,
+      paddingVertical: 4,
+      paddingHorizontal: 6,
       alignItems: 'center',
       justifyContent: 'center',
-      borderWidth: 1,
-      borderColor: palette.sourcePillBorder,
-      backgroundColor: palette.sourcePillBackground,
-      shadowColor: palette.sourcePillShadow,
-      shadowOpacity: isDark ? 0.28 : 0.18,
-      shadowRadius: isDark ? 10 : 7,
-      shadowOffset: { width: 0, height: isDark ? 6 : 4 },
-      elevation: isDark ? 4 : 2,
     },
     nowPlayingControlButtonActive: {
-      backgroundColor: palette.sourcePillActiveBackground,
-      borderColor: palette.sourcePillActiveBorder,
-      shadowColor: palette.sourcePillShadow,
+      transform: [{ scale: 1.05 }],
     },
-    nowPlayingControlGlyph: {
-      fontSize: 26,
-      color: palette.sourcePillText,
+    sleepProgressWrapper: {
+      marginTop: 10,
+      width: '100%',
+      paddingHorizontal: 8,
     },
-    nowPlayingControlGlyphActive: {
-      color: palette.sourcePillActiveText,
+    sleepProgressTrack: {
+      width: '100%',
+      height: 6,
+      borderRadius: 999,
+      backgroundColor: palette.sleepTimerBorder,
+      overflow: 'hidden',
+    },
+    sleepProgressFill: {
+      height: '100%',
+      borderRadius: 999,
+      backgroundColor: palette.sleepTimerBackgroundActive,
     },
     groupSection: {
       gap: 14,
@@ -1068,6 +1068,23 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
     };
   }, [sleepCircle, sleepNow]);
 
+  const timerProgress = useMemo(() => {
+    if (!sleepCircle || sleepCircle.mode !== 'timer') {
+      return null;
+    }
+
+    const totalDurationMs = sleepCircle.duration * 60000;
+
+    if (totalDurationMs <= 0) {
+      return 1;
+    }
+
+    const remainingMs = sleepCircle.targetTimestamp - sleepNow;
+    const clampedRemaining = Math.min(Math.max(remainingMs, 0), totalDurationMs);
+    const elapsed = totalDurationMs - clampedRemaining;
+    return Math.min(Math.max(elapsed / totalDurationMs, 0), 1);
+  }, [sleepCircle, sleepNow]);
+
   const handleSleepComplete = useCallback(
     async (mode: SleepMode) => {
       setSleepCircle(null);
@@ -1282,16 +1299,35 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
                   : 'Starts the selected ambience mix'
               }
             >
-              <Text
-                style={[
-                  styles.nowPlayingControlGlyph,
-                  isAmbientPlaying && styles.nowPlayingControlGlyphActive,
-                ]}
-              >
-                {isAmbientPlaying ? '⏸️' : '▶️'}
-              </Text>
+              <Feather
+                name={isAmbientPlaying ? 'pause' : 'play'}
+                size={34}
+                color={isAmbientPlaying ? palette.sourcePillActiveText : palette.sourcePillText}
+              />
             </Pressable>
           </View>
+          {timerProgress !== null ? (
+            <View
+              style={styles.sleepProgressWrapper}
+              accessible
+              accessibilityRole="progressbar"
+              accessibilityLabel="Dream Capsule timer progress"
+              accessibilityValue={{
+                min: 0,
+                max: 100,
+                now: Math.round(timerProgress * 100),
+              }}
+            >
+              <View style={styles.sleepProgressTrack}>
+                <View
+                  style={[
+                    styles.sleepProgressFill,
+                    { width: `${Math.min(Math.max(timerProgress, 0), 1) * 100}%` },
+                  ]}
+                />
+              </View>
+            </View>
+          ) : null}
         </View>
 
         {primaryGroups.map((group) => (

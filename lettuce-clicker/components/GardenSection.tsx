@@ -35,13 +35,13 @@ import Animated, {
 import { captureRef } from 'react-native-view-shot';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { emojiCategoryOrder } from '@/constants/emojiCatalog';
+import { emojiCategoryOrder, formatClickValue } from '@/constants/emojiCatalog';
 import { EmojiDefinition, Placement, TextStyleId } from '@/context/GameContext';
 
 type Props = {
   harvest: number;
   emojiCatalog: EmojiDefinition[];
-  emojiInventory: Record<string, number>;
+  emojiInventory: Record<string, boolean>;
   placements: Placement[];
   purchaseEmoji: (emojiId: string) => boolean;
   placeEmoji: (emojiId: string, position: { x: number; y: number }) => boolean;
@@ -215,7 +215,7 @@ const SHOP_EMOJI_CHOICES = ['🏡', '🚀', '🛍', '📱'] as const;
 const INVENTORY_EMOJI_CHOICES = ['🧰', '📦', '💼', '👜'] as const;
 
 type InventoryEntry = EmojiDefinition & {
-  owned: number;
+  owned: boolean;
   searchBlob: string;
   normalizedEmoji: string;
 };
@@ -351,7 +351,7 @@ export function GardenSection({
 
           return {
             ...item,
-            owned: emojiInventory[item.id] ?? 0,
+            owned: Boolean(emojiInventory[item.id]),
             searchBlob,
             normalizedEmoji,
           };
@@ -375,7 +375,7 @@ export function GardenSection({
     [emojiCatalog, emojiInventory]
   );
 
-  const ownedInventory = useMemo(() => inventoryList.filter((item) => item.owned > 0), [inventoryList]);
+  const ownedInventory = useMemo(() => inventoryList.filter((item) => item.owned), [inventoryList]);
   const normalizedFilter = shopFilter.trim().toLowerCase();
   const normalizedFilterEmoji = useMemo(() => stripVariationSelectors(normalizedFilter), [normalizedFilter]);
   const emojiTokens = useMemo<EmojiToken[]>(() => {
@@ -635,10 +635,8 @@ export function GardenSection({
       return;
     }
 
-    const available = emojiInventory[selectedEmoji] ?? 0;
-
-    if (available <= 0) {
-      Alert.alert('Out of stock', 'Purchase more of this emoji to keep decorating!');
+    if (!emojiInventory[selectedEmoji]) {
+      Alert.alert('Locked decoration', 'Unlock this emoji before placing it in your garden.');
       setSelectedEmoji(null);
       return;
     }
@@ -647,35 +645,27 @@ export function GardenSection({
     const placed = placeEmoji(selectedEmoji, { x: locationX, y: locationY });
 
     if (!placed) {
-      Alert.alert('Out of stock', 'Purchase more of this emoji to keep decorating!');
-      setSelectedEmoji(null);
-      return;
-    }
-
-    if (available === 1) {
+      Alert.alert('Placement unavailable', 'Unlock this emoji to decorate with it.');
       setSelectedEmoji(null);
     }
   };
 
-  const handleSelect = useCallback(
-    (emojiId: string, owned: number) => {
-      if (owned <= 0) {
-        Alert.alert('Purchase required', 'Buy this decoration before placing it in the garden.');
-        return;
-      }
+  const handleSelect = useCallback((emojiId: string, owned: boolean) => {
+    if (!owned) {
+      Alert.alert('Unlock required', 'Buy this decoration before placing it in the garden.');
+      return;
+    }
 
-      setSelectedEmoji(emojiId);
-      setActiveSheet(null);
-      setIsDrawingMode(false);
-    },
-    []
-  );
+    setSelectedEmoji(emojiId);
+    setActiveSheet(null);
+    setIsDrawingMode(false);
+  }, []);
 
   const handlePurchase = (emojiId: string) => {
     const success = purchaseEmoji(emojiId);
 
     if (!success) {
-      Alert.alert('Not enough harvest', 'Gather more lettuce to purchase this decoration.');
+      Alert.alert('Not enough clicks', 'Gather more clicks to unlock this decoration.');
     }
   };
 
@@ -1031,8 +1021,8 @@ export function GardenSection({
   );
 
   const shouldShowCanvasEmptyState = useMemo(
-    () => placements.length === 0 && strokes.length === 0 && !selectedEmoji,
-    [placements.length, strokes.length, selectedEmoji]
+    () => placements.length === 0 && strokes.length === 0 && !selectedEmoji && !currentStroke,
+    [currentStroke, placements.length, strokes.length, selectedEmoji]
   );
   const handleCloseSheet = useCallback(() => {
     setActiveSheet(null);
@@ -1059,9 +1049,9 @@ export function GardenSection({
     const canAfford = harvest >= item.cost;
 
     const handleTilePress = () => {
-      if (owned > 0) {
+      if (owned) {
         Alert.alert(
-          'Find it in inventory',
+          'Already unlocked',
           'Open your inventory to ready this decoration for placement.',
           [
             {
@@ -1085,16 +1075,16 @@ export function GardenSection({
           style={[
             styles.emojiTile,
             isSelected && styles.emojiTileSelected,
-            !canAfford && owned === 0 && styles.emojiTileDisabled,
+            !canAfford && !owned && styles.emojiTileDisabled,
           ]}
           onPress={handleTilePress}
           accessibilityLabel={`${item.name} emoji`}
           accessibilityHint={
-            owned > 0
+            owned
               ? 'Select to ready this decoration.'
               : canAfford
-              ? 'Purchase and ready this decoration.'
-              : 'Not enough harvest to purchase.'
+              ? 'Unlock and ready this decoration.'
+              : 'Not enough clicks to unlock.'
           }>
           <View style={[styles.emojiBadge, isSelected && styles.emojiBadgeSelected]}>
             <View style={[styles.emojiBadgeGlow, isSelected && styles.emojiBadgeGlowActive]} />
@@ -1102,28 +1092,39 @@ export function GardenSection({
               <Text style={[styles.emojiGlyphLarge, isSelected && styles.emojiGlyphSelected]}>{item.emoji}</Text>
             </View>
           </View>
-          <Text style={styles.emojiTileLabel} numberOfLines={1}>
+          <Text style={styles.emojiTileLabel} numberOfLines={2}>
             {item.name}
           </Text>
           <View style={styles.emojiTileFooter}>
             <Text style={[styles.emojiTileMeta, styles.emojiTileCostText]} numberOfLines={1}>
-              {item.cost.toLocaleString()} harvest
+              {formatClickValue(item.cost)} clicks
             </Text>
           </View>
-          {owned > 0 ? (
+          {owned ? (
             <View style={styles.emojiTileBadge}>
-              <Text style={styles.emojiTileBadgeText}>×{owned}</Text>
+              <Text style={styles.emojiTileBadgeText}>Unlocked</Text>
             </View>
           ) : null}
         </Pressable>
         <View style={styles.tileActionRow}>
-          <Pressable
-            style={[styles.tileActionButton, !canAfford && styles.disabledSecondary]}
-            onPress={() => handlePurchase(item.id)}
-            disabled={!canAfford}
-            accessibilityLabel={`Buy ${item.name}`}>
-            <Text style={[styles.tileActionButtonText, !canAfford && styles.disabledText]}>Buy</Text>
-          </Pressable>
+          {owned ? (
+            <View style={[styles.tileActionButton, styles.tileActionUnlocked]} accessibilityRole="text">
+              <Text style={[styles.tileActionButtonText, styles.tileActionUnlockedText]}>Unlocked</Text>
+            </View>
+          ) : (
+            <Pressable
+              style={[styles.tileActionButton, !canAfford && styles.disabledSecondary]}
+              onPress={() => handlePurchase(item.id)}
+              disabled={!canAfford}
+              accessibilityLabel={`Unlock ${item.name}`}
+              accessibilityHint={
+                canAfford
+                  ? 'Unlocks this decoration for unlimited placements.'
+                  : 'Gather more clicks to unlock this decoration.'
+              }>
+              <Text style={[styles.tileActionButtonText, !canAfford && styles.disabledText]}>Unlock</Text>
+            </Pressable>
+          )}
         </View>
       </View>
     );
@@ -1208,7 +1209,9 @@ export function GardenSection({
               </Text>
               <View style={styles.selectionStatusActions}>
                 <Text style={styles.selectionStatusMeta}>
-                  {(emojiInventory[selectedDetails.id] ?? 0).toLocaleString()} in inventory
+                  {emojiInventory[selectedDetails.id]
+                    ? 'Unlocked for unlimited placements'
+                    : 'Locked — unlock in Garden Shop'}
                 </Text>
                 <Pressable
                   onPress={() => {
@@ -1904,7 +1907,7 @@ type InventoryTileItemProps = {
   isDragging: boolean;
   categoryLabel: string;
   canReorder: boolean;
-  onSelect: (emojiId: string, owned: number) => void;
+  onSelect: (emojiId: string, owned: boolean) => void;
   onLayout: (event: LayoutChangeEvent) => void;
   beginDrag: (emojiId: string, index: number) => void;
   updateDrag: (dx: number, dy: number) => void;
@@ -2014,9 +2017,9 @@ function InventoryTileItem({
               <Text style={[styles.emojiGlyphLarge, isSelected && styles.emojiGlyphSelected]}>{item.emoji}</Text>
             </View>
           </View>
-          {item.owned > 0 ? (
+          {item.owned ? (
             <View style={styles.emojiTileBadge}>
-              <Text style={styles.emojiTileBadgeText}>×{item.owned}</Text>
+              <Text style={styles.emojiTileBadgeText}>Unlocked</Text>
             </View>
           ) : null}
           <Text style={styles.emojiTileLabel} numberOfLines={1}>
@@ -2027,7 +2030,7 @@ function InventoryTileItem({
               {categoryLabel}
             </Text>
             <Text style={[styles.emojiTileMeta, styles.inventoryMeta]} numberOfLines={1}>
-              {item.owned.toLocaleString()} owned
+              {item.owned ? 'Unlimited use' : 'Locked'}
             </Text>
           </View>
         </Pressable>
@@ -2426,6 +2429,9 @@ const styles = StyleSheet.create({
     color: '#134e32',
     textAlign: 'center',
     width: '100%',
+    lineHeight: 16,
+    minHeight: 32,
+    paddingHorizontal: 4,
   },
   emojiTileFooter: {
     marginTop: 'auto',
@@ -2454,13 +2460,15 @@ const styles = StyleSheet.create({
     right: 8,
     backgroundColor: '#047857',
     borderRadius: 10,
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
     paddingVertical: 2,
   },
   emojiTileBadgeText: {
     color: '#ffffff',
     fontSize: 11,
     fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
   },
   inventoryMeta: {
     color: '#22543d',
@@ -2821,6 +2829,14 @@ const styles = StyleSheet.create({
   tileActionButtonText: {
     color: '#f0fff4',
     fontWeight: '700',
+  },
+  tileActionUnlocked: {
+    backgroundColor: '#d1fae5',
+    borderWidth: 1,
+    borderColor: '#0f766e',
+  },
+  tileActionUnlockedText: {
+    color: '#0f766e',
   },
   sheetCloseButton: {
     marginTop: 12,

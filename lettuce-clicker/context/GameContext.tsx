@@ -122,6 +122,7 @@ type GameContextValue = {
   profileName: string;
   profileUsername: string;
   profileImageUri: string | null;
+  profilePhotoWidgetEnabled: boolean;
   homeEmojiTheme: HomeEmojiTheme;
   emojiThemes: EmojiThemeDefinition[];
   ownedThemes: Record<HomeEmojiTheme, boolean>;
@@ -129,6 +130,7 @@ type GameContextValue = {
   hasPremiumUpgrade: boolean;
   premiumAccentColor: string;
   customClickEmoji: string;
+  gardenBackgroundColor: string;
   registerCustomEmoji: (emoji: string) => EmojiDefinition | null;
   setProfileLifetimeTotal: (value: number) => void;
   addHarvest: () => void;
@@ -153,10 +155,12 @@ type GameContextValue = {
   setProfileName: (value: string) => void;
   setProfileUsername: (value: string) => void;
   setProfileImageUri: (uri: string | null) => void;
+  setProfilePhotoWidgetEnabled: (value: boolean) => void;
   setHomeEmojiTheme: (theme: HomeEmojiTheme) => void;
   purchasePremiumUpgrade: () => void;
   setPremiumAccentColor: (color: string) => void;
   setCustomClickEmoji: (emoji: string) => void;
+  setGardenBackgroundColor: (color: string) => void;
   clearResumeNotice: () => void;
 };
 
@@ -559,6 +563,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [profileName, setProfileName] = useState('');
   const [profileUsername, setProfileUsername] = useState('');
   const [profileImageUri, setProfileImageUri] = useState<string | null>(null);
+  const [profilePhotoWidgetEnabled, setProfilePhotoWidgetEnabled] = useState(false);
   const [homeEmojiTheme, setHomeEmojiThemeState] = useState<HomeEmojiTheme>('circle');
   const [ownedThemes, setOwnedThemes] = useState<Record<HomeEmojiTheme, boolean>>(() => ({
     ...defaultOwnedThemes,
@@ -568,6 +573,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [hasPremiumUpgrade, setHasPremiumUpgrade] = useState(false);
   const [premiumAccentColor, setPremiumAccentColorState] = useState('#1f6f4a');
   const [customClickEmoji, setCustomClickEmojiState] = useState('🥬');
+  const [gardenBackgroundColor, setGardenBackgroundColorState] = useState('#f2f9f2');
   const initialisedRef = useRef(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const backgroundInfoRef = useRef<
@@ -1136,6 +1142,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     profileName,
     profileUsername,
     profileImageUri,
+    profilePhotoWidgetEnabled,
     homeEmojiTheme,
     emojiThemes: emojiThemeCatalog,
     ownedThemes,
@@ -1143,8 +1150,55 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     hasPremiumUpgrade,
     premiumAccentColor,
     customClickEmoji,
+    gardenBackgroundColor,
     registerCustomEmoji,
     setProfileLifetimeTotal,
+    addHarvest,
+    addHarvestAmount,
+    spendHarvestAmount,
+    purchaseUpgrade,
+    purchaseEmojiTheme,
+    purchaseEmoji,
+    grantEmojiUnlock,
+    placeEmoji,
+    addPhotoPlacement,
+    addTextPlacement,
+    updatePlacement,
+    removePlacement,
+    clearGarden,
+    setProfileName,
+    setProfileUsername,
+    setProfileImageUri,
+    setProfilePhotoWidgetEnabled,
+    setHomeEmojiTheme,
+    purchasePremiumUpgrade,
+    setPremiumAccentColor,
+    setCustomClickEmoji,
+    setGardenBackgroundColor: setGardenBackgroundColorState,
+    clearResumeNotice: () => setResumeNotice(null),
+  }), [
+    harvest,
+    lifetimeHarvest,
+    profileLifetimeTotal,
+    tapValue,
+    autoPerSecond,
+    purchasedUpgrades,
+    orbitingUpgradeEmojis,
+    emojiInventory,
+    placements,
+    profileName,
+    profileUsername,
+    profileImageUri,
+    profilePhotoWidgetEnabled,
+    homeEmojiTheme,
+    ownedThemes,
+    resumeNotice,
+    hasPremiumUpgrade,
+    premiumAccentColor,
+    customClickEmoji,
+    gardenBackgroundColor,
+    combinedEmojiCatalog,
+    registerCustomEmoji,
     addHarvest,
     addHarvestAmount,
     spendHarvestAmount,
@@ -1165,42 +1219,6 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     purchasePremiumUpgrade,
     setPremiumAccentColor,
     setCustomClickEmoji,
-    clearResumeNotice: () => setResumeNotice(null),
-  }), [
-    harvest,
-    lifetimeHarvest,
-    profileLifetimeTotal,
-    tapValue,
-    autoPerSecond,
-    purchasedUpgrades,
-    orbitingUpgradeEmojis,
-    emojiInventory,
-    placements,
-    profileName,
-    profileUsername,
-    profileImageUri,
-    homeEmojiTheme,
-    ownedThemes,
-    resumeNotice,
-    hasPremiumUpgrade,
-    premiumAccentColor,
-    customClickEmoji,
-    combinedEmojiCatalog,
-    registerCustomEmoji,
-    addHarvestAmount,
-    spendHarvestAmount,
-    addPhotoPlacement,
-    addTextPlacement,
-    removePlacement,
-    clearGarden,
-    purchasePremiumUpgrade,
-    purchaseEmojiTheme,
-    purchaseEmoji,
-    grantEmojiUnlock,
-    placeEmoji,
-    setPremiumAccentColor,
-    setCustomClickEmoji,
-    setHomeEmojiTheme,
   ]);
 
   useEffect(() => {
@@ -1217,11 +1235,19 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
               username?: string;
               imageUri?: string | null;
               lifetimeTotal?: number;
+              backgroundColor?: string;
+              photoWidgetEnabled?: boolean;
             };
             setProfileName(parsed.name ?? '');
             setProfileUsername(parsed.username ?? '');
             setProfileImageUri(parsed.imageUri ?? null);
             setProfileLifetimeTotal(parsed.lifetimeTotal ?? 0);
+            if (typeof parsed.backgroundColor === 'string' && parsed.backgroundColor.trim().length > 0) {
+              setGardenBackgroundColorState(parsed.backgroundColor);
+            }
+            if (typeof parsed.photoWidgetEnabled === 'boolean') {
+              setProfilePhotoWidgetEnabled(parsed.photoWidgetEnabled);
+            }
           } catch (error) {
             // ignore malformed stored data
           }
@@ -1363,12 +1389,21 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       username: profileUsername,
       imageUri: profileImageUri,
       lifetimeTotal: profileLifetimeTotal,
+      backgroundColor: gardenBackgroundColor,
+      photoWidgetEnabled: profilePhotoWidgetEnabled,
     });
 
     AsyncStorage.setItem(PROFILE_STORAGE_KEY, payload).catch(() => {
       // persistence best effort only
     });
-  }, [profileImageUri, profileLifetimeTotal, profileName, profileUsername]);
+  }, [
+    gardenBackgroundColor,
+    profileImageUri,
+    profileLifetimeTotal,
+    profileName,
+    profilePhotoWidgetEnabled,
+    profileUsername,
+  ]);
 
   useEffect(() => {
     if (!initialisedRef.current) {

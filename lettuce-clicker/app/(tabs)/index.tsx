@@ -11,6 +11,7 @@ import {
   Text,
   View,
   GestureResponderEvent,
+  Image,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -82,6 +83,9 @@ export default function HomeScreen() {
     clearResumeNotice,
     customClickEmoji,
     premiumAccentColor,
+    gardenBackgroundColor,
+    profilePhotoWidgetEnabled,
+    profileImageUri,
     addHarvestAmount,
     spendHarvestAmount,
     grantEmojiUnlock,
@@ -123,6 +127,10 @@ export default function HomeScreen() {
     const trimmed = profileName.trim();
     return trimmed.length > 0 ? trimmed : 'Gardener';
   }, [profileName]);
+  const gardenSurfaceColor = useMemo(
+    () => (gardenBackgroundColor && gardenBackgroundColor.trim().length > 0 ? gardenBackgroundColor : '#f2f9f2'),
+    [gardenBackgroundColor]
+  );
   const accentColor = useMemo(() => premiumAccentColor || '#1f6f4a', [premiumAccentColor]);
   const accentSurface = useMemo(() => lightenColor(accentColor, 0.65), [accentColor]);
   const accentHighlight = useMemo(() => lightenColor(accentColor, 0.85), [accentColor]);
@@ -541,9 +549,16 @@ export default function HomeScreen() {
       let unlockedEmoji: EmojiDefinition | null = null;
 
       if (lockedEmojis.length > 0) {
-        const selection = lockedEmojis[Math.floor(Math.random() * lockedEmojis.length)];
-        if (grantEmojiUnlock(selection.id)) {
-          unlockedEmoji = selection;
+        const shuffled = [...lockedEmojis];
+        for (let index = shuffled.length - 1; index > 0; index -= 1) {
+          const swapIndex = Math.floor(Math.random() * (index + 1));
+          [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+        }
+        for (const candidate of shuffled) {
+          if (grantEmojiUnlock(candidate.id)) {
+            unlockedEmoji = candidate;
+            break;
+          }
         }
       }
 
@@ -555,7 +570,11 @@ export default function HomeScreen() {
         );
       } else {
         setLastUnlockedEmoji(null);
-        setBonusMessage(`You earned ${reward.toLocaleString()} clicks!`);
+        setBonusMessage(
+          lockedEmojis.length === 0
+            ? `You earned ${reward.toLocaleString()} clicks! Every Garden Shop emoji is already yours.`
+            : `You earned ${reward.toLocaleString()} clicks!`
+        );
       }
       setIsSpinningBonus(false);
     }, 900);
@@ -647,8 +666,8 @@ export default function HomeScreen() {
   ]);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: gardenSurfaceColor }]}>
+      <View style={[styles.container, { backgroundColor: gardenSurfaceColor }]}>
         <View style={[styles.headerWrapper, { paddingTop: headerPaddingTop }]}>
           <View style={styles.headerShelf}>
             <Text style={styles.headerText}>Lettuce Park Gardens</Text>
@@ -813,7 +832,11 @@ export default function HomeScreen() {
                             { transform: [{ rotate: quickActionRotations.profile }] },
                           ]}
                         >
-                          <Text style={[styles.menuItemIcon, styles.quickActionIcon]}>🌿</Text>
+                          {profilePhotoWidgetEnabled && profileImageUri ? (
+                            <Image source={{ uri: profileImageUri }} style={styles.quickActionWidgetImage} />
+                          ) : (
+                            <Text style={[styles.menuItemIcon, styles.quickActionIcon]}>🌿</Text>
+                          )}
                         </Animated.View>
                       </Pressable>
                       <View style={styles.menuItemBody}>
@@ -1069,11 +1092,11 @@ export default function HomeScreen() {
       </Modal>
 
       <Modal visible={showDailyBonus} animationType="slide" onRequestClose={handleCloseDailyBonus}>
-        <SafeAreaView style={styles.bonusSafeArea}>
+        <SafeAreaView style={[styles.bonusSafeArea, { backgroundColor: gardenSurfaceColor }]}>
           <View style={styles.bonusContainer}>
             <Text style={styles.bonusTitle}>Daily Bonus</Text>
             <Text style={styles.bonusSubtitle}>
-              Spin the garden wheel for surprise clicks. Claim one free spin every 24 hours!
+              Spin the garden wheel for surprise clicks and fresh emoji unlocks. Claim one free spin every 24 hours!
             </Text>
             <Animated.View
               style={[
@@ -1105,9 +1128,15 @@ export default function HomeScreen() {
             ) : null}
             {bonusMessage ? <Text style={styles.bonusMessage}>{bonusMessage}</Text> : null}
             {lastUnlockedEmoji ? (
-              <Text style={styles.bonusUnlock}>
-                Recently unlocked: {lastUnlockedEmoji.name} {lastUnlockedEmoji.emoji}
-              </Text>
+              <View style={styles.bonusUnlockCard}>
+                <Text style={styles.bonusUnlockLabel}>Newest emoji reward</Text>
+                <View style={styles.bonusUnlockRow}>
+                  <View style={styles.bonusUnlockGlyphWrap}>
+                    <Text style={styles.bonusUnlockGlyph}>{lastUnlockedEmoji.emoji}</Text>
+                  </View>
+                  <Text style={styles.bonusUnlockName}>{lastUnlockedEmoji.name}</Text>
+                </View>
+              </View>
             ) : null}
             <Pressable
               style={[styles.bonusPrimaryButton, (isSpinningBonus || availableBonusSpins <= 0) && styles.bonusButtonDisabled]}
@@ -1116,7 +1145,11 @@ export default function HomeScreen() {
               accessibilityLabel="Spin the bonus wheel"
             >
               <Text style={styles.bonusPrimaryText}>
-                {availableBonusSpins > 0 ? (isSpinningBonus ? 'Spinning…' : 'Spin for clicks') : 'No spins left'}
+                {availableBonusSpins > 0
+                  ? isSpinningBonus
+                    ? 'Spinning…'
+                    : 'Spin for emoji rewards'
+                  : 'No spins left'}
               </Text>
             </Pressable>
             <View style={styles.bonusActionsRow}>
@@ -1605,9 +1638,15 @@ const styles = StyleSheet.create({
   quickActionIconWrap: {
     backgroundColor: '#1b7a45',
     borderColor: '#0f3f26',
+    overflow: 'hidden',
   },
   quickActionIcon: {
     color: '#ecfdf5',
+  },
+  quickActionWidgetImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 16,
   },
   quickActionTitle: {
     color: '#f0fff4',
@@ -1805,11 +1844,44 @@ const styles = StyleSheet.create({
     color: '#0f766e',
     textAlign: 'center',
   },
-  bonusUnlock: {
-    fontSize: 13,
+  bonusUnlockCard: {
+    width: '100%',
+    borderRadius: 18,
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    gap: 6,
+    alignItems: 'flex-start',
+  },
+  bonusUnlockLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#047857',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  bonusUnlockRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  bonusUnlockGlyphWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#d1fae5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bonusUnlockGlyph: {
+    fontSize: 26,
+  },
+  bonusUnlockName: {
+    fontSize: 16,
+    fontWeight: '700',
     color: '#0f3d2b',
-    textAlign: 'center',
-    fontWeight: '600',
   },
   bonusPrimaryButton: {
     width: '100%',

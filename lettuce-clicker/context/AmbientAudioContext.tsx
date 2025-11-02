@@ -9,7 +9,7 @@ type AmbientAudioContextValue = {
   selectedTrackId: MusicOption['id'];
   isPlaying: boolean;
   error: Error | null;
-  selectTrack: (trackId: MusicOption['id']) => void;
+  selectTrack: (trackId: MusicOption['id'], options?: { autoPlay?: boolean }) => void;
   togglePlayback: () => void;
   play: () => void;
   pause: () => void;
@@ -24,40 +24,58 @@ type ProviderProps = {
 export function AmbientAudioProvider({ children }: ProviderProps) {
   const [selectedTrackId, setSelectedTrackId] = useState<MusicOption['id']>(MUSIC_OPTIONS[0].id);
   const [error, setError] = useState<Error | null>(null);
-  
+
   const player = useAudioPlayer(MUSIC_AUDIO_MAP[selectedTrackId]);
   const status = useAudioPlayerStatus(player);
-  
+
   const isPlaying = status.playing;
-  
+  const shouldResumeRef = useRef(false);
+
   // Handle track changes
   useEffect(() => {
+    let resumeTimeout: ReturnType<typeof setTimeout> | null = null;
     const source = MUSIC_AUDIO_MAP[selectedTrackId];
     if (source) {
       try {
         player.replace(source);
         player.loop = true;
         setError(null);
+        if (shouldResumeRef.current) {
+          resumeTimeout = setTimeout(() => {
+            try {
+              player.play();
+              setError(null);
+            } catch (caught) {
+              console.warn('Failed to resume playback after track change', caught);
+              setError(caught instanceof Error ? caught : new Error('Failed to start playback'));
+            } finally {
+              shouldResumeRef.current = false;
+            }
+          }, 140);
+        } else {
+          shouldResumeRef.current = false;
+        }
       } catch (caught) {
         console.warn('Failed to load ambient audio', caught);
         setError(caught instanceof Error ? caught : new Error('Failed to load ambient audio'));
+        shouldResumeRef.current = false;
       }
     }
-  }, [selectedTrackId, player]);
-
-  const selectTrack = useCallback((trackId: MusicOption['id']) => {
-    setSelectedTrackId(trackId);
-    setError(null);
-    // Auto-play when selecting a new track
-    setTimeout(() => {
-      try {
-        player.play();
-      } catch (caught) {
-        console.warn('Failed to start playback', caught);
-        setError(caught instanceof Error ? caught : new Error('Failed to start playback'));
+    return () => {
+      if (resumeTimeout) {
+        clearTimeout(resumeTimeout);
       }
-    }, 100); // Small delay to ensure track is loaded
-  }, [player]);
+    };
+  }, [player, selectedTrackId, setError]);
+
+  const selectTrack = useCallback(
+    (trackId: MusicOption['id'], options?: { autoPlay?: boolean }) => {
+      shouldResumeRef.current = options?.autoPlay ?? isPlaying;
+      setSelectedTrackId(trackId);
+      setError(null);
+    },
+    [isPlaying]
+  );
 
   const play = useCallback(() => {
     try {

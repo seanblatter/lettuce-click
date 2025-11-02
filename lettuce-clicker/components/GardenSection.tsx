@@ -57,6 +57,7 @@ type Props = {
   removePlacement: (placementId: string) => void;
   clearGarden: () => void;
   registerCustomEmoji: (emoji: string) => EmojiDefinition | null;
+  gardenBackgroundColor: string;
   title?: string;
 };
 
@@ -80,6 +81,33 @@ const stripVariationSelectors = (value: string) => value.replace(VARIATION_SELEC
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+
+const lightenColor = (hex: string, factor: number) => {
+  const normalized = hex.replace('#', '');
+  if (normalized.length !== 3 && normalized.length !== 6) {
+    return hex;
+  }
+
+  const expanded = normalized.length === 3 ? normalized.split('').map((char) => char + char).join('') : normalized;
+  const value = Number.parseInt(expanded, 16);
+
+  if (!Number.isFinite(value)) {
+    return hex;
+  }
+
+  const clampChannel = (channelValue: number) => {
+    const boundedFactor = Math.min(Math.max(factor, 0), 1);
+    const next = Math.round(channelValue + (255 - channelValue) * boundedFactor);
+    return Math.max(0, Math.min(255, next));
+  };
+
+  const channel = (shift: number) => (value >> shift) & 0xff;
+  const r = clampChannel(channel(16));
+  const g = clampChannel(channel(8));
+  const b = clampChannel(channel(0));
+
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+};
 
 const CANVAS_BACKGROUND = '#ffffff';
 const ERASER_COLOR = 'eraser';
@@ -238,6 +266,7 @@ export function GardenSection({
   removePlacement,
   clearGarden,
   registerCustomEmoji,
+  gardenBackgroundColor,
   title = 'Lettuce Gardens',
 }: Props) {
   const insets = useSafeAreaInsets();
@@ -275,6 +304,8 @@ export function GardenSection({
   const draggingInventoryIdRef = useRef<string | null>(null);
   const dragStartIndexRef = useRef(0);
   const dragCurrentIndexRef = useRef(0);
+  const skipNextCanvasTapRef = useRef(false);
+  const skipTapResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tileSizeRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
   const colorWheelPositions = useMemo(
     () =>
@@ -288,6 +319,13 @@ export function GardenSection({
       }),
     []
   );
+  const baseBackgroundColor = useMemo(
+    () => (gardenBackgroundColor && gardenBackgroundColor.trim().length > 0 ? gardenBackgroundColor : '#f2f9f2'),
+    [gardenBackgroundColor]
+  );
+  const containerStyle = useMemo(() => [styles.container, { backgroundColor: baseBackgroundColor }], [baseBackgroundColor]);
+  const canvasSurfaceColor = useMemo(() => lightenColor(baseBackgroundColor, 0.12), [baseBackgroundColor]);
+  const canvasStyle = useMemo(() => [styles.canvas, { backgroundColor: canvasSurfaceColor }], [canvasSurfaceColor]);
 
   const { height: windowHeight } = useWindowDimensions();
   const paletteMaxHeight = Math.max(windowHeight - insets.top - 32, 360);
@@ -646,6 +684,15 @@ export function GardenSection({
   }, []);
 
   const handleCanvasPress = (event: GestureResponderEvent) => {
+    if (skipNextCanvasTapRef.current) {
+      skipNextCanvasTapRef.current = false;
+      if (skipTapResetTimeoutRef.current) {
+        clearTimeout(skipTapResetTimeoutRef.current);
+        skipTapResetTimeoutRef.current = null;
+      }
+      return;
+    }
+
     if (isDrawingMode) {
       return;
     }
@@ -843,6 +890,17 @@ export function GardenSection({
     [isDrawingMode]
   );
 
+  const handlePlacementGesture = useCallback(() => {
+    skipNextCanvasTapRef.current = true;
+    if (skipTapResetTimeoutRef.current) {
+      clearTimeout(skipTapResetTimeoutRef.current);
+    }
+    skipTapResetTimeoutRef.current = setTimeout(() => {
+      skipNextCanvasTapRef.current = false;
+      skipTapResetTimeoutRef.current = null;
+    }, 160);
+  }, []);
+
   const handlePlacementDragMove = useCallback((placementId: string, center: { x: number; y: number }) => {
     setActiveDrag({ id: placementId, point: center });
   }, []);
@@ -1022,6 +1080,16 @@ export function GardenSection({
     }
   }, [showPalette]);
 
+  useEffect(
+    () => () => {
+      if (skipTapResetTimeoutRef.current) {
+        clearTimeout(skipTapResetTimeoutRef.current);
+        skipTapResetTimeoutRef.current = null;
+      }
+    },
+    []
+  );
+
   const clampedTextScale = clamp(textScale, TEXT_SCALE_MIN, TEXT_SCALE_MAX);
   const textScaleRatio =
     TEXT_SCALE_MAX - TEXT_SCALE_MIN === 0
@@ -1125,14 +1193,24 @@ export function GardenSection({
           </View>
         </Pressable>
         <View style={styles.tileActionRow}>
-          <Text
-            style={[
-              styles.tileStatusText,
-              owned ? styles.tileStatusUnlocked : styles.tileStatusLocked,
-            ]}
-          >
-            {owned ? 'Unlocked' : 'Locked'}
-          </Text>
+          <View style={styles.tileLockToggle}>
+            <View
+              style={[
+                styles.tileLockSegment,
+                !owned ? styles.tileLockSegmentActive : styles.tileLockSegmentInactive,
+              ]}
+            >
+              <Text style={[styles.tileLockText, !owned && styles.tileLockTextActive]}>🔒 Locked</Text>
+            </View>
+            <View
+              style={[
+                styles.tileLockSegment,
+                owned ? styles.tileLockSegmentActive : styles.tileLockSegmentInactive,
+              ]}
+            >
+              <Text style={[styles.tileLockText, owned && styles.tileLockTextActive]}>🔓 Ready</Text>
+            </View>
+          </View>
           {!owned ? (
             <Pressable
               style={[styles.tileActionButton, !canAfford && styles.disabledSecondary]}
@@ -1147,7 +1225,11 @@ export function GardenSection({
             >
               <Text style={[styles.tileActionButtonText, !canAfford && styles.disabledText]}>Unlock</Text>
             </Pressable>
-          ) : null}
+          ) : (
+            <View style={styles.tileUnlockBadge}>
+              <Text style={styles.tileUnlockBadgeText}>Unlimited</Text>
+            </View>
+          )}
         </View>
       </View>
     );
@@ -1180,7 +1262,7 @@ export function GardenSection({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={containerStyle}>
       <ScrollView
         style={styles.contentScroll}
         contentInsetAdjustmentBehavior="never"
@@ -1259,7 +1341,7 @@ export function GardenSection({
         <View style={styles.canvasContainer}>
           <Pressable
             ref={canvasRef}
-            style={styles.canvas}
+            style={canvasStyle}
             onLayout={handleCanvasLayout}
             onPress={handleCanvasPress}
             onTouchStart={handleCanvasTouchStart}
@@ -1304,6 +1386,7 @@ export function GardenSection({
                   onDragBegin={handlePlacementDragBegin}
                   onDragMove={handlePlacementDragMove}
                   onDragEnd={handlePlacementDragEnd}
+                  onGestureActivated={handlePlacementGesture}
                 >
                   <Text style={styles.canvasEmojiGlyph}>{emoji.emoji}</Text>
                 </DraggablePlacement>
@@ -1320,6 +1403,7 @@ export function GardenSection({
                   onDragBegin={handlePlacementDragBegin}
                   onDragMove={handlePlacementDragMove}
                   onDragEnd={handlePlacementDragEnd}
+                  onGestureActivated={handlePlacementGesture}
                 >
                   <View style={styles.canvasPhotoFrame}>
                     <Image source={{ uri: placement.imageUri }} style={styles.canvasPhotoImage} />
@@ -1337,6 +1421,7 @@ export function GardenSection({
                   onDragBegin={handlePlacementDragBegin}
                   onDragMove={handlePlacementDragMove}
                   onDragEnd={handlePlacementDragEnd}
+                  onGestureActivated={handlePlacementGesture}
                 >
                   <Text
                     style={[
@@ -2083,6 +2168,7 @@ type DraggablePlacementProps = {
   onDragMove?: (placementId: string, center: { x: number; y: number }) => void;
   onDragEnd?: (placementId: string, center: { x: number; y: number }) => void;
   onLongPressChange?: (placementId: string, isActive: boolean) => void;
+  onGestureActivated?: (placementId: string) => void;
 };
 
 function DraggablePlacement({
@@ -2094,6 +2180,7 @@ function DraggablePlacement({
   onDragMove,
   onDragEnd,
   onLongPressChange,
+  onGestureActivated,
 }: DraggablePlacementProps) {
   const x = useSharedValue(placement.x);
   const y = useSharedValue(placement.y);
@@ -2164,6 +2251,11 @@ function DraggablePlacement({
   const singleTapGesture = Gesture.Tap()
     .numberOfTaps(1)
     .maxDuration(220)
+    .onBegin(() => {
+      if (onGestureActivated) {
+        runOnJS(onGestureActivated)(placement.id);
+      }
+    })
     .onEnd(() => {
       scale.value = Math.min(scale.value * 1.12, MAX_SCALE);
       reportUpdate();
@@ -2171,6 +2263,11 @@ function DraggablePlacement({
 
   const doubleTapGesture = Gesture.Tap()
     .numberOfTaps(2)
+    .onBegin(() => {
+      if (onGestureActivated) {
+        runOnJS(onGestureActivated)(placement.id);
+      }
+    })
     .onEnd(() => {
       scale.value = Math.min(scale.value * 1.25, MAX_SCALE);
       reportUpdate();
@@ -2179,6 +2276,9 @@ function DraggablePlacement({
   const longPressGesture = Gesture.LongPress()
     .minDuration(350)
     .onStart(() => {
+      if (onGestureActivated) {
+        runOnJS(onGestureActivated)(placement.id);
+      }
       if (onLongPressChange) {
         runOnJS(onLongPressChange)(placement.id, true);
       }
@@ -2881,14 +2981,51 @@ const styles = StyleSheet.create({
   },
   tileActionRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 12,
     marginTop: 12,
     width: '100%',
     alignItems: 'center',
-    justifyContent: 'space-between',
+  },
+  tileLockToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    borderRadius: 18,
+    padding: 4,
+    backgroundColor: '#ecfdf3',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    gap: 6,
+  },
+  tileLockSegment: {
+    flex: 1,
+    borderRadius: 14,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tileLockSegmentActive: {
+    backgroundColor: '#16a34a',
+    shadowColor: '#0f5132',
+    shadowOpacity: 0.24,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  tileLockSegmentInactive: {
+    backgroundColor: 'transparent',
+  },
+  tileLockText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#047857',
+  },
+  tileLockTextActive: {
+    color: '#f0fff4',
   },
   tileActionButton: {
-    borderRadius: 12,
+    borderRadius: 14,
     paddingVertical: 8,
     paddingHorizontal: 16,
     alignItems: 'center',
@@ -2899,24 +3036,19 @@ const styles = StyleSheet.create({
     color: '#f0fff4',
     fontWeight: '700',
   },
-  tileStatusText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#134e32',
-  },
-  tileStatusUnlocked: {
-    color: '#047857',
-  },
-  tileStatusLocked: {
-    color: '#b91c1c',
-  },
-  tileActionUnlocked: {
-    backgroundColor: '#d1fae5',
+  tileUnlockBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#dcfce7',
     borderWidth: 1,
-    borderColor: '#0f766e',
+    borderColor: '#bbf7d0',
   },
-  tileActionUnlockedText: {
-    color: '#0f766e',
+  tileUnlockBadgeText: {
+    color: '#047857',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   sheetCloseButton: {
     marginTop: 12,

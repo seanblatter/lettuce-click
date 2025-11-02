@@ -18,10 +18,11 @@ export default function GardenScreen() {
     removePlacement,
     clearGarden,
     registerCustomEmoji,
+    gardenBackgroundColor,
   } = useGame();
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: gardenBackgroundColor }]}>
       <GardenSection
         harvest={harvest}
         emojiCatalog={emojiCatalog}
@@ -35,6 +36,7 @@ export default function GardenScreen() {
         removePlacement={removePlacement}
         clearGarden={clearGarden}
         registerCustomEmoji={registerCustomEmoji}
+        gardenBackgroundColor={gardenBackgroundColor}
       />
     </SafeAreaView>
   );

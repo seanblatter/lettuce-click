@@ -17,187 +17,11 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router';
 import { useAudioPlayer } from 'expo-audio';
 import { ALARM_CHIME_DATA_URI } from '@/assets/audio/alarmChime';
+import { MUSIC_GROUPS, MUSIC_OPTIONS, type MusicOption } from '@/constants/music';
+import { useAmbientAudio } from '@/context/AmbientAudioContext';
 import type { ColorScheme } from '@/context/ThemeContext';
 import { useAppTheme } from '@/context/ThemeContext';
 
-const MUSIC_OPTIONS = [
-  {
-    id: 'white-hush',
-    name: 'White Hush',
-    emoji: '🤍',
-    description: 'A gentle static wash that brightens focus and energy.',
-    family: 'white' as const,
-  },
-  {
-    id: 'white-waves',
-    name: 'White Waves',
-    emoji: '🌊',
-    description: 'Rolling broadband surf that keeps momentum moving.',
-    family: 'white' as const,
-  },
-  {
-    id: 'white-sparks',
-    name: 'White Sparks',
-    emoji: '✨',
-    description: 'Shimmering tones that make the garden feel electric.',
-    family: 'white' as const,
-  },
-  {
-    id: 'grey-mist',
-    name: 'Grey Mist',
-    emoji: '🌫️',
-    description: 'Balanced whispers of sound for calm concentration.',
-    family: 'grey' as const,
-  },
-  {
-    id: 'grey-embers',
-    name: 'Grey Embers',
-    emoji: '🔥',
-    description: 'Warm crackles mixed with low hush for cozy evenings.',
-    family: 'grey' as const,
-  },
-  {
-    id: 'grey-lanterns',
-    name: 'Grey Lanterns',
-    emoji: '🏮',
-    description: 'Soft drones and glowing chimes for twilight planting.',
-    family: 'grey' as const,
-  },
-  {
-    id: 'rain-mist',
-    name: 'Rain Mist',
-    emoji: '🌧️',
-    description: 'Soft droplets on greenhouse glass for steady calm.',
-    family: 'rain' as const,
-  },
-  {
-    id: 'rain-thunder',
-    name: 'Thunder Bloom',
-    emoji: '⛈️',
-    description: 'A sleepy storm with distant thunder rumbles.',
-    family: 'rain' as const,
-  },
-  {
-    id: 'ocean-tide',
-    name: 'Moonlit Tides',
-    emoji: '🌙',
-    description: 'Slow tides and shimmering foam beneath the moon.',
-    family: 'ocean' as const,
-  },
-  {
-    id: 'ocean-depths',
-    name: 'Deep Currents',
-    emoji: '🐚',
-    description: 'Subtle whale calls and gentle buoys far offshore.',
-    family: 'ocean' as const,
-  },
-  {
-    id: 'forest-dawn',
-    name: 'Forest Dawn',
-    emoji: '🌲',
-    description: 'Birdsong and dew-kissed leaves greeting the sun.',
-    family: 'forest' as const,
-  },
-  {
-    id: 'forest-twilight',
-    name: 'Twilight Grove',
-    emoji: '🦉',
-    description: 'Crickets and rustling branches after dusk settles.',
-    family: 'forest' as const,
-  },
-  {
-    id: 'static-amber',
-    name: 'Amber Static',
-    emoji: '📻',
-    description: 'Vintage static with warm, cozy undertones.',
-    family: 'static' as const,
-  },
-  {
-    id: 'static-stars',
-    name: 'Star Scanner',
-    emoji: '🛰️',
-    description: 'Spacey sweeps and distant signals for deep focus.',
-    family: 'static' as const,
-  },
-  {
-    id: 'keys-glass',
-    name: 'Glass Keys',
-    emoji: '🎹',
-    description: 'Soft piano loops glimmering in the breeze.',
-    family: 'keys' as const,
-  },
-  {
-    id: 'keys-nocturne',
-    name: 'Nocturne Notes',
-    emoji: '🎼',
-    description: 'Dusty chords and sleepy vinyl crackle.',
-    family: 'keys' as const,
-  },
-  {
-    id: 'night-orbit',
-    name: 'Night Orbit',
-    emoji: '🌌',
-    description: 'Ambient synth pads that cradle the stars.',
-    family: 'night' as const,
-  },
-  {
-    id: 'night-halo',
-    name: 'Lunar Halo',
-    emoji: '🛌',
-    description: 'Celestial hum that eases you into deep rest.',
-    family: 'night' as const,
-  },
-] as const;
-
-const MUSIC_AUDIO_MAP = {
-  'white-hush': require('@/assets/audio/soft-soothing-deep-white-noise-378857.mp3'),
-  'white-waves': require('@/assets/audio/heavy-rain-white-noise-159772.mp3'),
-  'white-sparks': require('@/assets/audio/large-industrial-fan-running-constantly-in-warehouse-environment-339216.mp3'),
-  'grey-mist': require('@/assets/audio/kitchen-fan-71401.mp3'),
-  'grey-embers': require('@/assets/audio/fire-place-189399.mp3'),
-  'grey-lanterns': require('@/assets/audio/street-ambience-traffic-410714.mp3'),
-  'rain-mist': require('@/assets/audio/gentle-rain-for-relaxation-and-sleep-337279.mp3'),
-  'rain-thunder': require('@/assets/audio/copyright-free-rain-sounds-331497.mp3'),
-  'ocean-tide': require('@/assets/audio/rowing-river-sounds-215254.mp3'),
-  'ocean-depths': require('@/assets/audio/river-sounds-420904.mp3'),
-  'forest-dawn': require('@/assets/audio/chirping-birds-ambience-217410-1.mp3'),
-  'forest-twilight': require('@/assets/audio/avala-trail-forest-nature-246779.mp3'),
-  'static-amber': require('@/assets/audio/large-industrial-fan-running-constantly-in-warehouse-environment-339216.mp3'),
-  'static-stars': require('@/assets/audio/soft-soothing-deep-white-noise-378857.mp3'),
-  'keys-glass': require('@/assets/audio/river-sounds-420904.mp3'),
-  'keys-nocturne': require('@/assets/audio/street-ambience-traffic-410714.mp3'),
-  'night-orbit': require('@/assets/audio/soft-soothing-deep-white-noise-378857.mp3'),
-  'night-halo': require('@/assets/audio/gentle-rain-for-relaxation-and-sleep-337279.mp3'),
-} as const satisfies Record<(typeof MUSIC_OPTIONS)[number]['id'], number>;
-
-const MUSIC_GROUPS = [
-  { id: 'forest', label: 'Forest Echoes', intro: 'Leaves, birds, and twilight breezes between the vines.' },
-  { id: 'static', label: 'Static & Signal', intro: 'Analog textures tuned for deep concentration.' },
-  { id: 'keys', label: 'Keys & Chords', intro: 'Piano and plucked harmonies to soften the mood.' },
-  { id: 'ocean', label: 'Ocean Waves', intro: 'Coastal hush and tidal sways for breezy focus.' },
-  { id: 'white', label: 'White Noise', intro: 'Bright, energetic mixes to keep the garden lively.' },
-  { id: 'grey', label: 'Grey Noise', intro: 'Softly balanced sounds that settle the senses.' },
-  { id: 'rain', label: 'Rainfall Retreats', intro: 'Falling drops and distant thunder for gentle nights.' },
-  { id: 'night', label: 'Night Sky', intro: 'Synth swells and starlit drones for restorative sleep.' },
-] as const;
-
-const MUSIC_SERVICES = [
-  { id: 'apple', name: 'Apple Music', emoji: '🍎', description: 'Link your personal library and curated stations.' },
-  { id: 'spotify', name: 'Spotify', emoji: '🟢', description: 'Stream playlists and blends from your account.' },
-] as const;
-
-const SERVICE_NOW_PLAYING: Record<MusicServiceId, { emoji: string; title: string; subtitle: string }> = {
-  apple: {
-    emoji: '🍎',
-    title: 'Morning Bloom Radio',
-    subtitle: 'Playing from your Apple Music connection.',
-  },
-  spotify: {
-    emoji: '🟢',
-    title: 'Focus Flow',
-    subtitle: 'Streaming from your Spotify playlists.',
-  },
-};
 
 const SLEEP_MODE_OPTIONS = [
   { id: 'timer', label: 'Timer', description: 'Fade out and stop playback when the time ends.' },
@@ -631,9 +455,17 @@ const createStyles = (palette: Palette, isDark: boolean) =>
       gap: 18,
     },
     nowPlayingEmojiWrap: {
-      width: 64,
-      height: 64,
-      borderRadius: 32,
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'visible',
+    },
+    nowPlayingEmojiStatic: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
       backgroundColor: palette.nowPlayingEmojiBackground,
       alignItems: 'center',
       justifyContent: 'center',
@@ -680,143 +512,36 @@ const createStyles = (palette: Palette, isDark: boolean) =>
       color: palette.sleepStatusWarning,
     },
     nowPlayingControls: {
-      flexDirection: 'row',
+      marginTop: 12,
       alignItems: 'center',
-      justifyContent: 'flex-start',
+      justifyContent: 'center',
     },
     nowPlayingControlButton: {
-      flexDirection: 'row',
+      width: 66,
+      height: 66,
+      borderRadius: 33,
       alignItems: 'center',
-      gap: 8,
-      paddingHorizontal: 18,
-      paddingVertical: 10,
-      borderRadius: 999,
+      justifyContent: 'center',
       borderWidth: 1,
       borderColor: palette.sourcePillBorder,
       backgroundColor: palette.sourcePillBackground,
+      shadowColor: palette.sourcePillShadow,
+      shadowOpacity: isDark ? 0.28 : 0.18,
+      shadowRadius: isDark ? 10 : 7,
+      shadowOffset: { width: 0, height: isDark ? 6 : 4 },
+      elevation: isDark ? 4 : 2,
     },
     nowPlayingControlButtonActive: {
       backgroundColor: palette.sourcePillActiveBackground,
       borderColor: palette.sourcePillActiveBorder,
       shadowColor: palette.sourcePillShadow,
-      shadowOpacity: isDark ? 0.35 : 0.18,
-      shadowRadius: isDark ? 10 : 8,
-      shadowOffset: { width: 0, height: isDark ? 6 : 4 },
-      elevation: isDark ? 4 : 2,
     },
     nowPlayingControlGlyph: {
-      fontSize: 16,
+      fontSize: 26,
       color: palette.sourcePillText,
     },
     nowPlayingControlGlyphActive: {
       color: palette.sourcePillActiveText,
-    },
-    nowPlayingControlText: {
-      fontSize: 14,
-      fontWeight: '700',
-      color: palette.sourcePillText,
-    },
-    nowPlayingControlTextActive: {
-      color: palette.sourcePillActiveText,
-    },
-    nowPlayingSources: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 10,
-    },
-    sourcePill: {
-      paddingHorizontal: 16,
-      paddingVertical: 8,
-      borderRadius: 999,
-      borderWidth: 1,
-      borderColor: palette.sourcePillBorder,
-      backgroundColor: palette.sourcePillBackground,
-    },
-    sourcePillActive: {
-      backgroundColor: palette.sourcePillActiveBackground,
-      borderColor: palette.sourcePillActiveBorder,
-      shadowColor: palette.sourcePillShadow,
-      shadowOpacity: isDark ? 0.35 : 0.18,
-      shadowRadius: isDark ? 10 : 8,
-      shadowOffset: { width: 0, height: isDark ? 6 : 4 },
-      elevation: isDark ? 4 : 2,
-    },
-    sourcePillText: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: palette.sourcePillText,
-    },
-    sourcePillTextActive: {
-      color: palette.sourcePillActiveText,
-    },
-    serviceSection: {
-      gap: 12,
-    },
-    sectionTitle: {
-      fontSize: 18,
-      fontWeight: '700',
-      color: palette.groupTitle,
-    },
-    sectionSubtitle: {
-      fontSize: 13,
-      color: palette.groupDescription,
-      lineHeight: 19,
-    },
-    serviceList: {
-      gap: 12,
-    },
-    serviceCard: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 14,
-      backgroundColor: palette.serviceCardBackground,
-      borderRadius: 20,
-      padding: 18,
-      borderWidth: 1,
-      borderColor: palette.serviceCardBorder,
-    },
-    serviceCardConnected: {
-      backgroundColor: palette.serviceCardConnectedBackground,
-      borderColor: palette.serviceCardBorder,
-    },
-    serviceIconWrap: {
-      width: 52,
-      height: 52,
-      borderRadius: 26,
-      backgroundColor: palette.serviceIconBackground,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    serviceIconWrapConnected: {
-      backgroundColor: palette.serviceIconConnectedBackground,
-    },
-    serviceIcon: {
-      fontSize: 26,
-    },
-    serviceBody: {
-      flex: 1,
-      gap: 4,
-    },
-    serviceName: {
-      fontSize: 16,
-      fontWeight: '700',
-      color: palette.serviceName,
-    },
-    serviceNameConnected: {
-      color: palette.serviceNameConnected,
-    },
-    serviceDescription: {
-      fontSize: 12,
-      lineHeight: 17,
-      color: palette.serviceDescription,
-    },
-    serviceStatus: {
-      fontSize: 12,
-      fontWeight: '600',
-      color: palette.serviceStatus,
-    },
-    serviceStatusConnected: {
-      color: palette.serviceStatusConnected,
     },
     groupSection: {
       gap: 14,
@@ -1192,9 +917,6 @@ const formatDurationCompact = (minutes: number) => {
   return `${hours}h ${mins}m`;
 };
 
-type MusicOption = (typeof MUSIC_OPTIONS)[number];
-type MusicServiceId = (typeof MUSIC_SERVICES)[number]['id'];
-type MusicSource = 'mix' | MusicServiceId;
 type SleepMode = (typeof SLEEP_MODE_OPTIONS)[number]['id'];
 type AlarmPeriod = 'AM' | 'PM';
 
@@ -1229,12 +951,13 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
     musicColorScheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
   const themeAccessibilityValue =
     musicColorScheme === 'dark' ? 'Dark mode active' : 'Light mode active';
-  const [selectedTrackId, setSelectedTrackId] = useState<MusicOption['id']>(MUSIC_OPTIONS[0].id);
-  const [connectedServices, setConnectedServices] = useState<Record<MusicServiceId, boolean>>({
-    apple: false,
-    spotify: false,
-  });
-  const [nowPlayingSource, setNowPlayingSource] = useState<MusicSource>('mix');
+  const {
+    selectedTrackId,
+    isPlaying: isAmbientPlaying,
+    error: ambientError,
+    selectTrack,
+    togglePlayback,
+  } = useAmbientAudio();
   const [sleepModalOpen, setSleepModalOpen] = useState(false);
   const [sleepMode, setSleepMode] = useState<SleepMode>('timer');
   const [sleepTimerMinutes, setSleepTimerMinutes] = useState<number>(30);
@@ -1244,10 +967,7 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
   const [sleepCircle, setSleepCircle] = useState<SleepCircleState>(null);
   const [sleepNow, setSleepNow] = useState(() => Date.now());
   const sleepTimeoutRef = useRef<number | null>(null);
-  const ambientPlayer = useAudioPlayer(MUSIC_AUDIO_MAP[selectedTrackId]);
   const alarmPlayer = useAudioPlayer(ALARM_SOUND_URI);
-  const [ambientError, setAmbientError] = useState<Error | null>(null);
-  const [isAmbientPlaying, setIsAmbientPlaying] = useState(false);
   const [showAllGroups, setShowAllGroups] = useState(false);
 
   useEffect(() => {
@@ -1297,41 +1017,14 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
     [selectedTrackId]
   );
 
-  useEffect(() => {
-    if (nowPlayingSource !== 'mix' && !connectedServices[nowPlayingSource]) {
-      setNowPlayingSource('mix');
-    }
-  }, [connectedServices, nowPlayingSource]);
-
-  const availableSources = useMemo(() => {
-    const sources: { id: MusicSource; label: string }[] = [{ id: 'mix', label: 'Garden mix' }];
-    MUSIC_SERVICES.forEach((service) => {
-      if (connectedServices[service.id]) {
-        sources.push({ id: service.id, label: service.name });
-      }
-    });
-    return sources;
-  }, [connectedServices]);
-
-  const nowPlayingDetails = useMemo(() => {
-    if (nowPlayingSource === 'mix') {
-      return {
-        emoji: selectedTrack.emoji,
-        title: selectedTrack.name,
-        subtitle: selectedTrack.description,
-      };
-    }
-
-    if (!connectedServices[nowPlayingSource]) {
-      return {
-        emoji: selectedTrack.emoji,
-        title: selectedTrack.name,
-        subtitle: selectedTrack.description,
-      };
-    }
-
-    return SERVICE_NOW_PLAYING[nowPlayingSource];
-  }, [connectedServices, nowPlayingSource, selectedTrack]);
+  const nowPlayingDetails = useMemo(
+    () => ({
+      emoji: selectedTrack.emoji,
+      title: selectedTrack.name,
+      subtitle: selectedTrack.description,
+    }),
+    [selectedTrack]
+  );
 
   const sleepSummary = useMemo(() => {
     if (!sleepCircle) {
@@ -1374,21 +1067,6 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
       detail: `Rings in ${formatDurationLong(minutes)}`,
     };
   }, [sleepCircle, sleepNow]);
-
-  const handleToggleService = useCallback(
-    (serviceId: MusicServiceId) => {
-      setConnectedServices((prev) => {
-        const next = { ...prev, [serviceId]: !prev[serviceId] };
-        if (next[serviceId]) {
-          setNowPlayingSource(serviceId);
-        } else if (nowPlayingSource === serviceId) {
-          setNowPlayingSource('mix');
-        }
-        return next;
-      });
-    },
-    [nowPlayingSource]
-  );
 
   const handleSleepComplete = useCallback(
     async (mode: SleepMode) => {
@@ -1490,152 +1168,16 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
     setMusicColorScheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   }, []);
 
-  const ensureLoopingPlayback = useCallback(
-    async (source: number, shouldPlayOverride?: boolean) => {
-      const player: any = ambientPlayer;
-      const desiredPlayState = shouldPlayOverride ?? (nowPlayingSource === 'mix' && isAmbientPlaying);
-
-      try {
-        const playbackOptions = {
-          isLooping: true,
-          shouldPlay: desiredPlayState,
-        };
-
-        let startedWithSource = false;
-        if (player && typeof player.replace === 'function') {
-          await Promise.resolve(player.replace(source, playbackOptions));
-          startedWithSource = true;
-        } else if (player && typeof player.loadAsync === 'function') {
-          await Promise.resolve(player.stop?.());
-          await Promise.resolve(player.unloadAsync?.());
-          await Promise.resolve(player.loadAsync(source, playbackOptions));
-        } else if (player && typeof player.play === 'function' && player.play.length >= 1) {
-          await Promise.resolve(player.play(source, playbackOptions));
-          startedWithSource = true;
-        } else if (player && typeof player.setSource === 'function') {
-          await Promise.resolve(player.setSource(source));
-        }
-
-        if (player) {
-          if (typeof player.setStatus === 'function') {
-            await Promise.resolve(player.setStatus({ isLooping: true }));
-          } else if (typeof player.updateStatus === 'function') {
-            await Promise.resolve(player.updateStatus({ isLooping: true }));
-          }
-
-          if (desiredPlayState) {
-            if (!startedWithSource) {
-              if (typeof player.play === 'function' && player.play.length === 0) {
-                await Promise.resolve(player.play());
-              } else if (typeof player.playAsync === 'function') {
-                await Promise.resolve(player.playAsync());
-              } else if (typeof player.replayAsync === 'function') {
-                await Promise.resolve(player.replayAsync());
-              } else {
-                player.seekTo?.(0);
-                player.play?.();
-              }
-            }
-            setIsAmbientPlaying(true);
-          } else {
-            player.pause?.();
-            setIsAmbientPlaying(false);
-          }
-        } else {
-          setIsAmbientPlaying(false);
-        }
-
-        setAmbientError(null);
-      } catch (error) {
-        console.warn('Ambient playback failed', error);
-        setIsAmbientPlaying(false);
-        setAmbientError(
-          error instanceof Error ? error : new Error('Ambient playback failed to start')
-        );
-      }
-    },
-    [ambientPlayer, isAmbientPlaying, nowPlayingSource]
-  );
-
-  useEffect(() => {
-    if (nowPlayingSource !== 'mix') {
-      const player: any = ambientPlayer;
-      player?.pause?.();
-      setIsAmbientPlaying(false);
-      setAmbientError(null);
-      return;
-    }
-
-    const source = MUSIC_AUDIO_MAP[selectedTrackId];
-    if (!source) {
-      return;
-    }
-
-    ensureLoopingPlayback(source);
-  }, [ambientPlayer, ensureLoopingPlayback, nowPlayingSource, selectedTrackId]);
-
   const handleSelectTrack = useCallback(
     (trackId: MusicOption['id']) => {
-      setSelectedTrackId(trackId);
-      setNowPlayingSource('mix');
-      setAmbientError(null);
-
-      const source = MUSIC_AUDIO_MAP[trackId];
-      if (source) {
-        ensureLoopingPlayback(source, true).catch((error) => {
-          console.warn('Playback failed to start', error);
-        });
-      }
+      selectTrack(trackId);
     },
-    [ensureLoopingPlayback]
-  );
-
-  const handleSelectSource = useCallback(
-    (sourceId: MusicSource) => {
-      setAmbientError(null);
-      if (sourceId === 'mix') {
-        setNowPlayingSource('mix');
-        const source = MUSIC_AUDIO_MAP[selectedTrackId];
-        if (source) {
-          ensureLoopingPlayback(source, true).catch((error) => {
-            console.warn('Playback failed to start', error);
-          });
-        }
-        return;
-      }
-
-      setNowPlayingSource(sourceId);
-      setIsAmbientPlaying(false);
-      const player: any = ambientPlayer;
-      player?.pause?.();
-    },
-    [ambientPlayer, ensureLoopingPlayback, selectedTrackId]
+    [selectTrack]
   );
 
   const handleToggleAmbientPlayback = useCallback(() => {
-    if (nowPlayingSource !== 'mix') {
-      return;
-    }
-
-    const source = MUSIC_AUDIO_MAP[selectedTrackId];
-    if (!source) {
-      return;
-    }
-
-    setAmbientError(null);
-    const nextShouldPlay = !isAmbientPlaying;
-    ensureLoopingPlayback(source, nextShouldPlay).catch((error) => {
-      console.warn('Playback toggle failed', error);
-    });
-  }, [ensureLoopingPlayback, isAmbientPlaying, nowPlayingSource, selectedTrackId]);
-
-  useEffect(() => {
-    const player: any = ambientPlayer;
-    return () => {
-      player?.stop?.();
-      player?.unloadAsync?.();
-    };
-  }, [ambientPlayer]);
+    togglePlayback();
+  }, [togglePlayback]);
 
   const handleClose = useCallback(() => {
     if (onRequestClose) {
@@ -1703,7 +1245,13 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
           </View>
           <View style={styles.nowPlayingRow}>
             <View style={styles.nowPlayingEmojiWrap}>
-              <Text style={styles.nowPlayingEmoji}>{nowPlayingDetails.emoji}</Text>
+              {isAmbientPlaying ? (
+                <AudioOrb emoji={nowPlayingDetails.emoji} palette={palette} styles={styles} />
+              ) : (
+                <View style={styles.nowPlayingEmojiStatic}>
+                  <Text style={styles.nowPlayingEmoji}>{nowPlayingDetails.emoji}</Text>
+                </View>
+              )}
             </View>
             <View style={styles.nowPlayingBody}>
               <Text style={styles.nowPlayingTitle}>{nowPlayingDetails.title}</Text>
@@ -1719,97 +1267,30 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
               </Text>
             ) : null}
           </View>
-          {nowPlayingSource === 'mix' ? (
-            <View style={styles.nowPlayingControls}>
-              <Pressable
-                onPress={handleToggleAmbientPlayback}
+          <View style={styles.nowPlayingControls}>
+            <Pressable
+              onPress={handleToggleAmbientPlayback}
+              style={[
+                styles.nowPlayingControlButton,
+                isAmbientPlaying && styles.nowPlayingControlButtonActive,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={isAmbientPlaying ? 'Pause ambience' : 'Play ambience'}
+              accessibilityHint={
+                isAmbientPlaying
+                  ? 'Pauses the currently playing ambience'
+                  : 'Starts the selected ambience mix'
+              }
+            >
+              <Text
                 style={[
-                  styles.nowPlayingControlButton,
-                  isAmbientPlaying && styles.nowPlayingControlButtonActive,
+                  styles.nowPlayingControlGlyph,
+                  isAmbientPlaying && styles.nowPlayingControlGlyphActive,
                 ]}
-                accessibilityRole="button"
-                accessibilityLabel={isAmbientPlaying ? 'Pause garden mix' : 'Play garden mix'}
-                accessibilityHint={
-                  isAmbientPlaying
-                    ? 'Pauses the currently playing ambience'
-                    : 'Starts the selected ambience mix'
-                }
               >
-                <Text
-                  style={[
-                    styles.nowPlayingControlGlyph,
-                    isAmbientPlaying && styles.nowPlayingControlGlyphActive,
-                  ]}
-                >
-                  {isAmbientPlaying ? '⏸️' : '▶️'}
-                </Text>
-                <Text
-                  style={[
-                    styles.nowPlayingControlText,
-                    isAmbientPlaying && styles.nowPlayingControlTextActive,
-                  ]}
-                >
-                  {isAmbientPlaying ? 'Pause mix' : 'Play mix'}
-                </Text>
-              </Pressable>
-            </View>
-          ) : null}
-          <View style={styles.nowPlayingSources}>
-            {availableSources.map((source) => {
-              const isActive = nowPlayingSource === source.id;
-              return (
-                <Pressable
-                  key={source.id}
-                  style={[styles.sourcePill, isActive && styles.sourcePillActive]}
-                  onPress={() => handleSelectSource(source.id)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: isActive }}
-                  accessibilityLabel={`Play from ${source.label}`}
-                >
-                  <Text style={[styles.sourcePillText, isActive && styles.sourcePillTextActive]}>
-                    {source.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-
-        <View style={styles.serviceSection}>
-          <Text style={styles.sectionTitle}>Connect your music</Text>
-          <Text style={styles.sectionSubtitle}>
-            Link Apple Music or Spotify to stream your own playlists inside the lounge.
-          </Text>
-          <View style={styles.serviceList}>
-            {MUSIC_SERVICES.map((service) => {
-              const connected = connectedServices[service.id];
-              return (
-                <Pressable
-                  key={service.id}
-                  style={[styles.serviceCard, connected && styles.serviceCardConnected]}
-                  onPress={() => handleToggleService(service.id)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: connected }}
-                  accessibilityLabel={connected ? `Disconnect ${service.name}` : `Connect ${service.name}`}
-                >
-                  <View
-                    style={[styles.serviceIconWrap, connected && styles.serviceIconWrapConnected]}
-                    pointerEvents="none"
-                  >
-                    <Text style={styles.serviceIcon}>{service.emoji}</Text>
-                  </View>
-                  <View style={styles.serviceBody}>
-                    <Text style={[styles.serviceName, connected && styles.serviceNameConnected]}>
-                      {service.name}
-                    </Text>
-                    <Text style={styles.serviceDescription}>{service.description}</Text>
-                    <Text style={[styles.serviceStatus, connected && styles.serviceStatusConnected]}>
-                      {connected ? 'Connected · tap to switch sources' : 'Tap to connect'}
-                    </Text>
-                  </View>
-                </Pressable>
-              );
-            })}
+                {isAmbientPlaying ? '⏸️' : '▶️'}
+              </Text>
+            </Pressable>
           </View>
         </View>
 
@@ -1819,29 +1300,44 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
             <Text style={styles.groupDescription}>{group.intro}</Text>
             <View style={styles.optionList}>
               {group.options.map((option) => {
-                const isActive = option.id === selectedTrackId && nowPlayingSource === 'mix';
+                const isSelected = option.id === selectedTrackId;
+                const isPlayingOption = isSelected && isAmbientPlaying;
                 return (
                   <Pressable
                     key={option.id}
-                    style={[styles.optionRow, isActive && styles.optionRowActive]}
+                    style={[styles.optionRow, isSelected && styles.optionRowActive]}
                     onPress={() => handleSelectTrack(option.id)}
                     accessibilityRole="button"
-                    accessibilityState={{ selected: isActive }}
+                    accessibilityState={{ selected: isSelected }}
                   >
                     <View style={styles.optionAvatar}>
-                      {isActive ? (
+                      {isPlayingOption ? (
                         <AudioOrb emoji={option.emoji} palette={palette} styles={styles} />
                       ) : (
-                        <View style={styles.optionEmojiWrap}>
-                          <Text style={styles.optionEmoji}>{option.emoji}</Text>
+                        <View
+                          style={[
+                            styles.optionEmojiWrap,
+                            isSelected && styles.optionEmojiWrapActive,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.optionEmoji,
+                              isSelected && styles.optionEmojiActive,
+                            ]}
+                          >
+                            {option.emoji}
+                          </Text>
                         </View>
                       )}
                     </View>
                     <View style={styles.optionBody}>
-                      <Text style={[styles.optionName, isActive && styles.optionNameActive]}>{option.name}</Text>
+                      <Text style={[styles.optionName, isSelected && styles.optionNameActive]}>
+                        {option.name}
+                      </Text>
                       <Text style={styles.optionDescription}>{option.description}</Text>
                     </View>
-                    {isActive ? <Text style={styles.optionBadge}>Playing</Text> : null}
+                    {isPlayingOption ? <Text style={styles.optionBadge}>Playing</Text> : null}
                   </Pressable>
                 );
               })}
@@ -1866,29 +1362,44 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
                     <Text style={styles.groupDescription}>{group.intro}</Text>
                     <View style={styles.optionList}>
                       {group.options.map((option) => {
-                        const isActive = option.id === selectedTrackId && nowPlayingSource === 'mix';
+                        const isSelected = option.id === selectedTrackId;
+                        const isPlayingOption = isSelected && isAmbientPlaying;
                         return (
                           <Pressable
                             key={option.id}
-                            style={[styles.optionRow, isActive && styles.optionRowActive]}
+                            style={[styles.optionRow, isSelected && styles.optionRowActive]}
                             onPress={() => handleSelectTrack(option.id)}
                             accessibilityRole="button"
-                            accessibilityState={{ selected: isActive }}
+                            accessibilityState={{ selected: isSelected }}
                           >
                             <View style={styles.optionAvatar}>
-                              {isActive ? (
+                              {isPlayingOption ? (
                                 <AudioOrb emoji={option.emoji} palette={palette} styles={styles} />
                               ) : (
-                                <View style={styles.optionEmojiWrap}>
-                                  <Text style={styles.optionEmoji}>{option.emoji}</Text>
+                                <View
+                                  style={[
+                                    styles.optionEmojiWrap,
+                                    isSelected && styles.optionEmojiWrapActive,
+                                  ]}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.optionEmoji,
+                                      isSelected && styles.optionEmojiActive,
+                                    ]}
+                                  >
+                                    {option.emoji}
+                                  </Text>
                                 </View>
                               )}
                             </View>
                             <View style={styles.optionBody}>
-                              <Text style={[styles.optionName, isActive && styles.optionNameActive]}>{option.name}</Text>
+                              <Text style={[styles.optionName, isSelected && styles.optionNameActive]}>
+                                {option.name}
+                              </Text>
                               <Text style={styles.optionDescription}>{option.description}</Text>
                             </View>
-                            {isActive ? <Text style={styles.optionBadge}>Playing</Text> : null}
+                            {isPlayingOption ? <Text style={styles.optionBadge}>Playing</Text> : null}
                           </Pressable>
                         );
                       })}

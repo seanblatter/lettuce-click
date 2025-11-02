@@ -6,6 +6,7 @@ import 'react-native-reanimated';
 
 import { AppThemeProvider, useAppTheme } from '@/context/ThemeContext';
 import { GameProvider } from '@/context/GameContext';
+import { AmbientAudioProvider } from '@/context/AmbientAudioContext';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -40,9 +41,11 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AppThemeProvider>
-        <GameProvider>
-          <RootNavigation />
-        </GameProvider>
+        <AmbientAudioProvider>
+          <GameProvider>
+            <RootNavigation />
+          </GameProvider>
+        </AmbientAudioProvider>
       </AppThemeProvider>
     </GestureHandlerRootView>
   );

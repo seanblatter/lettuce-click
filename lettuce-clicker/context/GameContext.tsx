@@ -668,7 +668,17 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       const customId = `custom-${idFragment}`;
 
       if (customEmojiCatalog[customId]) {
-        return customEmojiCatalog[customId];
+        const existing = customEmojiCatalog[customId];
+        setEmojiInventory((prev) => {
+          if (prev[existing.id]) {
+            return prev;
+          }
+          return {
+            ...prev,
+            [existing.id]: true,
+          };
+        });
+        return existing;
       }
 
       let createdDefinition: EmojiDefinition | null = null;
@@ -693,9 +703,28 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         return { ...prev, [customId]: nextDefinition };
       });
 
+      if (createdDefinition) {
+        const definition = createdDefinition;
+        setEmojiInventory((prev) => {
+          if (prev[definition.id]) {
+            return prev;
+          }
+          return {
+            ...prev,
+            [definition.id]: true,
+          };
+        });
+      }
+
       return createdDefinition;
     },
-    [computeCustomEmojiCost, customEmojiCatalog, pickCustomCategory, stripVariationSelectors]
+    [
+      computeCustomEmojiCost,
+      customEmojiCatalog,
+      pickCustomCategory,
+      setEmojiInventory,
+      stripVariationSelectors,
+    ]
   );
 
   const combinedEmojiCatalog = useMemo(

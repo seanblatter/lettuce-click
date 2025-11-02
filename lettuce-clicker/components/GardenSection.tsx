@@ -82,33 +82,6 @@ const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, 
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
-const lightenColor = (hex: string, factor: number) => {
-  const normalized = hex.replace('#', '');
-  if (normalized.length !== 3 && normalized.length !== 6) {
-    return hex;
-  }
-
-  const expanded = normalized.length === 3 ? normalized.split('').map((char) => char + char).join('') : normalized;
-  const value = Number.parseInt(expanded, 16);
-
-  if (!Number.isFinite(value)) {
-    return hex;
-  }
-
-  const clampChannel = (channelValue: number) => {
-    const boundedFactor = Math.min(Math.max(factor, 0), 1);
-    const next = Math.round(channelValue + (255 - channelValue) * boundedFactor);
-    return Math.max(0, Math.min(255, next));
-  };
-
-  const channel = (shift: number) => (value >> shift) & 0xff;
-  const r = clampChannel(channel(16));
-  const g = clampChannel(channel(8));
-  const b = clampChannel(channel(0));
-
-  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-};
-
 const CANVAS_BACKGROUND = '#ffffff';
 const ERASER_COLOR = 'eraser';
 const DEFAULT_TEXT_COLOR = '#14532d';
@@ -151,6 +124,7 @@ const PEN_SIZES = [3, 5, 8, 12];
 const TEXT_SCALE_MIN = 0.7;
 const TEXT_SCALE_MAX = 2;
 const TEXT_SLIDER_THUMB_SIZE = 24;
+const TOTAL_EMOJI_LIBRARY_COUNT = 3953;
 
 const TEXT_STYLE_OPTIONS: { id: TextStyleId; label: string; textStyle: TextStyle; preview: string }[] = [
   { id: 'sprout', label: 'Sprout', textStyle: { fontSize: 18, fontWeight: '600' }, preview: 'Hello' },
@@ -324,8 +298,7 @@ export function GardenSection({
     [gardenBackgroundColor]
   );
   const containerStyle = useMemo(() => [styles.container, { backgroundColor: baseBackgroundColor }], [baseBackgroundColor]);
-  const canvasSurfaceColor = useMemo(() => lightenColor(baseBackgroundColor, 0.12), [baseBackgroundColor]);
-  const canvasStyle = useMemo(() => [styles.canvas, { backgroundColor: canvasSurfaceColor }], [canvasSurfaceColor]);
+  const canvasStyle = useMemo(() => [styles.canvas, { backgroundColor: CANVAS_BACKGROUND }], []);
 
   const { height: windowHeight } = useWindowDimensions();
   const paletteMaxHeight = Math.max(windowHeight - insets.top - 32, 360);
@@ -1133,6 +1106,15 @@ export function GardenSection({
   const bannerTopPadding = insets.top + 24;
   const contentBottomPadding = insets.bottom + 48;
   const canClearGarden = placements.length > 0 || strokes.length > 0;
+  const totalCollected = useMemo(
+    () => Object.values(emojiInventory).filter(Boolean).length,
+    [emojiInventory]
+  );
+  const collectionProgressLabel = useMemo(
+    () =>
+      `${totalCollected.toLocaleString()} / ${TOTAL_EMOJI_LIBRARY_COUNT.toLocaleString()}`,
+    [totalCollected]
+  );
 
   const renderShopItem: ListRenderItem<InventoryEntry> = ({ item }) => {
     const owned = item.owned;
@@ -1143,7 +1125,7 @@ export function GardenSection({
       if (owned) {
         Alert.alert(
           'Already unlocked',
-          'Open your inventory to ready this decoration for placement.',
+          'Open your inventory to place this decoration.',
           [
             {
               text: 'Go to inventory',
@@ -1174,9 +1156,14 @@ export function GardenSection({
             owned
               ? 'Select to ready this decoration.'
               : canAfford
-              ? 'Unlock and ready this decoration.'
-              : 'Not enough clicks to unlock.'
+                ? 'Unlock and ready this decoration.'
+                : 'Not enough clicks to unlock.'
           }>
+          {!owned ? (
+            <View style={styles.tileStatusBadge}>
+              <Text style={styles.tileStatusBadgeText}>Locked</Text>
+            </View>
+          ) : null}
           <View style={[styles.emojiBadge, isSelected && styles.emojiBadgeSelected]}>
             <View style={[styles.emojiBadgeGlow, isSelected && styles.emojiBadgeGlowActive]} />
             <View style={[styles.emojiBadgeCore, isSelected && styles.emojiBadgeCoreSelected]}>
@@ -1192,28 +1179,25 @@ export function GardenSection({
             </Text>
           </View>
         </Pressable>
-        <View style={styles.tileActionRow}>
-          <View style={styles.tileLockToggle}>
-            <View
+        <View style={styles.tileFooterRow}>
+          <View
+            style={[
+              styles.tileStatusPill,
+              owned ? styles.tileStatusPillUnlocked : styles.tileStatusPillLocked,
+            ]}
+          >
+            <Text
               style={[
-                styles.tileLockSegment,
-                !owned ? styles.tileLockSegmentActive : styles.tileLockSegmentInactive,
+                styles.tileStatusText,
+                owned ? styles.tileStatusTextUnlocked : styles.tileStatusTextLocked,
               ]}
             >
-              <Text style={[styles.tileLockText, !owned && styles.tileLockTextActive]}>🔒 Locked</Text>
-            </View>
-            <View
-              style={[
-                styles.tileLockSegment,
-                owned ? styles.tileLockSegmentActive : styles.tileLockSegmentInactive,
-              ]}
-            >
-              <Text style={[styles.tileLockText, owned && styles.tileLockTextActive]}>🔓 Ready</Text>
-            </View>
+              {owned ? 'Unlocked' : 'Locked'}
+            </Text>
           </View>
           {!owned ? (
             <Pressable
-              style={[styles.tileActionButton, !canAfford && styles.disabledSecondary]}
+              style={[styles.tileUnlockButton, !canAfford && styles.tileUnlockButtonDisabled]}
               onPress={() => handlePurchase(item.id)}
               disabled={!canAfford}
               accessibilityLabel={`Unlock ${item.name}`}
@@ -1223,12 +1207,10 @@ export function GardenSection({
                   : 'Gather more clicks to unlock this decoration.'
               }
             >
-              <Text style={[styles.tileActionButtonText, !canAfford && styles.disabledText]}>Unlock</Text>
+              <Text style={styles.tileUnlockButtonText}>Unlock</Text>
             </Pressable>
           ) : (
-            <View style={styles.tileUnlockBadge}>
-              <Text style={styles.tileUnlockBadgeText}>Unlimited</Text>
-            </View>
+            <Text style={styles.tileOwnedHint}>Ready in inventory</Text>
           )}
         </View>
       </View>
@@ -1486,17 +1468,15 @@ export function GardenSection({
             ) : null}
           </Pressable>
 
-          <View style={styles.canvasActions}>
-            <Pressable
-              style={[styles.ghostButton, !canClearGarden && styles.disabledSecondary]}
-              disabled={!canClearGarden}
-              onPress={handleClearGarden}>
-              <Text style={[styles.ghostButtonText, !canClearGarden && styles.disabledText]}>
-                Clear Garden
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[styles.primaryButton, isSavingSnapshot && styles.primaryButtonDisabled]}
+        <View style={styles.canvasActions}>
+          <Pressable
+            style={[styles.primaryButton, styles.clearButton, !canClearGarden && styles.clearButtonDisabled]}
+            disabled={!canClearGarden}
+            onPress={handleClearGarden}>
+            <Text style={styles.primaryText}>Clear Garden</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.primaryButton, isSavingSnapshot && styles.primaryButtonDisabled]}
               onPress={handleSaveSnapshot}
               disabled={isSavingSnapshot}>
               <Text style={styles.primaryText}>{isSavingSnapshot ? 'Saving…' : 'Save'}</Text>
@@ -1829,6 +1809,13 @@ export function GardenSection({
                   </Pressable>
                 ) : null}
               </View>
+              <View style={styles.collectionSummary}>
+                <Text style={styles.collectionSummaryLabel}>Emojis collected</Text>
+                <Text style={styles.collectionSummaryValue}>{collectionProgressLabel}</Text>
+                <Text style={styles.collectionSummaryHint}>
+                  Unlocked emojis stay available in your inventory for unlimited use.
+                </Text>
+              </View>
               <View style={styles.sortRow}>
                 <Text style={styles.sortLabel}>Price</Text>
                 <Pressable
@@ -1964,6 +1951,13 @@ export function GardenSection({
                     <Text style={styles.clearSearchText}>Clear</Text>
                   </Pressable>
                 ) : null}
+              </View>
+              <View style={styles.collectionSummary}>
+                <Text style={styles.collectionSummaryLabel}>Your emoji collection</Text>
+                <Text style={styles.collectionSummaryValue}>{collectionProgressLabel}</Text>
+                <Text style={styles.collectionSummaryHint}>
+                  Every emoji you buy or add is saved, even when a harvest resets.
+                </Text>
               </View>
             </View>
             <View style={styles.categoryFilterBlock}>
@@ -2150,7 +2144,7 @@ function InventoryTileItem({
               {categoryLabel}
             </Text>
             <Text style={[styles.emojiTileMeta, styles.inventoryMeta]} numberOfLines={1}>
-              {item.owned ? 'Unlocked' : 'Locked'}
+              {item.owned ? 'Ready' : 'Locked'}
             </Text>
           </View>
         </Pressable>
@@ -2457,6 +2451,33 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#14532d',
+  },
+  collectionSummary: {
+    marginTop: 12,
+    backgroundColor: '#ecfdf3',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    gap: 4,
+  },
+  collectionSummaryLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#047857',
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
+  },
+  collectionSummaryValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#134e32',
+  },
+  collectionSummaryHint: {
+    fontSize: 12,
+    color: '#1f2937',
+    lineHeight: 18,
   },
   emptyState: {
     width: '100%',
@@ -2785,25 +2806,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
   },
-  ghostButton: {
-    flex: 1,
-    borderRadius: 14,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: '#22543d',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ghostButtonText: {
-    textAlign: 'center',
-    color: '#22543d',
-    fontWeight: '600',
-  },
   primaryButton: {
     flex: 1,
     backgroundColor: '#22543d',
     borderRadius: 14,
     paddingVertical: 12,
+  },
+  clearButton: {
+    backgroundColor: '#dc2626',
+  },
+  clearButtonDisabled: {
+    backgroundColor: '#fca5a5',
   },
   primaryButtonDisabled: {
     backgroundColor: '#94a3b8',
@@ -2812,12 +2825,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#f0fff4',
     fontWeight: '700',
-  },
-  disabledSecondary: {
-    opacity: 0.6,
-  },
-  disabledText: {
-    color: '#718096',
   },
   sheetOverlay: {
     flex: 1,
@@ -2979,52 +2986,55 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 4,
   },
-  tileActionRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 12,
-    width: '100%',
-    alignItems: 'center',
-  },
-  tileLockToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    borderRadius: 18,
-    padding: 4,
-    backgroundColor: '#ecfdf3',
+  tileStatusBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(254, 215, 170, 0.92)',
     borderWidth: 1,
-    borderColor: '#bbf7d0',
-    gap: 6,
+    borderColor: 'rgba(251, 191, 36, 0.7)',
   },
-  tileLockSegment: {
-    flex: 1,
-    borderRadius: 14,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
+  tileStatusBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#92400e',
+  },
+  tileFooterRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    gap: 12,
+    width: '100%',
   },
-  tileLockSegmentActive: {
-    backgroundColor: '#16a34a',
-    shadowColor: '#0f5132',
-    shadowOpacity: 0.24,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
+  tileStatusPill: {
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
   },
-  tileLockSegmentInactive: {
-    backgroundColor: 'transparent',
+  tileStatusPillLocked: {
+    backgroundColor: '#fef3c7',
+    borderColor: '#fcd34d',
   },
-  tileLockText: {
+  tileStatusPillUnlocked: {
+    backgroundColor: '#dcfce7',
+    borderColor: '#34d399',
+  },
+  tileStatusText: {
     fontSize: 12,
     fontWeight: '700',
+  },
+  tileStatusTextLocked: {
+    color: '#92400e',
+  },
+  tileStatusTextUnlocked: {
     color: '#047857',
   },
-  tileLockTextActive: {
-    color: '#f0fff4',
-  },
-  tileActionButton: {
+  tileUnlockButton: {
     borderRadius: 14,
     paddingVertical: 8,
     paddingHorizontal: 16,
@@ -3032,23 +3042,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#22543d',
   },
-  tileActionButtonText: {
+  tileUnlockButtonDisabled: {
+    opacity: 0.6,
+  },
+  tileUnlockButtonText: {
     color: '#f0fff4',
     fontWeight: '700',
   },
-  tileUnlockBadge: {
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#dcfce7',
-    borderWidth: 1,
-    borderColor: '#bbf7d0',
-  },
-  tileUnlockBadgeText: {
-    color: '#047857',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.3,
+  tileOwnedHint: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#134e32',
   },
   sheetCloseButton: {
     marginTop: 12,

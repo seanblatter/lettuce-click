@@ -939,6 +939,8 @@ const styles = StyleSheet.create({
   headerWrapper: {
     paddingHorizontal: 24,
     paddingBottom: 6,
+    zIndex: 10,
+    elevation: 10,
   },
   headerShelf: {
     flexDirection: 'row',

@@ -1,7 +1,7 @@
 
 import type { ReactNode } from 'react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { useAudioPlayer } from 'expo-audio';
+import { Audio } from 'expo-av';
 
 import { MUSIC_AUDIO_MAP, MUSIC_OPTIONS, type MusicOption } from '@/constants/music';
 
@@ -25,9 +25,10 @@ export function AmbientAudioProvider({ children }: ProviderProps) {
   const [selectedTrackId, setSelectedTrackId] = useState<MusicOption['id']>(MUSIC_OPTIONS[0].id);
   const [isPlaying, setIsPlaying] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const player = useAudioPlayer(MUSIC_AUDIO_MAP[selectedTrackId]);
   const isPlayingRef = useRef(isPlaying);
   const trackRef = useRef(selectedTrackId);
+  const soundRef = useRef<Audio.Sound | null>(null);
+  const loadedTrackRef = useRef<MusicOption['id'] | null>(null);
 
   useEffect(() => {
     isPlayingRef.current = isPlaying;
@@ -37,80 +38,114 @@ export function AmbientAudioProvider({ children }: ProviderProps) {
     trackRef.current = selectedTrackId;
   }, [selectedTrackId]);
 
-  const ensurePlayback = useCallback(
-    async (source: number, shouldPlayOverride?: boolean) => {
-      const desiredPlayState = shouldPlayOverride ?? isPlayingRef.current;
-      const playerAny: any = player;
-
-      try {
-        const playbackOptions = {
-          isLooping: true,
-          shouldPlay: desiredPlayState,
-        };
-
-        let startedWithSource = false;
-
-        if (playerAny && typeof playerAny.replace === 'function') {
-          await Promise.resolve(playerAny.replace(source, playbackOptions));
-          startedWithSource = true;
-        } else if (playerAny && typeof playerAny.loadAsync === 'function') {
-          await Promise.resolve(playerAny.stop?.());
-          await Promise.resolve(playerAny.unloadAsync?.());
-          await Promise.resolve(playerAny.loadAsync(source, playbackOptions));
-        } else if (playerAny && typeof playerAny.play === 'function' && playerAny.play.length >= 1) {
-          await Promise.resolve(playerAny.play(source, playbackOptions));
-          startedWithSource = true;
-        } else if (playerAny && typeof playerAny.setSource === 'function') {
-          await Promise.resolve(playerAny.setSource(source));
-        }
-
-        if (playerAny) {
-          if (typeof playerAny.setStatus === 'function') {
-            await Promise.resolve(playerAny.setStatus({ isLooping: true }));
-          } else if (typeof playerAny.updateStatus === 'function') {
-            await Promise.resolve(playerAny.updateStatus({ isLooping: true }));
-          }
-
-          if (desiredPlayState) {
-            if (!startedWithSource) {
-              if (typeof playerAny.play === 'function' && playerAny.play.length === 0) {
-                await Promise.resolve(playerAny.play());
-              } else if (typeof playerAny.playAsync === 'function') {
-                await Promise.resolve(playerAny.playAsync());
-              } else if (typeof playerAny.replayAsync === 'function') {
-                await Promise.resolve(playerAny.replayAsync());
-              } else {
-                playerAny.seekTo?.(0);
-                playerAny.play?.();
-              }
-            }
-            console.log('[AmbientAudio]', 'Playing track', trackRef.current);
-          } else {
-            playerAny.pause?.();
-            console.log('[AmbientAudio]', 'Paused track', trackRef.current);
-          }
-        }
-
-        setError(null);
-      } catch (caught) {
-        console.warn('Ambient playback failed', caught);
-        setError(caught instanceof Error ? caught : new Error('Ambient playback failed to start'));
-        setIsPlaying(false);
-      }
-    },
-    [player]
-  );
-
   useEffect(() => {
-    const source = MUSIC_AUDIO_MAP[selectedTrackId];
-    if (!source) {
+    Audio.setAudioModeAsync({
+      allowsRecordingIOS: false,
+      staysActiveInBackground: true,
+      playsInSilentModeIOS: true,
+      interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
+      interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
+      shouldDuckAndroid: false,
+    }).catch((caught) => {
+      console.warn('Unable to configure audio mode', caught);
+    });
+  }, []);
+
+  const unloadCurrentSound = useCallback(async () => {
+    if (!soundRef.current) {
       return;
     }
 
-    ensurePlayback(source, isPlaying).catch((caught) => {
+    try {
+      await soundRef.current.stopAsync();
+    } catch (caught) {
+      console.warn('Failed to stop ambient audio', caught);
+    }
+
+    try {
+      await soundRef.current.unloadAsync();
+    } catch (caught) {
+      console.warn('Failed to unload ambient audio', caught);
+    }
+
+    soundRef.current = null;
+    loadedTrackRef.current = null;
+  }, []);
+
+  const ensureSound = useCallback(
+    async (trackId: MusicOption['id']) => {
+      const source = MUSIC_AUDIO_MAP[trackId];
+      if (!source) {
+        return { sound: null as Audio.Sound | null, isNew: false };
+      }
+
+      if (loadedTrackRef.current === trackId && soundRef.current) {
+        return { sound: soundRef.current, isNew: false };
+      }
+
+      await unloadCurrentSound();
+
+      try {
+        const { sound } = await Audio.Sound.createAsync(source, {
+          shouldPlay: false,
+          isLooping: true,
+          volume: 1,
+        });
+
+        soundRef.current = sound;
+        loadedTrackRef.current = trackId;
+        return { sound, isNew: true };
+      } catch (caught) {
+        throw caught instanceof Error ? caught : new Error('Failed to load ambient audio');
+      }
+    },
+    [unloadCurrentSound]
+  );
+
+  const applyPlaybackState = useCallback(async () => {
+    try {
+      const { sound, isNew } = await ensureSound(selectedTrackId);
+      if (!sound) {
+        return;
+      }
+
+      await sound.setIsLoopingAsync(true);
+
+      if (isPlayingRef.current) {
+        if (isNew) {
+          await sound.playFromPositionAsync(0);
+        } else {
+          await sound.playAsync();
+        }
+        console.log('[AmbientAudio]', 'Playing track', trackRef.current);
+      } else {
+        await sound.pauseAsync();
+        console.log('[AmbientAudio]', 'Paused track', trackRef.current);
+      }
+
+      setError(null);
+    } catch (caught) {
+      console.warn('Ambient playback failed', caught);
+      setError(caught instanceof Error ? caught : new Error('Ambient playback failed to start'));
+      setIsPlaying(false);
+    }
+  }, [ensureSound, selectedTrackId]);
+
+  useEffect(() => {
+    applyPlaybackState().catch((caught) => {
       console.warn('Unable to apply ambient playback state', caught);
     });
-  }, [ensurePlayback, isPlaying, selectedTrackId]);
+  }, [applyPlaybackState, isPlaying]);
+
+  useEffect(() => {
+    return () => {
+      if (soundRef.current) {
+        soundRef.current.unloadAsync().catch(() => {
+          // best effort cleanup
+        });
+      }
+    };
+  }, []);
 
   const selectTrack = useCallback((trackId: MusicOption['id']) => {
     setSelectedTrackId(trackId);

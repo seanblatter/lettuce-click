@@ -1,26 +1,37 @@
 import type { EmojiCategory, EmojiDefinition } from '@/context/GameContext';
 
-const CATEGORY_COST_MULTIPLIER: Record<EmojiCategory, number> = {
-  plants: 1.35,
-  scenery: 1.45,
-  creatures: 1.95,
-  features: 2.05,
-  accents: 1.4,
+export const MIN_EMOJI_COST = 100;
+export const MAX_EMOJI_COST = 10_000_000_000_000;
+
+const GAUSSIAN_MEAN = 0.5;
+const GAUSSIAN_STD_DEV = 0.18;
+
+const clampPercent = (value: number) => Math.min(Math.max(value, 0), 1);
+
+const gaussianWeight = (percent: number) => {
+  const normalized = (clampPercent(percent) - GAUSSIAN_MEAN) / GAUSSIAN_STD_DEV;
+  return Math.exp(-0.5 * normalized * normalized);
 };
 
-const COST_ROUNDING_INCREMENT = 5;
+const MIN_WEIGHT = gaussianWeight(0);
+const MAX_WEIGHT = gaussianWeight(GAUSSIAN_MEAN);
 
-const adjustCostForCategory = (cost: number, category: EmojiCategory) => {
-  const multiplier = CATEGORY_COST_MULTIPLIER[category] ?? 1.4;
-  const adjusted = cost * multiplier;
-  const rounded = Math.ceil(adjusted / COST_ROUNDING_INCREMENT) * COST_ROUNDING_INCREMENT;
-  return Math.max(rounded, cost + COST_ROUNDING_INCREMENT);
+export const computeBellCurveCost = (percent: number) => {
+  const weight = gaussianWeight(percent);
+  const span = MAX_WEIGHT - MIN_WEIGHT;
+  const normalized = span === 0 ? 0 : (weight - MIN_WEIGHT) / span;
+  const cost = MIN_EMOJI_COST + normalized * (MAX_EMOJI_COST - MIN_EMOJI_COST);
+  return Math.round(cost);
 };
+
+const PRICE_ANCHORS: Record<string, number> = {};
 
 const createEmoji = (
-  definition: Omit<EmojiDefinition, 'tags' | 'popularity'> & {
+  definition: Omit<EmojiDefinition, 'tags' | 'popularity' | 'cost'> & {
     tags: (string | { keyword: string; aliases?: string[] })[];
     popularity: number;
+    cost?: number;
+    priceAnchorPercent?: number;
   }
 ): EmojiDefinition => {
   const normalizedTags = definition.tags.flatMap((entry) => {
@@ -32,11 +43,15 @@ const createEmoji = (
     return [keyword, ...aliases];
   });
 
+  if (typeof definition.priceAnchorPercent === 'number') {
+    PRICE_ANCHORS[definition.id] = clampPercent(definition.priceAnchorPercent);
+  }
+
   return {
     id: definition.id,
     emoji: definition.emoji,
     name: definition.name,
-    cost: adjustCostForCategory(definition.cost, definition.category),
+    cost: definition.cost ?? MIN_EMOJI_COST,
     category: definition.category,
     tags: Array.from(new Set(normalizedTags)),
     popularity: definition.popularity,
@@ -401,9 +416,72 @@ const gardenEmojiEntries: EmojiDefinition[] = [
     popularity: 39,
     tags: ['lotus', 'pond', 'water garden', 'tranquil'],
   }),
+  createEmoji({
+    id: 'legendary-lettuce',
+    emoji: '🥬',
+    name: 'Legendary Lettuce',
+    category: 'plants',
+    popularity: 40,
+    priceAnchorPercent: 0.5,
+    cost: MAX_EMOJI_COST,
+    tags: [
+      { keyword: 'lettuce', aliases: ['leafy green', 'garden lettuce', 'salad green'] },
+      'signature',
+      'garden core',
+      'clicker icon',
+    ],
+  }),
 ];
 
-export const gardenEmojiCatalog = gardenEmojiEntries;
+const sortedByPopularity = [...gardenEmojiEntries].sort((a, b) => a.popularity - b.popularity);
+const totalEntries = sortedByPopularity.length;
+
+const pricedByPopularity = sortedByPopularity.map((entry, index) => {
+  const anchorPercent = PRICE_ANCHORS[entry.id];
+  const percent =
+    typeof anchorPercent === 'number'
+      ? anchorPercent
+      : totalEntries <= 1
+      ? 0.5
+      : index / (totalEntries - 1);
+  return { ...entry, cost: computeBellCurveCost(percent) };
+});
+
+const priceMap = new Map(pricedByPopularity.map((entry) => [entry.id, entry.cost]));
+
+export const gardenEmojiCatalog = gardenEmojiEntries.map((entry) => ({
+  ...entry,
+  cost: priceMap.get(entry.id) ?? computeBellCurveCost(0.5),
+}));
+
+const TRILLION = 1_000_000_000_000;
+const BILLION = 1_000_000_000;
+const MILLION = 1_000_000;
+
+const trimTrailingZeros = (value: number) => {
+  const fixed = value.toFixed(2);
+  return fixed.replace(/\.0+$/, '').replace(/(\.[1-9])0$/, '$1');
+};
+
+export const formatClickValue = (value: number) => {
+  if (value >= TRILLION) {
+    return `${trimTrailingZeros(value / TRILLION)}T`;
+  }
+
+  if (value >= BILLION) {
+    return `${trimTrailingZeros(value / BILLION)}B`;
+  }
+
+  if (value >= MILLION) {
+    return `${trimTrailingZeros(value / MILLION)}M`;
+  }
+
+  if (value >= 1000) {
+    return value.toLocaleString();
+  }
+
+  return `${Math.round(value)}`;
+};
 
 export const emojiCategoryOrder: Record<EmojiCategory, number> = {
   plants: 0,

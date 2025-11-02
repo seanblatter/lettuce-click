@@ -58,7 +58,9 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
   }, [premiumAccentColor]);
 
   const emojiOptions = useMemo(() => {
-    const sorted = [...emojiCatalog].sort((a, b) => (emojiInventory[b.id] ?? 0) - (emojiInventory[a.id] ?? 0));
+    const sorted = [...emojiCatalog].sort(
+      (a, b) => Number(Boolean(emojiInventory[b.id])) - Number(Boolean(emojiInventory[a.id]))
+    );
     return sorted.slice(0, 18);
   }, [emojiCatalog, emojiInventory]);
 

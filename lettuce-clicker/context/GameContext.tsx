@@ -9,7 +9,7 @@ import React, {
   useState,
 } from 'react';
 
-import { gardenEmojiCatalog } from '@/constants/emojiCatalog';
+import { computeBellCurveCost, gardenEmojiCatalog } from '@/constants/emojiCatalog';
 import { AppState, AppStateStatus } from 'react-native';
 
 export type HomeEmojiTheme =
@@ -117,7 +117,7 @@ type GameContextValue = {
   purchasedUpgrades: Record<string, number>;
   orbitingUpgradeEmojis: OrbitingEmoji[];
   emojiCatalog: EmojiDefinition[];
-  emojiInventory: Record<string, number>;
+  emojiInventory: Record<string, boolean>;
   placements: Placement[];
   profileName: string;
   profileUsername: string;
@@ -533,7 +533,7 @@ type StoredGameState = {
   harvest: number;
   lifetimeHarvest: number;
   purchasedUpgrades: Record<string, number>;
-  emojiInventory: Record<string, number>;
+  emojiInventory: Record<string, boolean>;
   placements: Placement[];
   orbitingUpgradeEmojis: OrbitingEmoji[];
   customEmojiCatalog?: Record<string, EmojiDefinition>;
@@ -553,7 +553,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [autoPerSecond, setAutoPerSecond] = useState(0);
   const [purchasedUpgrades, setPurchasedUpgrades] = useState<Record<string, number>>({});
   const [orbitingUpgradeEmojis, setOrbitingUpgradeEmojis] = useState<OrbitingEmoji[]>([]);
-  const [emojiInventory, setEmojiInventory] = useState<Record<string, number>>({});
+  const [emojiInventory, setEmojiInventory] = useState<Record<string, boolean>>({});
   const [placements, setPlacements] = useState<Placement[]>([]);
   const [profileName, setProfileName] = useState('');
   const [profileUsername, setProfileUsername] = useState('');
@@ -612,13 +612,12 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     const codePoints = Array.from(emojiValue).map((char) => char.codePointAt(0) ?? 0);
 
     if (codePoints.length === 0) {
-      return 120;
+      return computeBellCurveCost(0.5);
     }
 
-    const total = codePoints.reduce((sum, point) => sum + point, 0);
-    const base = 90;
-    const spread = 360;
-    return base + (total % spread);
+    const hash = codePoints.reduce((accumulator, point) => (accumulator * 257 + point) % 1_000_003, 0);
+    const normalized = hash / 1_000_003;
+    return computeBellCurveCost(normalized);
   }, []);
 
   const pickCustomCategory = useCallback((emojiValue: string): EmojiCategory => {
@@ -951,52 +950,55 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     return true;
   };
 
-  const purchaseEmoji = (emojiId: string) => {
-    const emoji = findEmojiDefinition(emojiId);
+  const purchaseEmoji = useCallback(
+    (emojiId: string) => {
+      const emoji = findEmojiDefinition(emojiId);
 
-    if (!emoji) {
-      return false;
-    }
+      if (!emoji) {
+        return false;
+      }
 
-    if (!spendHarvest(emoji.cost)) {
-      return false;
-    }
+      if (emojiInventory[emojiId]) {
+        return true;
+      }
 
-    setEmojiInventory((prev) => ({
-      ...prev,
-      [emojiId]: (prev[emojiId] ?? 0) + 1,
-    }));
+      if (!spendHarvest(emoji.cost)) {
+        return false;
+      }
 
-    return true;
-  };
+      setEmojiInventory((prev) => ({
+        ...prev,
+        [emojiId]: true,
+      }));
 
-  const placeEmoji = (emojiId: string, position: { x: number; y: number }) => {
-    const available = emojiInventory[emojiId] ?? 0;
+      return true;
+    },
+    [emojiInventory, findEmojiDefinition, spendHarvest]
+  );
 
-    if (available <= 0) {
-      return false;
-    }
+  const placeEmoji = useCallback(
+    (emojiId: string, position: { x: number; y: number }) => {
+      if (!emojiInventory[emojiId]) {
+        return false;
+      }
 
-    setEmojiInventory((prev) => ({
-      ...prev,
-      [emojiId]: Math.max((prev[emojiId] ?? 0) - 1, 0),
-    }));
+      setPlacements((prev) => [
+        ...prev,
+        {
+          id: createPlacementId(emojiId),
+          kind: 'emoji',
+          emojiId,
+          x: position.x,
+          y: position.y,
+          scale: 1,
+          rotation: 0,
+        },
+      ]);
 
-    setPlacements((prev) => [
-      ...prev,
-      {
-        id: createPlacementId(emojiId),
-        kind: 'emoji',
-        emojiId,
-        x: position.x,
-        y: position.y,
-        scale: 1,
-        rotation: 0,
-      },
-    ]);
-
-    return true;
-  };
+      return true;
+    },
+    [emojiInventory]
+  );
 
   const addPhotoPlacement = (imageUri: string, position: { x: number; y: number }) => {
     if (!imageUri) {
@@ -1079,37 +1081,13 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         return prevPlacements;
       }
 
-      if (target.kind === 'emoji') {
-        setEmojiInventory((prevInventory) => ({
-          ...prevInventory,
-          [target.emojiId]: (prevInventory[target.emojiId] ?? 0) + 1,
-        }));
-      }
-
       return prevPlacements.filter((placement) => placement.id !== placementId);
     });
   };
 
-  const clearGarden = () => {
-    setPlacements((prevPlacements) => {
-      if (prevPlacements.length === 0) {
-        return prevPlacements;
-      }
-
-      setEmojiInventory((prevInventory) => {
-        const restored = { ...prevInventory };
-        prevPlacements.forEach((placement) => {
-          if (placement.kind !== 'emoji') {
-            return;
-          }
-          restored[placement.emojiId] = (restored[placement.emojiId] ?? 0) + 1;
-        });
-        return restored;
-      });
-
-      return [];
-    });
-  };
+  const clearGarden = useCallback(() => {
+    setPlacements([]);
+  }, []);
 
   useEffect(() => {
     if (ownedThemes[homeEmojiTheme]) {
@@ -1194,8 +1172,11 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     addPhotoPlacement,
     addTextPlacement,
     removePlacement,
+    clearGarden,
     purchasePremiumUpgrade,
     purchaseEmojiTheme,
+    purchaseEmoji,
+    placeEmoji,
     setPremiumAccentColor,
     setCustomClickEmoji,
     setHomeEmojiTheme,
@@ -1264,7 +1245,17 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
               loadedAutoPerSecond = 0;
             }
             if (!shouldResetSession && parsed.emojiInventory && typeof parsed.emojiInventory === 'object') {
-              setEmojiInventory(parsed.emojiInventory);
+              setEmojiInventory(() => {
+                const normalized: Record<string, boolean> = {};
+                Object.entries(parsed.emojiInventory as Record<string, unknown>).forEach(([key, value]) => {
+                  if (typeof value === 'boolean') {
+                    normalized[key] = value;
+                  } else if (typeof value === 'number') {
+                    normalized[key] = value > 0;
+                  }
+                });
+                return normalized;
+              });
             } else if (shouldResetSession) {
               setEmojiInventory({});
             }

@@ -1,7 +1,7 @@
 import type { EmojiCategory, EmojiDefinition } from '@/context/GameContext';
 
-export const MIN_EMOJI_COST = 100;
-export const MAX_EMOJI_COST = 10_000_000_000_000;
+export const MIN_EMOJI_COST = 120;
+export const MAX_EMOJI_COST = 250_000;
 
 const GAUSSIAN_MEAN = 0.5;
 const GAUSSIAN_STD_DEV = 0.18;
@@ -417,11 +417,107 @@ const gardenEmojiEntries: EmojiDefinition[] = [
     tags: ['lotus', 'pond', 'water garden', 'tranquil'],
   }),
   createEmoji({
+    id: 'lavender-lane',
+    emoji: '🪻',
+    name: 'Lavender Lane',
+    category: 'plants',
+    popularity: 40,
+    tags: ['lavender', 'purple flowers', 'fragrance', 'calming bloom', 'herbal'],
+  }),
+  createEmoji({
+    id: 'bonsai-retreat',
+    emoji: '🎍',
+    name: 'Bonsai Retreat',
+    category: 'plants',
+    popularity: 41,
+    tags: ['bonsai', 'mini tree', 'zen garden', 'trimmed branches', 'careful pruning'],
+  }),
+  createEmoji({
+    id: 'autumn-maple-grove',
+    emoji: '🍁',
+    name: 'Autumn Maple Grove',
+    category: 'scenery',
+    popularity: 42,
+    tags: ['maple', 'fall leaves', 'crimson canopy', 'seasonal color', 'foliage'],
+  }),
+  createEmoji({
+    id: 'morning-mist-drift',
+    emoji: '🌫️',
+    name: 'Morning Mist Drift',
+    category: 'scenery',
+    popularity: 43,
+    tags: ['mist', 'fog', 'soft haze', 'cool dawn', 'breeze'],
+  }),
+  createEmoji({
+    id: 'gentle-hedgehog',
+    emoji: '🦔',
+    name: 'Gentle Hedgehog',
+    category: 'creatures',
+    popularity: 44,
+    tags: ['hedgehog', 'garden friend', 'spines', 'nocturnal', 'critter'],
+  }),
+  createEmoji({
+    id: 'midnight-owl-roost',
+    emoji: '🦉',
+    name: 'Midnight Owl Roost',
+    category: 'creatures',
+    popularity: 45,
+    tags: ['owl', 'night watch', 'wisdom', 'perch', 'stars'],
+  }),
+  createEmoji({
+    id: 'sage-teahouse',
+    emoji: '🍵',
+    name: 'Sage Teahouse',
+    category: 'features',
+    popularity: 46,
+    tags: ['tea', 'tea house', 'calm retreat', 'warm cup', 'gather'],
+  }),
+  createEmoji({
+    id: 'stone-arch-bridge',
+    emoji: '🌉',
+    name: 'Stone Arch Bridge',
+    category: 'features',
+    popularity: 47,
+    tags: ['bridge', 'archway', 'garden path', 'walkover', 'water crossing'],
+  }),
+  createEmoji({
+    id: 'twilight-wind-chimes',
+    emoji: '🎐',
+    name: 'Twilight Wind Chimes',
+    category: 'accents',
+    popularity: 48,
+    tags: ['wind chime', 'gentle sound', 'breeze song', 'evening accent', 'hanging charm'],
+  }),
+  createEmoji({
+    id: 'glimmer-orb-lights',
+    emoji: '🔮',
+    name: 'Glimmer Orb Lights',
+    category: 'accents',
+    popularity: 49,
+    tags: ['orb', 'mystic glow', 'path lights', 'floating light', 'spark'],
+  }),
+  createEmoji({
+    id: 'pocket-crickets',
+    emoji: '🦗',
+    name: 'Pocket Crickets',
+    category: 'creatures',
+    popularity: 50,
+    tags: ['cricket', 'evening song', 'chirp', 'nighttime', 'garden sound'],
+  }),
+  createEmoji({
+    id: 'cobblestone-gate',
+    emoji: '🚪',
+    name: 'Cobblestone Gate',
+    category: 'features',
+    popularity: 51,
+    tags: ['garden gate', 'entryway', 'stonework', 'welcome arch', 'entrance'],
+  }),
+  createEmoji({
     id: 'legendary-lettuce',
     emoji: '🥬',
     name: 'Legendary Lettuce',
     category: 'plants',
-    popularity: 40,
+    popularity: 60,
     priceAnchorPercent: 0.5,
     cost: MAX_EMOJI_COST,
     tags: [

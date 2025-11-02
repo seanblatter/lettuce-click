@@ -29,14 +29,7 @@ const SLEEP_MODE_OPTIONS = [
   { id: 'alarm', label: 'Wake alarm', description: 'Play gentle chimes at your wake time.' },
 ] as const;
 
-const SLEEP_TIMER_PRESETS = [
-  { id: '15', label: '15 min', minutes: 15 },
-  { id: '30', label: '30 min', minutes: 30 },
-  { id: '45', label: '45 min', minutes: 45 },
-  { id: '60', label: '60 min', minutes: 60 },
-  { id: '90', label: '90 min', minutes: 90 },
-  { id: '120', label: '120 min', minutes: 120 },
-] as const;
+const TIMER_MINUTE_OPTIONS = Array.from({ length: 36 }, (_, index) => (index + 1) * 5);
 
 const ALARM_HOUR_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1);
 const ALARM_MINUTE_OPTIONS = Array.from({ length: 60 }, (_, index) => index);
@@ -67,6 +60,10 @@ type Palette = {
   nowPlayingTitle: string;
   nowPlayingSubtitle: string;
   nowPlayingEmojiBackground: string;
+  nowPlayingControlBackground: string;
+  nowPlayingControlBorder: string;
+  nowPlayingControlIcon: string;
+  nowPlayingControlIconActive: string;
   sleepStatusBackground: string;
   sleepStatusBorder: string;
   sleepStatusLabel: string;
@@ -163,6 +160,10 @@ const DARK_PALETTE: Palette = {
   nowPlayingTitle: '#f6fff6',
   nowPlayingSubtitle: '#9cbda9',
   nowPlayingEmojiBackground: 'rgba(77, 255, 166, 0.22)',
+  nowPlayingControlBackground: 'rgba(77, 255, 166, 0.18)',
+  nowPlayingControlBorder: 'rgba(77, 255, 166, 0.45)',
+  nowPlayingControlIcon: '#f6fff6',
+  nowPlayingControlIconActive: '#062014',
   sleepStatusBackground: 'rgba(8, 30, 21, 0.85)',
   sleepStatusBorder: 'rgba(77, 255, 166, 0.18)',
   sleepStatusLabel: '#6ee7b7',
@@ -259,6 +260,10 @@ const LIGHT_PALETTE: Palette = {
   nowPlayingTitle: '#11402c',
   nowPlayingSubtitle: '#567d68',
   nowPlayingEmojiBackground: '#e3f4ea',
+  nowPlayingControlBackground: '#e1f3e7',
+  nowPlayingControlBorder: '#2dd78f',
+  nowPlayingControlIcon: '#0f3d2b',
+  nowPlayingControlIconActive: '#0f3d2b',
   sleepStatusBackground: '#f0f9f3',
   sleepStatusBorder: '#caead9',
   sleepStatusLabel: '#1f7a53',
@@ -514,17 +519,30 @@ const createStyles = (palette: Palette, isDark: boolean) =>
     },
     nowPlayingControls: {
       marginTop: 12,
+      flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
+      gap: 16,
     },
     nowPlayingControlButton: {
-      paddingVertical: 4,
-      paddingHorizontal: 6,
+      width: 54,
+      height: 54,
+      borderRadius: 27,
+      borderWidth: 2,
+      borderColor: palette.nowPlayingControlBorder,
+      backgroundColor: palette.nowPlayingControlBackground,
       alignItems: 'center',
       justifyContent: 'center',
+      shadowColor: palette.cardShadow,
+      shadowOpacity: isDark ? 0.5 : 0.18,
+      shadowRadius: isDark ? 16 : 10,
+      shadowOffset: { width: 0, height: isDark ? 10 : 6 },
+      elevation: isDark ? 5 : 2,
     },
     nowPlayingControlButtonActive: {
       transform: [{ scale: 1.05 }],
+      backgroundColor: palette.sourcePillActiveBackground,
+      borderColor: palette.sourcePillActiveBorder,
     },
     sleepProgressWrapper: {
       marginTop: 10,
@@ -754,30 +772,57 @@ const createStyles = (palette: Palette, isDark: boolean) =>
       letterSpacing: 0.8,
       textTransform: 'uppercase',
     },
-    sleepTimerGrid: {
+    sleepTimerWheelRow: {
+      marginTop: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    sleepTimerReadout: {
+      alignItems: 'center',
+      gap: 4,
+    },
+    sleepTimerReadoutValue: {
+      fontSize: 26,
+      fontWeight: '700',
+      color: palette.sleepTimerText,
+    },
+    sleepTimerReadoutHint: {
+      fontSize: 12,
+      color: palette.sleepModeDescription,
+    },
+    timerActionRow: {
+      marginTop: 18,
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: 10,
+      gap: 12,
     },
-    sleepTimerButton: {
-      paddingHorizontal: 16,
-      paddingVertical: 10,
-      borderRadius: 12,
+    timerActionCard: {
+      flex: 1,
+      minWidth: 150,
+      borderRadius: 18,
       borderWidth: 1,
       borderColor: palette.sleepTimerBorder,
       backgroundColor: palette.sleepTimerBackground,
+      paddingVertical: 16,
+      paddingHorizontal: 14,
+      gap: 6,
     },
-    sleepTimerButtonActive: {
-      backgroundColor: palette.sleepTimerBackgroundActive,
+    timerActionCardActive: {
       borderColor: palette.sleepTimerBorderActive,
+      backgroundColor: palette.sleepTimerBackgroundActive,
     },
-    sleepTimerText: {
+    timerActionLabel: {
       fontSize: 14,
-      fontWeight: '600',
+      fontWeight: '700',
       color: palette.sleepTimerText,
     },
-    sleepTimerTextActive: {
+    timerActionLabelActive: {
       color: palette.sleepTimerTextActive,
+    },
+    timerActionDescription: {
+      fontSize: 12,
+      lineHeight: 16,
+      color: palette.sleepModeDescription,
     },
     alarmPickerRow: {
       flexDirection: 'row',
@@ -885,7 +930,27 @@ const PRIORITIZED_GROUP_IDS = new Set(['forest', 'static', 'keys', 'ocean']);
 const formatAlarmDisplay = (hour: number, minute: number, period: AlarmPeriod) =>
   `${hour}:${minute.toString().padStart(2, '0')} ${period}`;
 
-const clampTimerMinutes = (minutes: number) => Math.max(1, Math.round(minutes));
+const clampTimerMinutes = (minutes: number) => {
+  if (!Number.isFinite(minutes)) {
+    return TIMER_MINUTE_OPTIONS[0];
+  }
+
+  const minimum = TIMER_MINUTE_OPTIONS[0];
+  const maximum = TIMER_MINUTE_OPTIONS[TIMER_MINUTE_OPTIONS.length - 1];
+  const clamped = Math.max(minimum, Math.min(minutes, maximum));
+
+  let closest = minimum;
+  let smallestDelta = Math.abs(closest - clamped);
+  for (const option of TIMER_MINUTE_OPTIONS) {
+    const delta = Math.abs(option - clamped);
+    if (delta < smallestDelta) {
+      closest = option;
+      smallestDelta = delta;
+    }
+  }
+
+  return closest;
+};
 
 const ceilingMinutesFromMs = (ms: number) => Math.max(1, Math.ceil(ms / 60000));
 
@@ -920,9 +985,27 @@ const formatDurationCompact = (minutes: number) => {
 type SleepMode = (typeof SLEEP_MODE_OPTIONS)[number]['id'];
 type AlarmPeriod = 'AM' | 'PM';
 
+type TimerAction = 'stop' | 'alarm';
+
+const TIMER_ACTION_OPTIONS: { id: TimerAction; title: string; description: string }[] = [
+  { id: 'stop', title: 'Fade out audio', description: 'Stop ambience when the timer completes.' },
+  {
+    id: 'alarm',
+    title: 'Pause & chime',
+    description: 'Pause ambience and play a gentle alarm until you stop it.',
+  },
+];
+
 type SleepCircleState =
-  | { mode: 'timer'; duration: number; targetTimestamp: number }
-  | { mode: 'alarm'; fireTimestamp: number; hour: number; minute: number; period: AlarmPeriod }
+  | { mode: 'timer'; duration: number; targetTimestamp: number; startedAt: number; action: TimerAction }
+  | {
+      mode: 'alarm';
+      fireTimestamp: number;
+      hour: number;
+      minute: number;
+      period: AlarmPeriod;
+      scheduledAt: number;
+    }
   | null;
 
 type MusicContentProps = {
@@ -957,23 +1040,25 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
     error: ambientError,
     selectTrack,
     togglePlayback,
+    pause: pauseAmbient,
   } = useAmbientAudio();
   const [sleepModalOpen, setSleepModalOpen] = useState(false);
   const [sleepMode, setSleepMode] = useState<SleepMode>('timer');
   const [sleepTimerMinutes, setSleepTimerMinutes] = useState<number>(30);
+  const [sleepTimerAction, setSleepTimerAction] = useState<TimerAction>('stop');
   const [alarmHour, setAlarmHour] = useState<number>(7);
   const [alarmMinute, setAlarmMinute] = useState<number>(0);
   const [alarmPeriod, setAlarmPeriod] = useState<AlarmPeriod>('AM');
   const [sleepCircle, setSleepCircle] = useState<SleepCircleState>(null);
   const [sleepNow, setSleepNow] = useState(() => Date.now());
-  const sleepTimeoutRef = useRef<number | null>(null);
+  const sleepTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const alarmPlayer = useAudioPlayer(ALARM_SOUND_URI);
   const [showAllGroups, setShowAllGroups] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => {
       setSleepNow(Date.now());
-    }, 15000);
+    }, 1000);
 
     return () => clearInterval(interval);
   }, []);
@@ -1040,14 +1125,18 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
       if (remainingMs <= 0) {
         return {
           headline: 'Timer · ready',
-          detail: 'Awaiting your next session',
+          detail:
+            sleepCircle.action === 'alarm'
+              ? 'Alarm standing by for your next session'
+              : 'Awaiting your next session',
         };
       }
 
       const minutes = ceilingMinutesFromMs(remainingMs);
+      const detailPrefix = sleepCircle.action === 'alarm' ? 'Alarm in' : 'Stops in';
       return {
         headline: `Timer · ${formatDurationCompact(minutes)}`,
-        detail: `Stops in ${formatDurationLong(minutes)}`,
+        detail: `${detailPrefix} ${formatDurationLong(minutes)}`,
       };
     }
 
@@ -1068,45 +1157,78 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
     };
   }, [sleepCircle, sleepNow]);
 
-  const timerProgress = useMemo(() => {
-    if (!sleepCircle || sleepCircle.mode !== 'timer') {
+  const sleepProgress = useMemo(() => {
+    if (!sleepCircle) {
       return null;
     }
 
-    const totalDurationMs = sleepCircle.duration * 60000;
+    if (sleepCircle.mode === 'timer') {
+      const totalDurationMs = sleepCircle.duration * 60000;
 
-    if (totalDurationMs <= 0) {
+      if (totalDurationMs <= 0) {
+        return 1;
+      }
+
+      const remainingMs = sleepCircle.targetTimestamp - sleepNow;
+      const clampedRemaining = Math.min(Math.max(remainingMs, 0), totalDurationMs);
+      const elapsed = totalDurationMs - clampedRemaining;
+      return Math.min(Math.max(elapsed / totalDurationMs, 0), 1);
+    }
+
+    const totalAlarmMs = sleepCircle.fireTimestamp - sleepCircle.scheduledAt;
+
+    if (totalAlarmMs <= 0) {
       return 1;
     }
 
-    const remainingMs = sleepCircle.targetTimestamp - sleepNow;
-    const clampedRemaining = Math.min(Math.max(remainingMs, 0), totalDurationMs);
-    const elapsed = totalDurationMs - clampedRemaining;
-    return Math.min(Math.max(elapsed / totalDurationMs, 0), 1);
+    const elapsed = Math.min(
+      Math.max(sleepNow - sleepCircle.scheduledAt, 0),
+      totalAlarmMs
+    );
+    return Math.min(Math.max(elapsed / totalAlarmMs, 0), 1);
   }, [sleepCircle, sleepNow]);
 
   const handleSleepComplete = useCallback(
-    async (mode: SleepMode) => {
+    async (state: Exclude<SleepCircleState, null>) => {
       setSleepCircle(null);
       Vibration.vibrate([0, 400, 200, 400], false);
 
-      try {
-        if (mode === 'alarm') {
+      pauseAmbient();
+
+      const shouldPlayAlarm =
+        state.mode === 'alarm' || (state.mode === 'timer' && state.action === 'alarm');
+
+      if (shouldPlayAlarm) {
+        try {
           alarmPlayer.seekTo(0);
           alarmPlayer.play();
+        } catch (error) {
+          console.warn('Alarm playback failed', error);
         }
-      } catch (error) {
-        console.warn('Alarm playback failed', error);
       }
 
-      Alert.alert(
-        mode === 'timer' ? 'Timer finished' : 'Alarm ringing',
-        mode === 'timer'
-          ? 'Playback faded out with the Dream Capsule timer.'
-          : 'Time to wake up! Your Dream Capsule alarm is sounding.'
-      );
+      const title = shouldPlayAlarm ? 'Alarm ringing' : 'Timer finished';
+      const message = shouldPlayAlarm
+        ? 'Time to wake up! Your Dream Capsule alarm is sounding.'
+        : 'Playback faded out with the Dream Capsule timer.';
+
+      Alert.alert(title, message, [
+        shouldPlayAlarm
+          ? {
+              text: 'Stop alarm',
+              onPress: () => {
+                try {
+                  alarmPlayer.pause();
+                  alarmPlayer.seekTo(0);
+                } catch (error) {
+                  console.warn('Alarm pause failed', error);
+                }
+              },
+            }
+          : { text: 'OK' },
+      ]);
     },
-    [alarmPlayer]
+    [alarmPlayer, pauseAmbient]
   );
 
   const scheduleSleepTrigger = useCallback(
@@ -1123,8 +1245,9 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
       const target = state.mode === 'timer' ? state.targetTimestamp : state.fireTimestamp;
       const delay = Math.max(target - Date.now(), 0);
 
+      const capturedState = state;
       sleepTimeoutRef.current = setTimeout(() => {
-        handleSleepComplete(state.mode);
+        handleSleepComplete(capturedState);
       }, delay);
     },
     [handleSleepComplete]
@@ -1139,11 +1262,16 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
       const remainingMs = sleepCircle.targetTimestamp - Date.now();
       setSleepMode('timer');
       setSleepTimerMinutes(clampTimerMinutes(remainingMs > 0 ? remainingMs / 60000 : sleepCircle.duration));
+      setSleepTimerAction(sleepCircle.action);
     } else if (sleepCircle?.mode === 'alarm') {
       setSleepMode('alarm');
       setAlarmHour(sleepCircle.hour);
       setAlarmMinute(sleepCircle.minute);
       setAlarmPeriod(sleepCircle.period);
+    } else {
+      setSleepMode('timer');
+      setSleepTimerMinutes((previous) => clampTimerMinutes(previous));
+      setSleepTimerAction('stop');
     }
     setSleepModalOpen(true);
   }, [sleepCircle]);
@@ -1151,8 +1279,15 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
   const handleApplySleepCircle = useCallback(() => {
     if (sleepMode === 'timer') {
       const minutes = clampTimerMinutes(sleepTimerMinutes);
-      const targetTimestamp = Date.now() + minutes * 60000;
-      setSleepCircle({ mode: 'timer', duration: minutes, targetTimestamp });
+      const startedAt = Date.now();
+      const targetTimestamp = startedAt + minutes * 60000;
+      setSleepCircle({
+        mode: 'timer',
+        duration: minutes,
+        targetTimestamp,
+        startedAt,
+        action: sleepTimerAction,
+      });
     } else {
       const normalizedHour = alarmHour % 12 === 0 ? 12 : alarmHour % 12;
       const hour24 = (normalizedHour % 12) + (alarmPeriod === 'PM' ? 12 : 0);
@@ -1171,13 +1306,15 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
         hour: normalizedHour,
         minute: alarmMinute,
         period: alarmPeriod,
+        scheduledAt: now.getTime(),
       });
     }
     setSleepModalOpen(false);
-  }, [alarmHour, alarmMinute, alarmPeriod, sleepMode, sleepTimerMinutes]);
+  }, [alarmHour, alarmMinute, alarmPeriod, sleepMode, sleepTimerAction, sleepTimerMinutes]);
 
   const handleClearSleepCircle = useCallback(() => {
     setSleepCircle(null);
+    setSleepTimerAction('stop');
     setSleepModalOpen(false);
   }, []);
 
@@ -1191,6 +1328,36 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
     },
     [selectTrack]
   );
+
+  const handleSelectPrevious = useCallback(() => {
+    if (MUSIC_OPTIONS.length === 0) {
+      return;
+    }
+
+    const currentIndex = MUSIC_OPTIONS.findIndex((option) => option.id === selectedTrackId);
+    const safeIndex = currentIndex >= 0 ? currentIndex : 0;
+    const previousIndex = (safeIndex - 1 + MUSIC_OPTIONS.length) % MUSIC_OPTIONS.length;
+    const previousTrack = MUSIC_OPTIONS[previousIndex];
+
+    if (previousTrack && previousTrack.id !== selectedTrackId) {
+      selectTrack(previousTrack.id);
+    }
+  }, [selectTrack, selectedTrackId]);
+
+  const handleSelectNext = useCallback(() => {
+    if (MUSIC_OPTIONS.length === 0) {
+      return;
+    }
+
+    const currentIndex = MUSIC_OPTIONS.findIndex((option) => option.id === selectedTrackId);
+    const safeIndex = currentIndex >= 0 ? currentIndex : 0;
+    const nextIndex = (safeIndex + 1) % MUSIC_OPTIONS.length;
+    const nextTrack = MUSIC_OPTIONS[nextIndex];
+
+    if (nextTrack && nextTrack.id !== selectedTrackId) {
+      selectTrack(nextTrack.id);
+    }
+  }, [selectTrack, selectedTrackId]);
 
   const handleToggleAmbientPlayback = useCallback(() => {
     togglePlayback();
@@ -1286,10 +1453,29 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
           </View>
           <View style={styles.nowPlayingControls}>
             <Pressable
-              onPress={handleToggleAmbientPlayback}
-              style={[
+              onPress={handleSelectPrevious}
+              style={({ pressed }) => [
                 styles.nowPlayingControlButton,
-                isAmbientPlaying && styles.nowPlayingControlButtonActive,
+                pressed && styles.nowPlayingControlButtonActive,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Play previous ambience"
+              accessibilityHint="Loads the previous ambience in the list"
+              hitSlop={10}
+            >
+              {({ pressed }) => (
+                <Feather
+                  name="skip-back"
+                  size={24}
+                  color={pressed ? palette.nowPlayingControlIconActive : palette.nowPlayingControlIcon}
+                />
+              )}
+            </Pressable>
+            <Pressable
+              onPress={handleToggleAmbientPlayback}
+              style={({ pressed }) => [
+                styles.nowPlayingControlButton,
+                (isAmbientPlaying || pressed) && styles.nowPlayingControlButtonActive,
               ]}
               accessibilityRole="button"
               accessibilityLabel={isAmbientPlaying ? 'Pause ambience' : 'Play ambience'}
@@ -1298,15 +1484,41 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
                   ? 'Pauses the currently playing ambience'
                   : 'Starts the selected ambience mix'
               }
+              hitSlop={12}
             >
-              <Feather
-                name={isAmbientPlaying ? 'pause' : 'play'}
-                size={34}
-                color={isAmbientPlaying ? palette.sourcePillActiveText : palette.sourcePillText}
-              />
+              {({ pressed }) => (
+                <Feather
+                  name={isAmbientPlaying ? 'pause' : 'play'}
+                  size={30}
+                  color={
+                    isAmbientPlaying || pressed
+                      ? palette.nowPlayingControlIconActive
+                      : palette.nowPlayingControlIcon
+                  }
+                />
+              )}
+            </Pressable>
+            <Pressable
+              onPress={handleSelectNext}
+              style={({ pressed }) => [
+                styles.nowPlayingControlButton,
+                pressed && styles.nowPlayingControlButtonActive,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Play next ambience"
+              accessibilityHint="Loads the next ambience in the list"
+              hitSlop={10}
+            >
+              {({ pressed }) => (
+                <Feather
+                  name="skip-forward"
+                  size={24}
+                  color={pressed ? palette.nowPlayingControlIconActive : palette.nowPlayingControlIcon}
+                />
+              )}
             </Pressable>
           </View>
-          {timerProgress !== null ? (
+          {sleepProgress !== null ? (
             <View
               style={styles.sleepProgressWrapper}
               accessible
@@ -1315,14 +1527,14 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
               accessibilityValue={{
                 min: 0,
                 max: 100,
-                now: Math.round(timerProgress * 100),
+                now: Math.round(sleepProgress * 100),
               }}
             >
               <View style={styles.sleepProgressTrack}>
                 <View
                   style={[
                     styles.sleepProgressFill,
-                    { width: `${Math.min(Math.max(timerProgress, 0), 1) * 100}%` },
+                    { width: `${Math.min(Math.max(sleepProgress, 0), 1) * 100}%` },
                   ]}
                 />
               </View>
@@ -1485,24 +1697,43 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
               {sleepMode === 'timer' ? 'Timer length' : 'Wake time'}
             </Text>
             {sleepMode === 'timer' ? (
-              <View style={styles.sleepTimerGrid}>
-                {SLEEP_TIMER_PRESETS.map((preset) => {
-                  const isActive = sleepTimerMinutes === preset.minutes;
-                  return (
-                    <Pressable
-                      key={preset.id}
-                      style={[styles.sleepTimerButton, isActive && styles.sleepTimerButtonActive]}
-                      onPress={() => setSleepTimerMinutes(preset.minutes)}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: isActive }}
-                    >
-                      <Text style={[styles.sleepTimerText, isActive && styles.sleepTimerTextActive]}>
-                        {preset.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
+              <>
+                <View style={styles.sleepTimerReadout}>
+                  <Text style={styles.sleepTimerReadoutValue}>
+                    {formatDurationLong(sleepTimerMinutes)}
+                  </Text>
+                  <Text style={styles.sleepTimerReadoutHint}>Timer duration</Text>
+                </View>
+                <View style={styles.sleepTimerWheelRow}>
+                  <WheelPicker
+                    data={TIMER_MINUTE_OPTIONS}
+                    value={clampTimerMinutes(sleepTimerMinutes)}
+                    onChange={setSleepTimerMinutes}
+                    formatter={(value) => `${value} min`}
+                    label="Timer length"
+                    styles={styles}
+                  />
+                </View>
+                <View style={styles.timerActionRow}>
+                  {TIMER_ACTION_OPTIONS.map((option) => {
+                    const isActive = sleepTimerAction === option.id;
+                    return (
+                      <Pressable
+                        key={option.id}
+                        style={[styles.timerActionCard, isActive && styles.timerActionCardActive]}
+                        onPress={() => setSleepTimerAction(option.id)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: isActive }}
+                      >
+                        <Text style={[styles.timerActionLabel, isActive && styles.timerActionLabelActive]}>
+                          {option.title}
+                        </Text>
+                        <Text style={styles.timerActionDescription}>{option.description}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </>
             ) : (
               <View style={styles.alarmPickerRow}>
                 <WheelPicker

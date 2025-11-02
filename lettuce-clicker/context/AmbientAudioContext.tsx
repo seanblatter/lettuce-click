@@ -1,7 +1,7 @@
 
 import type { ReactNode } from 'react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Audio } from 'expo-av';
+import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 
 import { MUSIC_AUDIO_MAP, MUSIC_OPTIONS, type MusicOption } from '@/constants/music';
 
@@ -23,147 +23,69 @@ type ProviderProps = {
 
 export function AmbientAudioProvider({ children }: ProviderProps) {
   const [selectedTrackId, setSelectedTrackId] = useState<MusicOption['id']>(MUSIC_OPTIONS[0].id);
-  const [isPlaying, setIsPlaying] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const isPlayingRef = useRef(isPlaying);
-  const trackRef = useRef(selectedTrackId);
-  const soundRef = useRef<Audio.Sound | null>(null);
-  const loadedTrackRef = useRef<MusicOption['id'] | null>(null);
-
+  
+  const player = useAudioPlayer(MUSIC_AUDIO_MAP[selectedTrackId]);
+  const status = useAudioPlayerStatus(player);
+  
+  const isPlaying = status.playing;
+  
+  // Handle track changes
   useEffect(() => {
-    isPlayingRef.current = isPlaying;
-  }, [isPlaying]);
-
-  useEffect(() => {
-    trackRef.current = selectedTrackId;
-  }, [selectedTrackId]);
-
-  useEffect(() => {
-    Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      staysActiveInBackground: true,
-      playsInSilentModeIOS: true,
-      interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
-      interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
-      shouldDuckAndroid: false,
-    }).catch((caught) => {
-      console.warn('Unable to configure audio mode', caught);
-    });
-  }, []);
-
-  const unloadCurrentSound = useCallback(async () => {
-    if (!soundRef.current) {
-      return;
-    }
-
-    try {
-      await soundRef.current.stopAsync();
-    } catch (caught) {
-      console.warn('Failed to stop ambient audio', caught);
-    }
-
-    try {
-      await soundRef.current.unloadAsync();
-    } catch (caught) {
-      console.warn('Failed to unload ambient audio', caught);
-    }
-
-    soundRef.current = null;
-    loadedTrackRef.current = null;
-  }, []);
-
-  const ensureSound = useCallback(
-    async (trackId: MusicOption['id']) => {
-      const source = MUSIC_AUDIO_MAP[trackId];
-      if (!source) {
-        return { sound: null as Audio.Sound | null, isNew: false };
-      }
-
-      if (loadedTrackRef.current === trackId && soundRef.current) {
-        return { sound: soundRef.current, isNew: false };
-      }
-
-      await unloadCurrentSound();
-
+    const source = MUSIC_AUDIO_MAP[selectedTrackId];
+    if (source) {
       try {
-        const { sound } = await Audio.Sound.createAsync(source, {
-          shouldPlay: false,
-          isLooping: true,
-          volume: 1,
-        });
-
-        soundRef.current = sound;
-        loadedTrackRef.current = trackId;
-        return { sound, isNew: true };
+        player.replace(source);
+        player.loop = true;
+        setError(null);
       } catch (caught) {
-        throw caught instanceof Error ? caught : new Error('Failed to load ambient audio');
+        console.warn('Failed to load ambient audio', caught);
+        setError(caught instanceof Error ? caught : new Error('Failed to load ambient audio'));
       }
-    },
-    [unloadCurrentSound]
-  );
-
-  const applyPlaybackState = useCallback(async () => {
-    try {
-      const { sound, isNew } = await ensureSound(selectedTrackId);
-      if (!sound) {
-        return;
-      }
-
-      await sound.setIsLoopingAsync(true);
-
-      if (isPlayingRef.current) {
-        if (isNew) {
-          await sound.playFromPositionAsync(0);
-        } else {
-          await sound.playAsync();
-        }
-        console.log('[AmbientAudio]', 'Playing track', trackRef.current);
-      } else {
-        await sound.pauseAsync();
-        console.log('[AmbientAudio]', 'Paused track', trackRef.current);
-      }
-
-      setError(null);
-    } catch (caught) {
-      console.warn('Ambient playback failed', caught);
-      setError(caught instanceof Error ? caught : new Error('Ambient playback failed to start'));
-      setIsPlaying(false);
     }
-  }, [ensureSound, selectedTrackId]);
-
-  useEffect(() => {
-    applyPlaybackState().catch((caught) => {
-      console.warn('Unable to apply ambient playback state', caught);
-    });
-  }, [applyPlaybackState, isPlaying]);
-
-  useEffect(() => {
-    return () => {
-      if (soundRef.current) {
-        soundRef.current.unloadAsync().catch(() => {
-          // best effort cleanup
-        });
-      }
-    };
-  }, []);
+  }, [selectedTrackId, player]);
 
   const selectTrack = useCallback((trackId: MusicOption['id']) => {
     setSelectedTrackId(trackId);
-    setIsPlaying(true);
     setError(null);
-  }, []);
+    // Auto-play when selecting a new track
+    setTimeout(() => {
+      try {
+        player.play();
+      } catch (caught) {
+        console.warn('Failed to start playback', caught);
+        setError(caught instanceof Error ? caught : new Error('Failed to start playback'));
+      }
+    }, 100); // Small delay to ensure track is loaded
+  }, [player]);
 
   const play = useCallback(() => {
-    setIsPlaying(true);
-  }, []);
+    try {
+      player.play();
+      setError(null);
+    } catch (caught) {
+      console.warn('Failed to start playback', caught);
+      setError(caught instanceof Error ? caught : new Error('Failed to start playback'));
+    }
+  }, [player]);
 
   const pause = useCallback(() => {
-    setIsPlaying(false);
-  }, []);
+    try {
+      player.pause();
+      setError(null);
+    } catch (caught) {
+      console.warn('Failed to pause playback', caught);
+      setError(caught instanceof Error ? caught : new Error('Failed to pause playback'));
+    }
+  }, [player]);
 
   const togglePlayback = useCallback(() => {
-    setIsPlaying((prev) => !prev);
-  }, []);
+    if (isPlaying) {
+      pause();
+    } else {
+      play();
+    }
+  }, [isPlaying, play, pause]);
 
   const value = useMemo(
     () => ({

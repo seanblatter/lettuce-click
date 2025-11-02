@@ -9,7 +9,8 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.lettucepark.lettuce-clicker"
     },
     "android": {
       "adaptiveIcon": {
@@ -37,13 +38,6 @@
           "dark": {
             "backgroundColor": "#000000"
           }
-        }
-      ],
-      [
-        "expo-ads-admob",
-        {
-          "androidAppId": "ca-app-pub-7849823724462832~3719046909",
-          "iosAppId": "ca-app-pub-7849823724462832~3844111939"
         }
       ]
     ],

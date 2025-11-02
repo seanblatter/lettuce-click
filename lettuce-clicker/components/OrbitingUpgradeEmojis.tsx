@@ -13,10 +13,10 @@ import {
 import type { HomeEmojiTheme, OrbitingEmoji } from '@/context/GameContext';
 
 const FULL_ROTATION_RADIANS = Math.PI * 2;
-const DEFAULT_RADIUS = Math.min(WINDOW_WIDTH, WINDOW_HEIGHT) * 0.38;
 const WINDOW = Dimensions.get('window');
 const WINDOW_WIDTH = WINDOW.width;
 const WINDOW_HEIGHT = WINDOW.height;
+const DEFAULT_RADIUS = Math.min(WINDOW_WIDTH, WINDOW_HEIGHT) * 0.38;
 
 const MATRIX_EXTRA_SPREAD = 220;
 const MATRIX_WIDTH = WINDOW_WIDTH + MATRIX_EXTRA_SPREAD;

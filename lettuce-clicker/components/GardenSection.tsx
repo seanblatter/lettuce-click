@@ -1,4 +1,4 @@
-import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -688,6 +688,11 @@ export function GardenSection({
     [setIsDrawingMode, setShowExtendedPalette]
   );
 
+  const handleClearDrawings = useCallback(() => {
+    setStrokes([]);
+    setCurrentStroke(null);
+  }, []);
+
   const handleClearGarden = useCallback(() => {
     if (placements.length > 0) {
       clearGarden();
@@ -726,11 +731,6 @@ export function GardenSection({
       setIsSavingSnapshot(false);
     }
   }, [canvasRef, isSavingSnapshot]);
-
-  const handleClearDrawings = useCallback(() => {
-    setStrokes([]);
-    setCurrentStroke(null);
-  }, []);
 
   const handleAddPhoto = useCallback(async () => {
     if (isPickingPhoto) {
@@ -854,10 +854,10 @@ export function GardenSection({
   const renderStrokeSegments = useCallback(
     (stroke: Stroke, prefix: string) => {
       if (stroke.points.length === 0) {
-        return [] as JSX.Element[];
+        return [] as React.ReactElement[];
       }
 
-      const segments: JSX.Element[] = [];
+      const segments: React.ReactElement[] = [];
       const firstPoint = stroke.points[0];
       segments.push(
         <View
@@ -1015,7 +1015,7 @@ export function GardenSection({
 
   const clampedTextScale = clamp(textScale, TEXT_SCALE_MIN, TEXT_SCALE_MAX);
   const textScaleRatio =
-    TEXT_SCALE_MAX === TEXT_SCALE_MIN
+    TEXT_SCALE_MAX - TEXT_SCALE_MIN === 0
       ? 0
       : (clampedTextScale - TEXT_SCALE_MIN) / (TEXT_SCALE_MAX - TEXT_SCALE_MIN);
   const sliderTrackWidth = Math.max(textSliderWidth - 28, 0);
@@ -1241,7 +1241,7 @@ export function GardenSection({
             onTouchEnd={handleCanvasTouchEnd}
             onTouchCancel={handleCanvasTouchEnd}>
             <View pointerEvents="none" style={styles.drawingSurface}>
-              {strokes.reduce<JSX.Element[]>((acc, stroke) => {
+              {strokes.reduce<React.ReactElement[]>((acc, stroke) => {
                 acc.push(...renderStrokeSegments(stroke, stroke.id));
                 return acc;
               }, [])}

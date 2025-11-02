@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Alert,
+  Image,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -7,6 +18,23 @@ import * as ImagePicker from 'expo-image-picker';
 import { useGame } from '@/context/GameContext';
 
 const PREMIUM_ACCENT_OPTIONS = ['#1f6f4a', '#047857', '#2563eb', '#a855f7', '#f97316', '#0ea5e9'];
+const BACKGROUND_WHEEL_COLORS = [
+  '#f2f9f2',
+  '#ffffff',
+  '#e0f2fe',
+  '#fef3c7',
+  '#fde68a',
+  '#e9d5ff',
+  '#fce7f3',
+  '#fee2e2',
+  '#dcfce7',
+  '#cffafe',
+  '#e2e8f0',
+  '#1f2937',
+];
+const BACKGROUND_WHEEL_DIAMETER = 160;
+const BACKGROUND_WHEEL_RADIUS = 64;
+const BACKGROUND_WHEEL_SWATCH_SIZE = 36;
 
 type ProfileContentProps = {
   mode?: 'screen' | 'modal';
@@ -28,6 +56,10 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
     purchasePremiumUpgrade,
     setPremiumAccentColor,
     setCustomClickEmoji,
+    gardenBackgroundColor,
+    setGardenBackgroundColor,
+    profilePhotoWidgetEnabled,
+    setProfilePhotoWidgetEnabled,
     emojiCatalog,
     emojiInventory,
     registerCustomEmoji,
@@ -38,6 +70,7 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
   const [isSaving, setIsSaving] = useState(false);
   const [emojiInput, setEmojiInput] = useState(customClickEmoji);
   const [accentSelection, setAccentSelection] = useState(premiumAccentColor);
+  const [showBackgroundPalette, setShowBackgroundPalette] = useState(false);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const emojiInputRef = useRef<TextInput>(null);
 
@@ -63,6 +96,18 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
     );
     return sorted.slice(0, 18);
   }, [emojiCatalog, emojiInventory]);
+  const backgroundWheelPositions = useMemo(
+    () =>
+      BACKGROUND_WHEEL_COLORS.map((color, index) => {
+        const angle = (index / BACKGROUND_WHEEL_COLORS.length) * 2 * Math.PI - Math.PI / 2;
+        const center = BACKGROUND_WHEEL_DIAMETER / 2;
+        const offset = BACKGROUND_WHEEL_SWATCH_SIZE / 2;
+        const left = center + Math.cos(angle) * BACKGROUND_WHEEL_RADIUS - offset;
+        const top = center + Math.sin(angle) * BACKGROUND_WHEEL_RADIUS - offset;
+        return { color, left, top };
+      }),
+    []
+  );
 
   const persistProfile = useCallback(() => {
     setIsSaving(true);
@@ -113,7 +158,8 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
 
   const handleRemoveImage = useCallback(() => {
     setProfileImageUri(null);
-  }, [setProfileImageUri]);
+    setProfilePhotoWidgetEnabled(false);
+  }, [setProfileImageUri, setProfilePhotoWidgetEnabled]);
 
   const handleUpgrade = useCallback(() => {
     if (hasPremiumUpgrade) {
@@ -142,6 +188,21 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
     },
     [hasPremiumUpgrade, setPremiumAccentColor]
   );
+
+  const handleToggleBackgroundPalette = useCallback(() => {
+    setShowBackgroundPalette((prev) => !prev);
+  }, []);
+
+  const handleSelectBackgroundColor = useCallback(
+    (color: string) => {
+      setGardenBackgroundColor(color);
+    },
+    [setGardenBackgroundColor]
+  );
+
+  const handleResetBackground = useCallback(() => {
+    setGardenBackgroundColor('#f2f9f2');
+  }, [setGardenBackgroundColor]);
 
   const applyEmojiSelection = useCallback(
     (value: string) => {
@@ -211,6 +272,19 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
     () => [styles.content, { paddingBottom: 40 + insets.bottom }],
     [insets.bottom]
   );
+  const widgetDisabled = !profileImageUri;
+  const widgetValue = widgetDisabled ? false : profilePhotoWidgetEnabled;
+  const widgetDescription = widgetDisabled
+    ? 'Add a photo to enable the widget preview.'
+    : Platform.OS === 'ios'
+      ? 'Pin your garden photo to the iOS Home Screen widget.'
+      : 'Keep your garden photo handy with a quick-look widget.';
+  const widgetThumbColor =
+    Platform.OS === 'android'
+      ? widgetValue
+        ? '#166534'
+        : '#e2e8f0'
+      : undefined;
 
   return (
     <SafeAreaView style={containerStyle} edges={['left', 'right']}>
@@ -244,6 +318,27 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
               <Text style={styles.removePhotoText}>Remove photo</Text>
             </Pressable>
           )}
+          <View style={styles.widgetCard}>
+            <View style={styles.widgetHeader}>
+              <Text style={styles.widgetTitle}>Photo widget</Text>
+              <Switch
+                value={widgetValue}
+                onValueChange={setProfilePhotoWidgetEnabled}
+                disabled={widgetDisabled}
+                trackColor={{ false: '#cbd5f5', true: '#34d399' }}
+                ios_backgroundColor="#cbd5f5"
+                thumbColor={widgetThumbColor}
+              />
+            </View>
+            <Text style={styles.widgetCopy}>{widgetDescription}</Text>
+            <View style={[styles.widgetPreview, widgetDisabled && styles.widgetPreviewEmpty]}>
+              {profileImageUri ? (
+                <Image source={{ uri: profileImageUri }} style={styles.widgetPreviewImage} />
+              ) : (
+                <Text style={styles.widgetPreviewPlaceholder}>Add a photo to preview your widget</Text>
+              )}
+            </View>
+          </View>
         </View>
 
         <View style={styles.formSection}>
@@ -300,6 +395,54 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
                   );
                 })}
               </View>
+              <View style={styles.backgroundSection}>
+                <View style={styles.backgroundHeaderRow}>
+                  <Text style={styles.backgroundTitle}>Garden background</Text>
+                  <Pressable
+                    onPress={handleToggleBackgroundPalette}
+                    accessibilityLabel="Toggle background color palette"
+                    style={styles.backgroundToggleButton}
+                  >
+                    <Text style={styles.backgroundToggleText}>
+                      {showBackgroundPalette ? 'Hide palette' : 'Choose color'}
+                    </Text>
+                  </Pressable>
+                </View>
+                <Text style={styles.backgroundCopy}>Set the color that surrounds your garden canvas.</Text>
+                <View style={[styles.backgroundPreviewFrame, { backgroundColor: gardenBackgroundColor }]}>
+                  <Text style={styles.backgroundPreviewText}>{gardenBackgroundColor.toUpperCase()}</Text>
+                </View>
+                {showBackgroundPalette ? (
+                  <View style={styles.backgroundWheelContainer}>
+                    <View style={styles.backgroundWheel}>
+                      {backgroundWheelPositions.map(({ color, left, top }) => {
+                        const isActive = gardenBackgroundColor === color;
+                        return (
+                          <Pressable
+                            key={color}
+                            style={[
+                              styles.backgroundWheelSwatch,
+                              { backgroundColor: color, left, top },
+                              isActive && styles.backgroundWheelSwatchActive,
+                            ]}
+                            onPress={() => handleSelectBackgroundColor(color)}
+                            accessibilityLabel={`Set garden background to ${color}`}
+                            accessibilityState={{ selected: isActive }}
+                          />
+                        );
+                      })}
+                      <View style={[styles.backgroundWheelCenter, { backgroundColor: gardenBackgroundColor }]} />
+                    </View>
+                    <Pressable
+                      style={styles.backgroundResetButton}
+                      onPress={handleResetBackground}
+                      accessibilityLabel="Reset background color"
+                    >
+                      <Text style={styles.backgroundResetText}>Reset to original</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+              </View>
               <Text style={styles.upgradeCopy}>Pick the emoji that appears on the home canvas and menu.</Text>
               {emojiOptions.length > 0 ? (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.emojiRow}>
@@ -350,7 +493,8 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
           ) : (
             <>
               <Text style={styles.upgradeCopy}>
-                Upgrade for $2.99 to unlock custom emoji choices and accent colors for your garden clicker.
+                Upgrade for $2.99 to unlock custom emoji choices, accent colors, and garden backgrounds for your
+                clicker.
               </Text>
               <Pressable style={styles.upgradeButton} onPress={handleUpgrade} accessibilityLabel="Upgrade to Garden Plus">
                 <Text style={styles.upgradeButtonText}>Upgrade for $2.99</Text>
@@ -551,6 +695,104 @@ const styles = StyleSheet.create({
   accentSwatchCheck: {
     color: '#f0fff4',
     fontWeight: '800',
+  },
+  backgroundSection: {
+    marginTop: 12,
+    gap: 10,
+  },
+  backgroundHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  backgroundTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#14532d',
+  },
+  backgroundToggleButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: '#bbf7d0',
+  },
+  backgroundToggleText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0f5132',
+  },
+  backgroundCopy: {
+    fontSize: 13,
+    color: '#22543d',
+    lineHeight: 18,
+  },
+  backgroundPreviewFrame: {
+    height: 60,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+  },
+  backgroundPreviewText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f3d2b',
+  },
+  backgroundWheelContainer: {
+    gap: 12,
+    alignItems: 'center',
+  },
+  backgroundWheel: {
+    width: BACKGROUND_WHEEL_DIAMETER,
+    height: BACKGROUND_WHEEL_DIAMETER,
+    borderRadius: BACKGROUND_WHEEL_DIAMETER / 2,
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+  },
+  backgroundWheelSwatch: {
+    position: 'absolute',
+    width: BACKGROUND_WHEEL_SWATCH_SIZE,
+    height: BACKGROUND_WHEEL_SWATCH_SIZE,
+    borderRadius: BACKGROUND_WHEEL_SWATCH_SIZE / 2,
+    borderWidth: 2,
+    borderColor: 'rgba(15, 83, 45, 0.2)',
+  },
+  backgroundWheelSwatchActive: {
+    borderColor: '#1f6f4a',
+    shadowColor: '#0f5132',
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  backgroundWheelCenter: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    borderWidth: 2,
+    borderColor: '#bbf7d0',
+  },
+  backgroundResetButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: '#bbf7d0',
+  },
+  backgroundResetText: {
+    color: '#0f5132',
+    fontWeight: '700',
+    fontSize: 13,
   },
   emojiRow: {
     gap: 14,

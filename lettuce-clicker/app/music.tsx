@@ -539,10 +539,28 @@ const createStyles = (palette: Palette, isDark: boolean) =>
       shadowOffset: { width: 0, height: isDark ? 10 : 6 },
       elevation: isDark ? 5 : 2,
     },
+    nowPlayingControlButtonPrimary: {
+      width: 68,
+      height: 68,
+      borderRadius: 34,
+      borderWidth: 2.5,
+    },
     nowPlayingControlButtonActive: {
       transform: [{ scale: 1.05 }],
       backgroundColor: palette.sourcePillActiveBackground,
       borderColor: palette.sourcePillActiveBorder,
+    },
+    nowPlayingControlButtonPrimaryActive: {
+      transform: [{ scale: 1.08 }],
+    },
+    nowPlayingPrimaryIconWrap: {
+      width: 40,
+      height: 40,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    nowPlayingPlayIcon: {
+      marginLeft: 2,
     },
     sleepProgressWrapper: {
       marginTop: 10,
@@ -1324,7 +1342,7 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
 
   const handleSelectTrack = useCallback(
     (trackId: MusicOption['id']) => {
-      selectTrack(trackId);
+      selectTrack(trackId, { autoPlay: true });
     },
     [selectTrack]
   );
@@ -1340,9 +1358,9 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
     const previousTrack = MUSIC_OPTIONS[previousIndex];
 
     if (previousTrack && previousTrack.id !== selectedTrackId) {
-      selectTrack(previousTrack.id);
+      selectTrack(previousTrack.id, { autoPlay: isAmbientPlaying });
     }
-  }, [selectTrack, selectedTrackId]);
+  }, [isAmbientPlaying, selectTrack, selectedTrackId]);
 
   const handleSelectNext = useCallback(() => {
     if (MUSIC_OPTIONS.length === 0) {
@@ -1355,9 +1373,9 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
     const nextTrack = MUSIC_OPTIONS[nextIndex];
 
     if (nextTrack && nextTrack.id !== selectedTrackId) {
-      selectTrack(nextTrack.id);
+      selectTrack(nextTrack.id, { autoPlay: isAmbientPlaying });
     }
-  }, [selectTrack, selectedTrackId]);
+  }, [isAmbientPlaying, selectTrack, selectedTrackId]);
 
   const handleToggleAmbientPlayback = useCallback(() => {
     togglePlayback();
@@ -1475,7 +1493,9 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
               onPress={handleToggleAmbientPlayback}
               style={({ pressed }) => [
                 styles.nowPlayingControlButton,
+                styles.nowPlayingControlButtonPrimary,
                 (isAmbientPlaying || pressed) && styles.nowPlayingControlButtonActive,
+                (isAmbientPlaying || pressed) && styles.nowPlayingControlButtonPrimaryActive,
               ]}
               accessibilityRole="button"
               accessibilityLabel={isAmbientPlaying ? 'Pause ambience' : 'Play ambience'}
@@ -1487,15 +1507,18 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
               hitSlop={12}
             >
               {({ pressed }) => (
-                <Feather
-                  name={isAmbientPlaying ? 'pause' : 'play'}
-                  size={30}
-                  color={
-                    isAmbientPlaying || pressed
-                      ? palette.nowPlayingControlIconActive
-                      : palette.nowPlayingControlIcon
-                  }
-                />
+                <View style={styles.nowPlayingPrimaryIconWrap}>
+                  <Feather
+                    name={isAmbientPlaying ? 'pause' : 'play'}
+                    size={isAmbientPlaying ? 30 : 32}
+                    style={!isAmbientPlaying ? styles.nowPlayingPlayIcon : undefined}
+                    color={
+                      isAmbientPlaying || pressed
+                        ? palette.nowPlayingControlIconActive
+                        : palette.nowPlayingControlIcon
+                    }
+                  />
+                </View>
               )}
             </Pressable>
             <Pressable

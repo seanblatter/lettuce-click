@@ -70,9 +70,7 @@ export function UpgradeSection({
 
   const nextThemeCost = lockedThemes.find((theme) => theme.cost > 0)?.cost ?? null;
   const themeToggleHint = lockedThemes.length
-    ? nextThemeCost
-      ? `Next unlock ${nextThemeCost.toLocaleString()} harvest`
-      : 'Free unlock ready'
+    ? 'Preview and expand your orbit styles.'
     : 'Showcase every orbit style you own';
   const activeTheme = useMemo(
     () => sortedThemes.find((theme) => theme.id === homeEmojiTheme) ?? null,
@@ -134,7 +132,7 @@ export function UpgradeSection({
             Automation Workshop
           </Text>
           <Text style={[styles.workshopToggleHint, activeWorkshop === 'automation' && styles.workshopToggleHintActive]}>
-            Boost idle harvest engines with greenhouse tech.
+            🤖 Automation upgrades at the ready.
           </Text>
         </Pressable>
 
@@ -152,7 +150,7 @@ export function UpgradeSection({
           </Text>
           {lockedThemes.length ? (
             <View style={styles.workshopToggleBadge}>
-              <Text style={styles.workshopToggleBadgeText}>{lockedThemes.length} to unlock</Text>
+              <Text style={styles.workshopToggleBadgeText}>🎨 {lockedThemes.length} to unlock</Text>
             </View>
           ) : null}
         </Pressable>

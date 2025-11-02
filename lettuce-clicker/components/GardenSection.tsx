@@ -213,6 +213,10 @@ const INVENTORY_COLUMN_GAP = 12;
 const INVENTORY_ROW_GAP = 12;
 const SHOP_EMOJI_CHOICES = ['🏡', '🚀', '🛍', '📱'] as const;
 const INVENTORY_EMOJI_CHOICES = ['🧰', '📦', '💼', '👜'] as const;
+const SORT_OPTIONS = [
+  { id: 'asc', icon: '↑', label: 'Low to high' },
+  { id: 'desc', icon: '↓', label: 'High to low' },
+] as const;
 
 type InventoryEntry = EmojiDefinition & {
   owned: boolean;
@@ -224,6 +228,8 @@ type EmojiToken = {
   original: string;
   normalized: string;
 };
+
+type SortOrder = (typeof SORT_OPTIONS)[number]['id'];
 
 export function GardenSection({
   harvest,
@@ -269,6 +275,7 @@ export function GardenSection({
   const [isDrawingGestureActive, setIsDrawingGestureActive] = useState(false);
   const [activeDrag, setActiveDrag] = useState<{ id: string; point: { x: number; y: number } } | null>(null);
   const [penButtonLayout, setPenButtonLayout] = useState<LayoutRectangle | null>(null);
+  const [shopSortOrder, setShopSortOrder] = useState<SortOrder>('asc');
   const canvasRef = useRef<View | null>(null);
   const filteredOwnedInventoryRef = useRef<InventoryEntry[]>([]);
   const draggingInventoryIdRef = useRef<string | null>(null);
@@ -445,14 +452,32 @@ export function GardenSection({
   }, [emojiTokens, registerCustomEmoji]);
 
   const filteredShopInventory = useMemo(() => {
+    const sortByPrice = (items: InventoryEntry[]) =>
+      [...items].sort((a, b) => {
+        const costDiff = shopSortOrder === 'asc' ? a.cost - b.cost : b.cost - a.cost;
+
+        if (costDiff !== 0) {
+          return costDiff;
+        }
+
+        return a.name.localeCompare(b.name);
+      });
+
     const filtered = inventoryList.filter((item) => matchesCategory(item) && matchesFilter(item));
 
     if (filtered.length === 0 && normalizedFilter && normalizedEmojiTokens.length === 0) {
-      return inventoryList.filter((item) => matchesCategory(item));
+      return sortByPrice(inventoryList.filter((item) => matchesCategory(item)));
     }
 
-    return filtered;
-  }, [inventoryList, matchesCategory, matchesFilter, normalizedEmojiTokens, normalizedFilter]);
+    return sortByPrice(filtered);
+  }, [
+    inventoryList,
+    matchesCategory,
+    matchesFilter,
+    normalizedEmojiTokens,
+    normalizedFilter,
+    shopSortOrder,
+  ]);
   const filteredOwnedInventory = useMemo(() => {
     const filtered = ownedInventory.filter((item) => matchesCategory(item) && matchesFilter(item));
 
@@ -1092,19 +1117,28 @@ export function GardenSection({
               <Text style={[styles.emojiGlyphLarge, isSelected && styles.emojiGlyphSelected]}>{item.emoji}</Text>
             </View>
           </View>
-          <Text style={styles.emojiTileLabel} numberOfLines={2}>
+          <Text
+            style={styles.emojiTileLabel}
+            numberOfLines={2}
+            adjustsFontSizeToFit
+            minimumFontScale={0.82}
+          >
             {item.name}
           </Text>
           <View style={styles.emojiTileFooter}>
             <Text style={[styles.emojiTileMeta, styles.emojiTileCostText]} numberOfLines={1}>
               {formatClickValue(item.cost)} clicks
             </Text>
+            <Text
+              style={[
+                styles.emojiTileMeta,
+                owned ? styles.emojiTileStatusUnlocked : styles.emojiTileStatusLocked,
+              ]}
+              numberOfLines={1}
+            >
+              {owned ? 'Unlocked' : 'Locked'}
+            </Text>
           </View>
-          {owned ? (
-            <View style={styles.emojiTileBadge}>
-              <Text style={styles.emojiTileBadgeText}>Unlocked</Text>
-            </View>
-          ) : null}
         </Pressable>
         <View style={styles.tileActionRow}>
           {owned ? (
@@ -1722,6 +1756,31 @@ export function GardenSection({
                 ) : null}
               </View>
             </View>
+            <View style={styles.sortNavigator}>
+              <Text style={styles.sortNavigatorLabel}>Price order</Text>
+              <View style={styles.sortNavigatorButtons}>
+                {SORT_OPTIONS.map((option) => {
+                  const isActive = option.id === shopSortOrder;
+                  return (
+                    <Pressable
+                      key={option.id}
+                      style={[styles.sortNavigatorButton, isActive && styles.sortNavigatorButtonActive]}
+                      onPress={() => setShopSortOrder(option.id)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: isActive }}
+                      accessibilityLabel={`${option.label} price`}
+                    >
+                      <Text style={[styles.sortNavigatorIcon, isActive && styles.sortNavigatorIconActive]}>
+                        {option.icon}
+                      </Text>
+                      <Text style={[styles.sortNavigatorText, isActive && styles.sortNavigatorTextActive]}>
+                        {option.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
             <View style={styles.categoryFilterBlock}>
               <ScrollView
                 horizontal
@@ -2017,20 +2076,27 @@ function InventoryTileItem({
               <Text style={[styles.emojiGlyphLarge, isSelected && styles.emojiGlyphSelected]}>{item.emoji}</Text>
             </View>
           </View>
-          {item.owned ? (
-            <View style={styles.emojiTileBadge}>
-              <Text style={styles.emojiTileBadgeText}>Unlocked</Text>
-            </View>
-          ) : null}
-          <Text style={styles.emojiTileLabel} numberOfLines={1}>
+          <Text
+            style={styles.emojiTileLabel}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.85}
+          >
             {item.name}
           </Text>
           <View style={styles.emojiTileFooter}>
             <Text style={[styles.emojiTileMeta, styles.emojiTileCategory]} numberOfLines={1}>
               {categoryLabel}
             </Text>
-            <Text style={[styles.emojiTileMeta, styles.inventoryMeta]} numberOfLines={1}>
-              {item.owned ? 'Unlimited use' : 'Locked'}
+            <Text
+              style={[
+                styles.emojiTileMeta,
+                styles.inventoryMeta,
+                item.owned ? styles.emojiTileStatusUnlocked : styles.emojiTileStatusLocked,
+              ]}
+              numberOfLines={1}
+            >
+              {item.owned ? 'Unlocked' : 'Locked'}
             </Text>
           </View>
         </Pressable>
@@ -2432,13 +2498,15 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     minHeight: 32,
     paddingHorizontal: 4,
+    flexShrink: 1,
   },
   emojiTileFooter: {
     marginTop: 'auto',
     width: '100%',
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-    gap: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
   },
   emojiTileMeta: {
     fontSize: 10,
@@ -2454,21 +2522,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0f766e',
   },
-  emojiTileBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: '#047857',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  emojiTileBadgeText: {
-    color: '#ffffff',
-    fontSize: 11,
+  emojiTileStatusUnlocked: {
+    color: '#047857',
     fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
+  },
+  emojiTileStatusLocked: {
+    color: '#b45309',
+    fontWeight: '700',
   },
   inventoryMeta: {
     color: '#22543d',
@@ -2763,12 +2823,63 @@ const styles = StyleSheet.create({
   sheetSearchBlock: {
     gap: 8,
   },
+  sortNavigator: {
+    marginTop: 8,
+    gap: 6,
+  },
+  sortNavigatorLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#14532d',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  sortNavigatorButtons: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  sortNavigatorButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    backgroundColor: '#ffffff',
+  },
+  sortNavigatorButtonActive: {
+    borderColor: '#0f766e',
+    backgroundColor: '#ecfdf3',
+    shadowColor: '#0f766e',
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  sortNavigatorIcon: {
+    fontSize: 16,
+    color: '#0f766e',
+    fontWeight: '700',
+  },
+  sortNavigatorIconActive: {
+    color: '#14532d',
+  },
+  sortNavigatorText: {
+    fontSize: 12,
+    color: '#166534',
+  },
+  sortNavigatorTextActive: {
+    fontWeight: '700',
+    color: '#0f172a',
+  },
   sheetColumn: {
     gap: 12,
     marginBottom: 12,
   },
   sheetList: {
-    flexGrow: 0,
+    flex: 1,
   },
   sheetListContent: {
     paddingBottom: 24,

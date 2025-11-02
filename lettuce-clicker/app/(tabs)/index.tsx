@@ -17,7 +17,8 @@ import { OrbitingUpgradeEmojis } from '@/components/OrbitingUpgradeEmojis';
 import { MusicContent } from '@/app/music';
 import { ProfileContent } from '@/app/profile';
 import { useGame } from '@/context/GameContext';
-import type { HomeEmojiTheme } from '@/context/GameContext';
+import type { EmojiDefinition, HomeEmojiTheme } from '@/context/GameContext';
+import { useAmbientAudio } from '@/context/AmbientAudioContext';
 import { preloadRewardedAd, showRewardedAd } from '@/lib/rewardedAd';
 
 const MODAL_STORAGE_KEY = 'lettuce-click:grow-your-park-dismissed';
@@ -72,6 +73,8 @@ export default function HomeScreen() {
     homeEmojiTheme,
     setHomeEmojiTheme,
     emojiThemes,
+    emojiCatalog,
+    emojiInventory,
     ownedThemes,
     profileName,
     resumeNotice,
@@ -80,6 +83,7 @@ export default function HomeScreen() {
     premiumAccentColor,
     addHarvestAmount,
     spendHarvestAmount,
+    grantEmojiUnlock,
   } = useGame();
   const [showGrowModal, setShowGrowModal] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -100,8 +104,16 @@ export default function HomeScreen() {
   const [dailyCountdown, setDailyCountdown] = useState<string | null>(null);
   const [hasDoubledPassiveHarvest, setHasDoubledPassiveHarvest] = useState(false);
   const [isWatchingResumeOffer, setIsWatchingResumeOffer] = useState(false);
+  const [lastUnlockedEmoji, setLastUnlockedEmoji] = useState<EmojiDefinition | null>(null);
+  const { isPlaying: isAmbientPlaying } = useAmbientAudio();
   const insets = useSafeAreaInsets();
   const flipAnimation = useRef(new Animated.Value(0)).current;
+  const audioPulse = useRef(new Animated.Value(0)).current;
+  const audioPulseLoop = useRef<Animated.CompositeAnimation | null>(null);
+  const profileQuickActionJiggle = useRef(new Animated.Value(0)).current;
+  const musicQuickActionJiggle = useRef(new Animated.Value(0)).current;
+  const bonusQuickActionJiggle = useRef(new Animated.Value(0)).current;
+  const themesQuickActionJiggle = useRef(new Animated.Value(0)).current;
   const headerPaddingTop = useMemo(() => Math.max(insets.top - 6, 0) + 2, [insets.top]);
   const contentPaddingBottom = useMemo(() => insets.bottom + 32, [insets.bottom]);
   const friendlyName = useMemo(() => {
@@ -119,6 +131,164 @@ export default function HomeScreen() {
       }),
     [flipAnimation]
   );
+  const audioPulseScale = useMemo(
+    () =>
+      audioPulse.interpolate({
+        inputRange: [0, 1],
+        outputRange: [1, 1.28],
+      }),
+    [audioPulse]
+  );
+  const audioPulseOpacity = useMemo(
+    () =>
+      audioPulse.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0.45, 0],
+      }),
+    [audioPulse]
+  );
+  const audioCoreScale = useMemo(
+    () =>
+      audioPulse.interpolate({
+        inputRange: [0, 1],
+        outputRange: [1, 1.08],
+      }),
+    [audioPulse]
+  );
+  const profileQuickActionStyle = useMemo(
+    () => ({
+      transform: [
+        {
+          rotate: profileQuickActionJiggle.interpolate({
+            inputRange: [-1, 0, 1],
+            outputRange: ['-8deg', '0deg', '8deg'],
+          }),
+        },
+        {
+          scale: profileQuickActionJiggle.interpolate({
+            inputRange: [-1, 0, 1],
+            outputRange: [0.94, 1, 1.06],
+          }),
+        },
+      ],
+    }),
+    [profileQuickActionJiggle]
+  );
+  const musicQuickActionStyle = useMemo(
+    () => ({
+      transform: [
+        {
+          rotate: musicQuickActionJiggle.interpolate({
+            inputRange: [-1, 0, 1],
+            outputRange: ['-8deg', '0deg', '8deg'],
+          }),
+        },
+        {
+          scale: musicQuickActionJiggle.interpolate({
+            inputRange: [-1, 0, 1],
+            outputRange: [0.94, 1, 1.06],
+          }),
+        },
+      ],
+    }),
+    [musicQuickActionJiggle]
+  );
+  const bonusQuickActionStyle = useMemo(
+    () => ({
+      transform: [
+        {
+          rotate: bonusQuickActionJiggle.interpolate({
+            inputRange: [-1, 0, 1],
+            outputRange: ['-8deg', '0deg', '8deg'],
+          }),
+        },
+        {
+          scale: bonusQuickActionJiggle.interpolate({
+            inputRange: [-1, 0, 1],
+            outputRange: [0.94, 1, 1.06],
+          }),
+        },
+      ],
+    }),
+    [bonusQuickActionJiggle]
+  );
+  const themesQuickActionStyle = useMemo(
+    () => ({
+      transform: [
+        {
+          rotate: themesQuickActionJiggle.interpolate({
+            inputRange: [-1, 0, 1],
+            outputRange: ['-8deg', '0deg', '8deg'],
+          }),
+        },
+        {
+          scale: themesQuickActionJiggle.interpolate({
+            inputRange: [-1, 0, 1],
+            outputRange: [0.94, 1, 1.06],
+          }),
+        },
+      ],
+    }),
+    [themesQuickActionJiggle]
+  );
+  useEffect(() => {
+    if (!isAmbientPlaying) {
+      if (audioPulseLoop.current) {
+        audioPulseLoop.current.stop();
+        audioPulseLoop.current = null;
+      }
+      audioPulse.setValue(0);
+      return;
+    }
+
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(audioPulse, {
+          toValue: 1,
+          duration: 1600,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(audioPulse, {
+          toValue: 0,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    audioPulseLoop.current = loop;
+    loop.start();
+
+    return () => {
+      loop.stop();
+      audioPulseLoop.current = null;
+    };
+  }, [audioPulse, isAmbientPlaying]);
+  const runQuickActionJiggle = useCallback((value: Animated.Value) => {
+    value.stopAnimation(() => {});
+    value.setValue(0);
+    Animated.sequence([
+      Animated.timing(value, {
+        toValue: 1,
+        duration: 120,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(value, {
+        toValue: -1,
+        duration: 150,
+        easing: Easing.inOut(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(value, {
+        toValue: 0,
+        duration: 180,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
   const dailyMenuStatus = useMemo(() => {
     if (isDailySpinAvailable) {
       return 'Ready! ❗';
@@ -391,8 +561,20 @@ export default function HomeScreen() {
       flipAnimation.setValue(0);
     });
     const reward = BONUS_REWARD_OPTIONS[Math.floor(Math.random() * BONUS_REWARD_OPTIONS.length)];
+    const lockedEmojiChoices = emojiCatalog.filter((emoji) => !emojiInventory[emoji.id]);
+    const unlockedEmoji =
+      lockedEmojiChoices.length > 0
+        ? lockedEmojiChoices[Math.floor(Math.random() * lockedEmojiChoices.length)]
+        : null;
+    setLastUnlockedEmoji(null);
     setTimeout(() => {
       addHarvestAmount(reward);
+      if (unlockedEmoji) {
+        grantEmojiUnlock(unlockedEmoji.id);
+        setLastUnlockedEmoji(unlockedEmoji);
+      } else {
+        setLastUnlockedEmoji(null);
+      }
       setAvailableBonusSpins((prev) => Math.max(prev - 1, 0));
       if (isDailySpinAvailable) {
         const now = Date.now();
@@ -405,7 +587,11 @@ export default function HomeScreen() {
         });
       }
       setLastBonusReward(reward);
-      setBonusMessage(`You earned ${reward.toLocaleString()} clicks!`);
+      setBonusMessage(
+        unlockedEmoji
+          ? `Unlocked ${unlockedEmoji.emoji} ${unlockedEmoji.name}! +${reward.toLocaleString()} clicks`
+          : `You earned ${reward.toLocaleString()} clicks!`
+      );
       setIsSpinningBonus(false);
     }, 900);
   }, [
@@ -414,6 +600,9 @@ export default function HomeScreen() {
     flipAnimation,
     isDailySpinAvailable,
     isSpinningBonus,
+    emojiCatalog,
+    emojiInventory,
+    grantEmojiUnlock,
   ]);
 
   const handleWatchBonusAd = useCallback(async () => {
@@ -519,15 +708,43 @@ export default function HomeScreen() {
           style={[styles.content, styles.contentStatic, { paddingTop: 12, paddingBottom: contentPaddingBottom }]}
         >
           <View style={styles.lettuceWrapper}>
-            <View style={styles.lettuceBackdrop}>
-              <View style={[styles.backdropHalo, styles.backdropHaloOuter]} />
-              <View style={[styles.backdropHalo, styles.backdropHaloMiddle]} />
-              <View style={[styles.backdropHalo, styles.backdropHaloInner]} />
-              <View style={[styles.backdropBubble, styles.backdropBubbleOne]} />
-              <View style={[styles.backdropBubble, styles.backdropBubbleTwo]} />
-              <View style={[styles.backdropBubble, styles.backdropBubbleThree]} />
-            </View>
-            <OrbitingUpgradeEmojis emojis={orbitingUpgradeEmojis} theme={homeEmojiTheme} />
+            {isAmbientPlaying ? (
+              <View style={styles.audioPulseWrapper} pointerEvents="none">
+                <Animated.View
+                  style={[
+                    styles.audioPulseRing,
+                    {
+                      borderColor: accentColor,
+                      transform: [{ scale: audioPulseScale }],
+                      opacity: audioPulseOpacity,
+                    },
+                  ]}
+                />
+                <Animated.View
+                  style={[
+                    styles.audioPulseCore,
+                    {
+                      backgroundColor: accentSurface,
+                      borderColor: accentColor,
+                      shadowColor: accentColor,
+                      transform: [{ scale: audioCoreScale }],
+                    },
+                  ]}
+                />
+              </View>
+            ) : (
+              <>
+                <View style={styles.lettuceBackdrop}>
+                  <View style={[styles.backdropHalo, styles.backdropHaloOuter]} />
+                  <View style={[styles.backdropHalo, styles.backdropHaloMiddle]} />
+                  <View style={[styles.backdropHalo, styles.backdropHaloInner]} />
+                  <View style={[styles.backdropBubble, styles.backdropBubbleOne]} />
+                  <View style={[styles.backdropBubble, styles.backdropBubbleTwo]} />
+                  <View style={[styles.backdropBubble, styles.backdropBubbleThree]} />
+                </View>
+                <OrbitingUpgradeEmojis emojis={orbitingUpgradeEmojis} theme={homeEmojiTheme} />
+              </>
+            )}
             <Pressable
               accessibilityLabel="Harvest lettuce"
               onPress={addHarvest}
@@ -608,11 +825,23 @@ export default function HomeScreen() {
                       ]}
                       onPress={handleNavigateProfile}
                     >
-                      <View
-                        style={[styles.menuItemIconWrap, styles.quickActionIconWrap]}
-                        pointerEvents="none"
-                      >
-                        <Text style={[styles.menuItemIcon, styles.quickActionIcon]}>🌿</Text>
+                      <View style={[styles.menuItemIconWrap, styles.quickActionIconWrap]}>
+                        <Pressable
+                          style={styles.quickActionEmojiPressable}
+                          onPress={(event) => {
+                            event.stopPropagation?.();
+                            runQuickActionJiggle(profileQuickActionJiggle);
+                          }}
+                          accessibilityRole="button"
+                          accessibilityLabel="Playful profile emoji"
+                          hitSlop={8}
+                        >
+                          <Animated.Text
+                            style={[styles.menuItemIcon, styles.quickActionIcon, profileQuickActionStyle]}
+                          >
+                            🌿
+                          </Animated.Text>
+                        </Pressable>
                       </View>
                       <View style={styles.menuItemBody}>
                         <Text style={[styles.menuItemTitle, styles.quickActionTitle]}>Profile</Text>
@@ -633,11 +862,23 @@ export default function HomeScreen() {
                       onPress={handleOpenMusic}
                       accessibilityRole="button"
                     >
-                      <View
-                        style={[styles.menuItemIconWrap, styles.quickActionIconWrap]}
-                        pointerEvents="none"
-                      >
-                        <Text style={[styles.menuItemIcon, styles.quickActionIcon]}>🎧</Text>
+                      <View style={[styles.menuItemIconWrap, styles.quickActionIconWrap]}>
+                        <Pressable
+                          style={styles.quickActionEmojiPressable}
+                          onPress={(event) => {
+                            event.stopPropagation?.();
+                            runQuickActionJiggle(musicQuickActionJiggle);
+                          }}
+                          accessibilityRole="button"
+                          accessibilityLabel="Playful music emoji"
+                          hitSlop={8}
+                        >
+                          <Animated.Text
+                            style={[styles.menuItemIcon, styles.quickActionIcon, musicQuickActionStyle]}
+                          >
+                            🎧
+                          </Animated.Text>
+                        </Pressable>
                       </View>
                       <View style={styles.menuItemBody}>
                         <Text style={[styles.menuItemTitle, styles.quickActionTitle]}>Music Lounge</Text>
@@ -657,11 +898,23 @@ export default function HomeScreen() {
                       ]}
                       onPress={handleOpenDailyBonus}
                     >
-                      <View
-                        style={[styles.menuItemIconWrap, styles.quickActionIconWrap]}
-                        pointerEvents="none"
-                      >
-                        <Text style={[styles.menuItemIcon, styles.quickActionIcon]}>🎁</Text>
+                      <View style={[styles.menuItemIconWrap, styles.quickActionIconWrap]}>
+                        <Pressable
+                          style={styles.quickActionEmojiPressable}
+                          onPress={(event) => {
+                            event.stopPropagation?.();
+                            runQuickActionJiggle(bonusQuickActionJiggle);
+                          }}
+                          accessibilityRole="button"
+                          accessibilityLabel="Playful daily bonus emoji"
+                          hitSlop={8}
+                        >
+                          <Animated.Text
+                            style={[styles.menuItemIcon, styles.quickActionIcon, bonusQuickActionStyle]}
+                          >
+                            🎁
+                          </Animated.Text>
+                        </Pressable>
                       </View>
                       <View style={styles.menuItemBody}>
                         <Text style={[styles.menuItemTitle, styles.quickActionTitle]}>Daily Bonus</Text>
@@ -684,13 +937,23 @@ export default function HomeScreen() {
                       onPress={() => setMenuPage('themes')}
                       accessibilityRole="button"
                     >
-                      <View
-                        style={[styles.menuItemIconWrap, styles.quickActionIconWrap]}
-                        pointerEvents="none"
-                      >
-                        <Text style={[styles.menuItemIcon, styles.quickActionIcon]}>
-                          {activeThemeDefinition?.emoji ?? '✨'}
-                        </Text>
+                      <View style={[styles.menuItemIconWrap, styles.quickActionIconWrap]}>
+                        <Pressable
+                          style={styles.quickActionEmojiPressable}
+                          onPress={(event) => {
+                            event.stopPropagation?.();
+                            runQuickActionJiggle(themesQuickActionJiggle);
+                          }}
+                          accessibilityRole="button"
+                          accessibilityLabel="Playful themes emoji"
+                          hitSlop={8}
+                        >
+                          <Animated.Text
+                            style={[styles.menuItemIcon, styles.quickActionIcon, themesQuickActionStyle]}
+                          >
+                            {activeThemeDefinition?.emoji ?? '✨'}
+                          </Animated.Text>
+                        </Pressable>
                       </View>
                       <View style={styles.menuItemBody}>
                         <Text style={[styles.menuItemTitle, styles.quickActionTitle]}>Themes Workshop</Text>
@@ -869,6 +1132,12 @@ export default function HomeScreen() {
               <Text style={styles.bonusReward}>Last reward: {lastBonusReward.toLocaleString()} clicks</Text>
             ) : null}
             {bonusMessage ? <Text style={styles.bonusMessage}>{bonusMessage}</Text> : null}
+            {lastUnlockedEmoji ? (
+              <View style={styles.bonusUnlockRow}>
+                <Text style={styles.bonusUnlockEmoji}>{lastUnlockedEmoji.emoji}</Text>
+                <Text style={styles.bonusUnlockText}>{lastUnlockedEmoji.name} added to your inventory!</Text>
+              </View>
+            ) : null}
             <Pressable
               style={[styles.bonusPrimaryButton, (isSpinningBonus || availableBonusSpins <= 0) && styles.bonusButtonDisabled]}
               onPress={handleSpinBonus}
@@ -992,6 +1261,31 @@ const styles = StyleSheet.create({
     height: 240,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  audioPulseWrapper: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  audioPulseRing: {
+    position: 'absolute',
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    borderWidth: 4,
+    opacity: 0.45,
+  },
+  audioPulseCore: {
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    borderWidth: 2,
+    shadowOpacity: 0.26,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 6,
   },
   lettuceBackdrop: {
     position: 'absolute',
@@ -1329,6 +1623,12 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     elevation: 6,
   },
+  quickActionEmojiPressable: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   quickActionIconWrap: {
     backgroundColor: '#1b7a45',
     borderColor: '#0f3f26',
@@ -1531,6 +1831,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#0f766e',
     textAlign: 'center',
+  },
+  bonusUnlockRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#ecfdf3',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  bonusUnlockEmoji: {
+    fontSize: 28,
+  },
+  bonusUnlockText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#14532d',
   },
   bonusPrimaryButton: {
     width: '100%',

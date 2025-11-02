@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  Animated,
+  Easing,
   Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -274,6 +276,8 @@ type Palette = {
   optionRowActiveShadow: string;
   optionEmojiBackground: string;
   optionEmojiBackgroundActive: string;
+  optionVisualizerRing: string;
+  optionVisualizerCore: string;
   optionName: string;
   optionNameActive: string;
   optionDescription: string;
@@ -368,6 +372,8 @@ const DARK_PALETTE: Palette = {
   optionRowActiveShadow: '#2dd78f',
   optionEmojiBackground: 'rgba(77, 255, 166, 0.16)',
   optionEmojiBackgroundActive: 'rgba(77, 255, 166, 0.28)',
+  optionVisualizerRing: 'rgba(77, 255, 166, 0.55)',
+  optionVisualizerCore: 'rgba(45, 215, 143, 0.55)',
   optionName: '#f6fff6',
   optionNameActive: '#86f3c1',
   optionDescription: '#97b2a4',
@@ -462,6 +468,8 @@ const LIGHT_PALETTE: Palette = {
   optionRowActiveShadow: 'rgba(45, 215, 143, 0.35)',
   optionEmojiBackground: '#e3f4ea',
   optionEmojiBackgroundActive: '#d2f0e0',
+  optionVisualizerRing: 'rgba(31, 122, 83, 0.45)',
+  optionVisualizerCore: 'rgba(45, 215, 143, 0.4)',
   optionName: '#11402c',
   optionNameActive: '#1f7a53',
   optionDescription: '#5f8570',
@@ -520,8 +528,19 @@ const createStyles = (palette: Palette, isDark: boolean) =>
     headerRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: 16,
+      gap: 0,
+    },
+    headerSide: {
+      flex: 1,
+      minWidth: 96,
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    headerSideLeft: {
+      justifyContent: 'flex-start',
+    },
+    headerSideRight: {
+      justifyContent: 'flex-end',
     },
     headerBackButton: {
       paddingHorizontal: 16,
@@ -539,9 +558,11 @@ const createStyles = (palette: Palette, isDark: boolean) =>
       textTransform: 'uppercase',
     },
     headerCenter: {
-      flex: 1,
+      flexShrink: 1,
       alignItems: 'center',
+      justifyContent: 'center',
       gap: 4,
+      paddingHorizontal: 4,
     },
     headerTitle: {
       fontSize: 28,
@@ -552,24 +573,23 @@ const createStyles = (palette: Palette, isDark: boolean) =>
     headerActions: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 6,
-      flexShrink: 0,
+      justifyContent: 'flex-end',
+      gap: 8,
+      width: '100%',
     },
     headerActionButton: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      paddingHorizontal: 16,
-      paddingVertical: 10,
-      borderRadius: 18,
-      backgroundColor: palette.actionBubbleBackground,
-      borderWidth: 1,
-      borderColor: palette.actionBubbleBorder,
-      shadowColor: palette.actionButtonShadow,
-      shadowOpacity: isDark ? 0.28 : 0.14,
-      shadowRadius: isDark ? 18 : 12,
-      shadowOffset: { width: 0, height: isDark ? 10 : 6 },
-      elevation: isDark ? 6 : 3,
+      paddingHorizontal: 8,
+      paddingVertical: 6,
+      borderRadius: 999,
+      backgroundColor: 'transparent',
+      borderWidth: 0,
+      shadowOpacity: 0,
+      shadowRadius: 0,
+      shadowOffset: { width: 0, height: 0 },
+      elevation: 0,
     },
     headerActionGlyph: {
       fontSize: 20,
@@ -658,6 +678,46 @@ const createStyles = (palette: Palette, isDark: boolean) =>
     sleepStatusWarning: {
       fontSize: 12,
       color: palette.sleepStatusWarning,
+    },
+    nowPlayingControls: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'flex-start',
+    },
+    nowPlayingControlButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingHorizontal: 18,
+      paddingVertical: 10,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: palette.sourcePillBorder,
+      backgroundColor: palette.sourcePillBackground,
+    },
+    nowPlayingControlButtonActive: {
+      backgroundColor: palette.sourcePillActiveBackground,
+      borderColor: palette.sourcePillActiveBorder,
+      shadowColor: palette.sourcePillShadow,
+      shadowOpacity: isDark ? 0.35 : 0.18,
+      shadowRadius: isDark ? 10 : 8,
+      shadowOffset: { width: 0, height: isDark ? 6 : 4 },
+      elevation: isDark ? 4 : 2,
+    },
+    nowPlayingControlGlyph: {
+      fontSize: 16,
+      color: palette.sourcePillText,
+    },
+    nowPlayingControlGlyphActive: {
+      color: palette.sourcePillActiveText,
+    },
+    nowPlayingControlText: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: palette.sourcePillText,
+    },
+    nowPlayingControlTextActive: {
+      color: palette.sourcePillActiveText,
     },
     nowPlayingSources: {
       flexDirection: 'row',
@@ -810,8 +870,14 @@ const createStyles = (palette: Palette, isDark: boolean) =>
     },
     optionRowActive: {
       borderColor: palette.optionRowActiveBorder,
-      shadowColor: palette.optionRowActiveShadow,
-      shadowOpacity: isDark ? 0.45 : 0.26,
+      shadowColor: palette.optionRowShadow,
+      shadowOpacity: isDark ? 0.35 : 0.16,
+    },
+    optionAvatar: {
+      width: 52,
+      height: 52,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     optionEmojiWrap: {
       width: 52,
@@ -828,7 +894,45 @@ const createStyles = (palette: Palette, isDark: boolean) =>
       fontSize: 28,
     },
     optionEmojiActive: {
-      transform: [{ scale: 1.1 }],
+      color: palette.optionNameActive,
+      fontWeight: '800',
+    },
+    optionVisualizer: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'visible',
+    },
+    optionVisualizerPulse: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      borderRadius: 26,
+      borderWidth: 2,
+    },
+    optionVisualizerPulseSecondary: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      borderRadius: 26,
+      borderWidth: 2,
+    },
+    optionVisualizerCore: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowOpacity: isDark ? 0.45 : 0.22,
+      shadowRadius: isDark ? 12 : 8,
+      shadowOffset: { width: 0, height: isDark ? 6 : 4 },
+      elevation: isDark ? 4 : 2,
     },
     optionBody: {
       flex: 1,
@@ -1111,13 +1215,15 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
   useEffect(() => {
     setMusicColorScheme(appColorScheme);
   }, [appColorScheme]);
+  const isDark = musicColorScheme === 'dark';
+  const palette = isDark ? DARK_PALETTE : LIGHT_PALETTE;
   const styles = useMemo(
     () =>
       createStyles(
-        musicColorScheme === 'dark' ? DARK_PALETTE : LIGHT_PALETTE,
-        musicColorScheme === 'dark'
+        palette,
+        isDark
       ),
-    [musicColorScheme]
+    [palette, isDark]
   );
   const themeToggleHint =
     musicColorScheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
@@ -1141,6 +1247,7 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
   const ambientPlayer = useAudioPlayer(MUSIC_AUDIO_MAP[selectedTrackId]);
   const alarmPlayer = useAudioPlayer(ALARM_SOUND_URI);
   const [ambientError, setAmbientError] = useState<Error | null>(null);
+  const [isAmbientPlaying, setIsAmbientPlaying] = useState(false);
   const [showAllGroups, setShowAllGroups] = useState(false);
 
   useEffect(() => {
@@ -1386,10 +1493,12 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
   const ensureLoopingPlayback = useCallback(
     async (source: number, shouldPlayOverride?: boolean) => {
       const player: any = ambientPlayer;
+      const desiredPlayState = shouldPlayOverride ?? (nowPlayingSource === 'mix' && isAmbientPlaying);
+
       try {
         const playbackOptions = {
           isLooping: true,
-          shouldPlay: shouldPlayOverride ?? (nowPlayingSource === 'mix'),
+          shouldPlay: desiredPlayState,
         };
 
         let startedWithSource = false;
@@ -1414,32 +1523,45 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
             await Promise.resolve(player.updateStatus({ isLooping: true }));
           }
 
-          const shouldPlay = shouldPlayOverride ?? (nowPlayingSource === 'mix');
-          if (shouldPlay) {
+          if (desiredPlayState) {
             if (!startedWithSource) {
-              player.seekTo?.(0);
-              player.play?.();
+              if (typeof player.play === 'function' && player.play.length === 0) {
+                await Promise.resolve(player.play());
+              } else if (typeof player.playAsync === 'function') {
+                await Promise.resolve(player.playAsync());
+              } else if (typeof player.replayAsync === 'function') {
+                await Promise.resolve(player.replayAsync());
+              } else {
+                player.seekTo?.(0);
+                player.play?.();
+              }
             }
+            setIsAmbientPlaying(true);
           } else {
             player.pause?.();
+            setIsAmbientPlaying(false);
           }
+        } else {
+          setIsAmbientPlaying(false);
         }
 
         setAmbientError(null);
       } catch (error) {
         console.warn('Ambient playback failed', error);
+        setIsAmbientPlaying(false);
         setAmbientError(
           error instanceof Error ? error : new Error('Ambient playback failed to start')
         );
       }
     },
-    [ambientPlayer, nowPlayingSource]
+    [ambientPlayer, isAmbientPlaying, nowPlayingSource]
   );
 
   useEffect(() => {
     if (nowPlayingSource !== 'mix') {
       const player: any = ambientPlayer;
       player?.pause?.();
+      setIsAmbientPlaying(false);
       setAmbientError(null);
       return;
     }
@@ -1456,6 +1578,7 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
     (trackId: MusicOption['id']) => {
       setSelectedTrackId(trackId);
       setNowPlayingSource('mix');
+      setAmbientError(null);
 
       const source = MUSIC_AUDIO_MAP[trackId];
       if (source) {
@@ -1466,6 +1589,45 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
     },
     [ensureLoopingPlayback]
   );
+
+  const handleSelectSource = useCallback(
+    (sourceId: MusicSource) => {
+      setAmbientError(null);
+      if (sourceId === 'mix') {
+        setNowPlayingSource('mix');
+        const source = MUSIC_AUDIO_MAP[selectedTrackId];
+        if (source) {
+          ensureLoopingPlayback(source, true).catch((error) => {
+            console.warn('Playback failed to start', error);
+          });
+        }
+        return;
+      }
+
+      setNowPlayingSource(sourceId);
+      setIsAmbientPlaying(false);
+      const player: any = ambientPlayer;
+      player?.pause?.();
+    },
+    [ambientPlayer, ensureLoopingPlayback, selectedTrackId]
+  );
+
+  const handleToggleAmbientPlayback = useCallback(() => {
+    if (nowPlayingSource !== 'mix') {
+      return;
+    }
+
+    const source = MUSIC_AUDIO_MAP[selectedTrackId];
+    if (!source) {
+      return;
+    }
+
+    setAmbientError(null);
+    const nextShouldPlay = !isAmbientPlaying;
+    ensureLoopingPlayback(source, nextShouldPlay).catch((error) => {
+      console.warn('Playback toggle failed', error);
+    });
+  }, [ensureLoopingPlayback, isAmbientPlaying, nowPlayingSource, selectedTrackId]);
 
   useEffect(() => {
     const player: any = ambientPlayer;
@@ -1493,38 +1655,44 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
         contentInsetAdjustmentBehavior="never"
       >
         <View style={styles.headerRow}>
-          <Pressable
-            onPress={handleClose}
-            style={styles.headerBackButton}
-            accessibilityRole="button"
-            accessibilityLabel={headerBackAccessibility}
-          >
-            <Text style={styles.headerBackText}>{headerBackText}</Text>
-          </Pressable>
+          <View style={[styles.headerSide, styles.headerSideLeft]}>
+            <Pressable
+              onPress={handleClose}
+              style={styles.headerBackButton}
+              accessibilityRole="button"
+              accessibilityLabel={headerBackAccessibility}
+            >
+              <Text style={styles.headerBackText}>{headerBackText}</Text>
+            </Pressable>
+          </View>
           <View style={styles.headerCenter}>
             <Text style={styles.headerTitle}>Music Lounge</Text>
           </View>
-          <View style={styles.headerActions}>
-            <Pressable
-              onPress={handleToggleMusicTheme}
-              style={styles.headerActionButton}
-              accessibilityRole="button"
-              accessibilityLabel="Toggle light or dark mode"
-              accessibilityHint={themeToggleHint}
-              accessibilityValue={{ text: themeAccessibilityValue }}
-            >
-              <Text style={styles.headerActionGlyph}>🌙</Text>
-            </Pressable>
-            <Pressable
-              onPress={handleOpenSleepModal}
-              style={styles.headerActionButton}
-              accessibilityRole="button"
-              accessibilityLabel="Open Dream Capsule controls"
-              accessibilityHint="Set timers or wake alarms"
-              accessibilityValue={{ text: sleepSummary.headline }}
-            >
-              <Text style={styles.headerActionGlyph}>⏰</Text>
-            </Pressable>
+          <View style={[styles.headerSide, styles.headerSideRight]}>
+            <View style={styles.headerActions}>
+              <Pressable
+                onPress={handleToggleMusicTheme}
+                style={styles.headerActionButton}
+                accessibilityRole="button"
+                accessibilityLabel="Toggle light or dark mode"
+                accessibilityHint={themeToggleHint}
+                accessibilityValue={{ text: themeAccessibilityValue }}
+                hitSlop={8}
+              >
+                <Text style={styles.headerActionGlyph}>🌙</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleOpenSleepModal}
+                style={styles.headerActionButton}
+                accessibilityRole="button"
+                accessibilityLabel="Open Dream Capsule controls"
+                accessibilityHint="Set timers or wake alarms"
+                accessibilityValue={{ text: sleepSummary.headline }}
+                hitSlop={8}
+              >
+                <Text style={styles.headerActionGlyph}>⏰</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
 
@@ -1551,6 +1719,41 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
               </Text>
             ) : null}
           </View>
+          {nowPlayingSource === 'mix' ? (
+            <View style={styles.nowPlayingControls}>
+              <Pressable
+                onPress={handleToggleAmbientPlayback}
+                style={[
+                  styles.nowPlayingControlButton,
+                  isAmbientPlaying && styles.nowPlayingControlButtonActive,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={isAmbientPlaying ? 'Pause garden mix' : 'Play garden mix'}
+                accessibilityHint={
+                  isAmbientPlaying
+                    ? 'Pauses the currently playing ambience'
+                    : 'Starts the selected ambience mix'
+                }
+              >
+                <Text
+                  style={[
+                    styles.nowPlayingControlGlyph,
+                    isAmbientPlaying && styles.nowPlayingControlGlyphActive,
+                  ]}
+                >
+                  {isAmbientPlaying ? '⏸️' : '▶️'}
+                </Text>
+                <Text
+                  style={[
+                    styles.nowPlayingControlText,
+                    isAmbientPlaying && styles.nowPlayingControlTextActive,
+                  ]}
+                >
+                  {isAmbientPlaying ? 'Pause mix' : 'Play mix'}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
           <View style={styles.nowPlayingSources}>
             {availableSources.map((source) => {
               const isActive = nowPlayingSource === source.id;
@@ -1558,7 +1761,7 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
                 <Pressable
                   key={source.id}
                   style={[styles.sourcePill, isActive && styles.sourcePillActive]}
-                  onPress={() => setNowPlayingSource(source.id)}
+                  onPress={() => handleSelectSource(source.id)}
                   accessibilityRole="button"
                   accessibilityState={{ selected: isActive }}
                   accessibilityLabel={`Play from ${source.label}`}
@@ -1625,8 +1828,14 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
                     accessibilityRole="button"
                     accessibilityState={{ selected: isActive }}
                   >
-                    <View style={[styles.optionEmojiWrap, isActive && styles.optionEmojiWrapActive]}>
-                      <Text style={[styles.optionEmoji, isActive && styles.optionEmojiActive]}>{option.emoji}</Text>
+                    <View style={styles.optionAvatar}>
+                      {isActive ? (
+                        <AudioOrb emoji={option.emoji} palette={palette} styles={styles} />
+                      ) : (
+                        <View style={styles.optionEmojiWrap}>
+                          <Text style={styles.optionEmoji}>{option.emoji}</Text>
+                        </View>
+                      )}
                     </View>
                     <View style={styles.optionBody}>
                       <Text style={[styles.optionName, isActive && styles.optionNameActive]}>{option.name}</Text>
@@ -1666,8 +1875,14 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
                             accessibilityRole="button"
                             accessibilityState={{ selected: isActive }}
                           >
-                            <View style={[styles.optionEmojiWrap, isActive && styles.optionEmojiWrapActive]}>
-                              <Text style={[styles.optionEmoji, isActive && styles.optionEmojiActive]}>{option.emoji}</Text>
+                            <View style={styles.optionAvatar}>
+                              {isActive ? (
+                                <AudioOrb emoji={option.emoji} palette={palette} styles={styles} />
+                              ) : (
+                                <View style={styles.optionEmojiWrap}>
+                                  <Text style={styles.optionEmoji}>{option.emoji}</Text>
+                                </View>
+                              )}
                             </View>
                             <View style={styles.optionBody}>
                               <Text style={[styles.optionName, isActive && styles.optionNameActive]}>{option.name}</Text>
@@ -1806,6 +2021,107 @@ export default function MusicScreen() {
 
 type WheelValue = string | number;
 type ThemedStyles = ReturnType<typeof createStyles>;
+
+type AudioOrbProps = {
+  emoji: string;
+  palette: Palette;
+  styles: ThemedStyles;
+};
+
+function AudioOrb({ emoji, palette, styles }: AudioOrbProps) {
+  const primaryPulse = useRef(new Animated.Value(0)).current;
+  const secondaryPulse = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const primaryAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(primaryPulse, {
+          toValue: 1,
+          duration: 1600,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(primaryPulse, {
+          toValue: 0,
+          duration: 1600,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    const secondaryAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.delay(800),
+        Animated.timing(secondaryPulse, {
+          toValue: 1,
+          duration: 1600,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(secondaryPulse, {
+          toValue: 0,
+          duration: 1600,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    primaryAnimation.start();
+    secondaryAnimation.start();
+
+    return () => {
+      primaryAnimation.stop();
+      secondaryAnimation.stop();
+      primaryPulse.stopAnimation();
+      secondaryPulse.stopAnimation();
+    };
+  }, [primaryPulse, secondaryPulse]);
+
+  const primaryScale = primaryPulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.45] });
+  const primaryOpacity = primaryPulse.interpolate({ inputRange: [0, 1], outputRange: [0.45, 0] });
+  const secondaryScale = secondaryPulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.65] });
+  const secondaryOpacity = secondaryPulse.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0] });
+  const coreScale = primaryPulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] });
+
+  return (
+    <View style={styles.optionVisualizer}>
+      <Animated.View
+        style={[
+          styles.optionVisualizerPulse,
+          {
+            borderColor: palette.optionVisualizerRing,
+            transform: [{ scale: primaryScale }],
+            opacity: primaryOpacity,
+          },
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.optionVisualizerPulseSecondary,
+          {
+            borderColor: palette.optionVisualizerRing,
+            transform: [{ scale: secondaryScale }],
+            opacity: secondaryOpacity,
+          },
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.optionVisualizerCore,
+          {
+            backgroundColor: palette.optionVisualizerCore,
+            shadowColor: palette.optionVisualizerRing,
+            transform: [{ scale: coreScale }],
+          },
+        ]}
+      >
+        <Text style={[styles.optionEmoji, styles.optionEmojiActive]}>{emoji}</Text>
+      </Animated.View>
+    </View>
+  );
+}
 
 type WheelPickerProps<T extends WheelValue> = {
   data: readonly T[];

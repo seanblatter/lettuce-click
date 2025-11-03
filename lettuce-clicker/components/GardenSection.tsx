@@ -1257,7 +1257,12 @@ export function GardenSection({
         ]}
         showsVerticalScrollIndicator={false}
         scrollEnabled={!isDrawingGestureActive}>
-        <View style={[styles.harvestBanner, { paddingTop: bannerTopPadding }]}>
+        <View style={styles.harvestBanner}>
+          {/* Decorative background circles */}
+          <View style={styles.harvestDecorativeCircle1} />
+          <View style={styles.harvestDecorativeCircle2} />
+          <View style={styles.harvestDecorativeCircle3} />
+          
           <Text style={styles.harvestTitle}>Welcome to Lettuce Garden</Text>
           <Text style={styles.harvestAmount}>
             You have harvested {harvest.toLocaleString()} clicks.
@@ -2464,16 +2469,51 @@ const styles = StyleSheet.create({
     elevation: 4,
     gap: 4,
     alignItems: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  harvestDecorativeCircle1: {
+    position: 'absolute',
+    top: -30,
+    right: -20,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(34, 197, 94, 0.25)',
+  },
+  harvestDecorativeCircle2: {
+    position: 'absolute',
+    bottom: -25,
+    left: -15,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(74, 222, 128, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(74, 222, 128, 0.2)',
+  },
+  harvestDecorativeCircle3: {
+    position: 'absolute',
+    top: 20,
+    left: -40,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.15)',
   },
   harvestTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 28,
+    fontWeight: '800',
     color: '#f0fff4',
     textAlign: 'center',
   },
   harvestAmount: {
-    fontSize: 24,
-    fontWeight: '800',
+    fontSize: 18,
+    fontWeight: '700',
     color: '#c6f6d5',
     textAlign: 'center',
   },

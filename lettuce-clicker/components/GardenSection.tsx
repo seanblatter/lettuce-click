@@ -276,6 +276,14 @@ export function GardenSection({
   title = 'Lettuce Gardens',
 }: Props) {
   const insets = useSafeAreaInsets();
+  const dimensions = useWindowDimensions();
+  
+  // Orientation detection and responsive layout
+  const isLandscape = dimensions.width > dimensions.height;
+  const responsiveGridColumns = isLandscape ? 6 : 4;
+  const responsiveContentPadding = isLandscape ? 16 : 24;
+  const responsiveBannerPadding = isLandscape ? 16 : 20;
+  
   const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null);
   const [activeSheet, setActiveSheet] = useState<'shop' | 'inventory' | null>(null);
   const [shopFilter, setShopFilter] = useState('');
@@ -1253,35 +1261,36 @@ export function GardenSection({
           {
             paddingTop: 0,
             paddingBottom: contentBottomPadding,
+            paddingHorizontal: responsiveContentPadding,
           },
         ]}
         showsVerticalScrollIndicator={false}
         scrollEnabled={!isDrawingGestureActive}>
-        <View style={styles.harvestBanner}>
+        <View style={[styles.harvestBanner, { paddingHorizontal: responsiveBannerPadding }, isLandscape && styles.harvestBannerLandscape]}>
           {/* Decorative background circles */}
           <View style={styles.harvestDecorativeCircle1} />
           <View style={styles.harvestDecorativeCircle2} />
           <View style={styles.harvestDecorativeCircle3} />
           
-          <Text style={styles.harvestTitle}>Welcome to Lettuce Garden</Text>
-          <Text style={styles.harvestAmount}>
+          <Text style={[styles.harvestTitle, isLandscape && styles.harvestTitleLandscape]}>Welcome to Lettuce Garden</Text>
+          <Text style={[styles.harvestAmount, isLandscape && styles.harvestAmountLandscape]}>
             You have harvested {harvest.toLocaleString()} clicks.
           </Text>
-          <Text style={styles.harvestHint}>
+          <Text style={[styles.harvestHint, isLandscape && styles.harvestHintLandscape]}>
             Your harvest bankroll is ready—shop curated emoji sets and paint the garden to life.
           </Text>
         </View>
 
-        <View style={styles.launcherRow}>
+        <View style={[styles.launcherRow, isLandscape && styles.launcherRowLandscape]}>
           <Pressable
-            style={styles.launcherCard}
+            style={[styles.launcherCard, isLandscape && styles.launcherCardLandscape]}
             onPress={() => handleOpenSheet('shop')}
             accessibilityLabel="Open the Garden shop">
             <Text style={styles.launcherIcon}>{shopEmoji}</Text>
             <Text style={styles.launcherHeading}>GardenShop</Text>
           </Pressable>
           <Pressable
-            style={styles.launcherCard}
+            style={[styles.launcherCard, isLandscape && styles.launcherCardLandscape]}
             onPress={() => handleOpenSheet('inventory')}
             accessibilityLabel="Open your inventory">
             <Text style={styles.launcherIcon}>{inventoryEmoji}</Text>
@@ -1956,7 +1965,7 @@ export function GardenSection({
               data={filteredShopInventory}
               renderItem={renderShopItem}
               keyExtractor={keyExtractor}
-              numColumns={GRID_COLUMN_COUNT}
+              numColumns={responsiveGridColumns}
               columnWrapperStyle={styles.sheetColumn}
               showsVerticalScrollIndicator
               contentContainerStyle={styles.sheetListContent}
@@ -2082,7 +2091,7 @@ export function GardenSection({
               data={filteredOwnedInventory}
               renderItem={renderInventoryItem}
               keyExtractor={keyExtractor}
-              numColumns={GRID_COLUMN_COUNT}
+              numColumns={responsiveGridColumns}
               columnWrapperStyle={styles.sheetColumn}
               showsVerticalScrollIndicator
               contentContainerStyle={styles.sheetListContent}
@@ -2523,6 +2532,20 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     textAlign: 'center',
   },
+  harvestBannerLandscape: {
+    paddingVertical: 16,
+    gap: 3,
+  },
+  harvestTitleLandscape: {
+    fontSize: 24,
+  },
+  harvestAmountLandscape: {
+    fontSize: 16,
+  },
+  harvestHintLandscape: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
   launcherRow: {
     flexDirection: 'row',
     gap: 12,
@@ -2543,6 +2566,16 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     elevation: 4,
     minWidth: 160,
+  },
+  launcherRowLandscape: {
+    gap: 8,
+    paddingHorizontal: 20,
+  },
+  launcherCardLandscape: {
+    paddingVertical: 16,
+    paddingHorizontal: 14,
+    borderRadius: 18,
+    minWidth: 140,
   },
   launcherIcon: {
     fontSize: 44,

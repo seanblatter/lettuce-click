@@ -616,20 +616,20 @@ export default function HomeScreen() {
           // persistence best effort only
         });
       }
+      // Check if user can win an emoji they haven't purchased yet
       const lockedEmojis = lockedShopEmojis;
       let unlockedEmoji: EmojiDefinition | null = null;
 
-      if (lockedEmojis.length > 0) {
-        const shuffled = [...lockedEmojis];
-        for (let index = shuffled.length - 1; index > 0; index -= 1) {
-          const swapIndex = Math.floor(Math.random() * (index + 1));
-          [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
-        }
-        for (const candidate of shuffled) {
-          if (grantEmojiUnlock(candidate.id)) {
-            unlockedEmoji = candidate;
-            break;
-          }
+      // 50% chance to win an emoji if there are locked emojis available
+      if (lockedEmojis.length > 0 && Math.random() < 0.5) {
+        // Select a random emoji from the locked emojis
+        const randomIndex = Math.floor(Math.random() * lockedEmojis.length);
+        const wonEmoji = lockedEmojis[randomIndex];
+        
+        if (wonEmoji) {
+          // Grant the emoji directly to the user's inventory
+          grantEmojiUnlock(wonEmoji.id);
+          unlockedEmoji = wonEmoji;
         }
       }
 
@@ -637,14 +637,12 @@ export default function HomeScreen() {
       if (unlockedEmoji) {
         setLastUnlockedEmoji(unlockedEmoji);
         setBonusMessage(
-          `You earned ${reward.toLocaleString()} clicks and unlocked ${unlockedEmoji.name}! ${unlockedEmoji.emoji}`
+          `You earned ${reward.toLocaleString()} clicks and won ${unlockedEmoji.name}!`
         );
       } else {
         setLastUnlockedEmoji(null);
         setBonusMessage(
-          lockedEmojis.length === 0
-            ? `You earned ${reward.toLocaleString()} clicks! Every Garden Shop emoji is already yours.`
-            : `You earned ${reward.toLocaleString()} clicks!`
+          `You earned ${reward.toLocaleString()} clicks! ${lockedEmojis.length > 0 ? 'Spin again for a chance to win emojis!' : 'All emojis unlocked!'}`
         );
       }
       setIsSpinningBonus(false);

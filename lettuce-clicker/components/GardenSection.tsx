@@ -311,6 +311,8 @@ export function GardenSection({
   const [inventoryEmoji, setInventoryEmoji] = useState('🧰');
   const [activeEmojiPicker, setActiveEmojiPicker] = useState<'shop' | 'inventory' | null>(null);
   const [shopPreview, setShopPreview] = useState<InventoryEntry | null>(null);
+  const [selectedInventoryEmoji, setSelectedInventoryEmoji] = useState<InventoryEntry | null>(null);
+  const [walletEmojis, setWalletEmojis] = useState<InventoryEntry[]>([]);
   const [isDrawingGestureActive, setIsDrawingGestureActive] = useState(false);
   
   // Debug shopPreview state changes
@@ -744,6 +746,37 @@ export function GardenSection({
     setSelectedEmoji(emojiId);
     setActiveSheet(null);
     setIsDrawingMode(false);
+  }, []);
+
+  const handleInventorySelect = useCallback((item: InventoryEntry) => {
+    // Toggle emoji stats display in inventory
+    if (selectedInventoryEmoji?.id === item.id) {
+      setSelectedInventoryEmoji(null);
+    } else {
+      setSelectedInventoryEmoji(item);
+    }
+  }, [selectedInventoryEmoji]);
+
+  const handleInventoryLongPress = useCallback((item: InventoryEntry) => {
+    console.log('🎒 Long press detected for:', item.name);
+    
+    // Toggle emoji in wallet
+    setWalletEmojis(prev => {
+      const isInWallet = prev.some(e => e.id === item.id);
+      if (isInWallet) {
+        console.log('🗑️ Removing from wallet:', item.name);
+        // Remove from wallet
+        return prev.filter(e => e.id !== item.id);
+      } else {
+        console.log('✨ Adding to wallet:', item.name);
+        // Add to wallet (max 10 items)
+        if (prev.length >= 10) {
+          console.log('💼 Wallet full, replacing oldest');
+          return [...prev.slice(1), item]; // Remove first, add new
+        }
+        return [...prev, item];
+      }
+    });
   }, []);
 
   const handlePurchase = (emojiId: string) => {
@@ -1227,7 +1260,8 @@ export function GardenSection({
     const categoryLabel = CATEGORY_LABELS[item.category];
     const categoryIcon = CATEGORY_ICONS[item.category];
     const isDragging = draggingInventoryId === item.id;
-    const shouldShake = Boolean(draggingInventoryId);
+    const shouldShake = false; // Disable shaking/jiggling for wallet system
+    const isInWallet = walletEmojis.some(e => e.id === item.id);
 
     return (
       <InventoryTileItem
@@ -1240,6 +1274,9 @@ export function GardenSection({
         categoryIcon={categoryIcon}
         canReorder={canReorderInventory}
         onSelect={handleSelect}
+        onInventorySelect={handleInventorySelect}
+        onInventoryLongPress={handleInventoryLongPress}
+        isInWallet={isInWallet}
         onLayout={handleInventoryTileLayout}
         beginDrag={beginInventoryDrag}
         updateDrag={updateInventoryDrag}
@@ -1298,39 +1335,37 @@ export function GardenSection({
           </Pressable>
         </View>
 
-        <View style={styles.selectionStatus}>
-          {selectedDetails ? (
-            <>
-              <Text style={styles.selectionStatusTitle}>
-                Ready to place {selectedDetails.emoji} {selectedDetails.name}
-              </Text>
-              <Text style={styles.selectionStatusCopy}>
-                Tap the canvas to drop it. Single tap decorations to grow them, swipe up or down to fine-tune
-                their size, pinch to resize, twist to rotate freely, and long press to shrink when fine tuning.
-              </Text>
-              <View style={styles.selectionStatusActions}>
-                <Text style={styles.selectionStatusMeta}>
-                  {emojiInventory[selectedDetails.id]
-                    ? 'Unlocked for unlimited placements'
-                    : 'Locked — unlock in Garden Shop'}
-                </Text>
-                <Pressable
-                  onPress={() => {
-                    setSelectedEmoji(null);
-                    setIsDrawingMode(false);
-                  }}
-                  style={styles.stopPlacingButton}>
-                  <Text style={styles.stopPlacingText}>Stop placing</Text>
-                </Pressable>
-              </View>
-            </>
+        <View style={styles.walletContainer}>
+          <Text style={styles.walletTitle}>Emoji Wallet</Text>
+          {walletEmojis.length > 0 ? (
+            <View style={styles.walletGrid}>
+              {Array.from({ length: 10 }, (_, index) => {
+                const emoji = walletEmojis[index];
+                return (
+                  <Pressable
+                    key={index}
+                    style={[
+                      styles.walletSlot,
+                      emoji && selectedEmoji === emoji.id && styles.walletSlotActive,
+                      !emoji && styles.walletSlotEmpty,
+                    ]}
+                    onPress={() => {
+                      if (emoji) {
+                        setSelectedEmoji(emoji.id);
+                        setIsDrawingMode(false);
+                      }
+                    }}
+                    disabled={!emoji}
+                  >
+                    {emoji && <Text style={styles.walletEmoji}>{emoji.emoji}</Text>}
+                  </Pressable>
+                );
+              })}
+            </View>
           ) : (
-            <>
-              <Text style={styles.selectionStatusTitle}>No decoration selected</Text>
-              <Text style={styles.selectionStatusCopy}>
-                Choose an emoji from your inventory or the shop to prepare it for the garden canvas.
-              </Text>
-            </>
+            <View style={styles.walletEmpty}>
+              <Text style={styles.walletEmptyText}>Long press emojis in inventory to add them here</Text>
+            </View>
           )}
         </View>
 
@@ -2061,6 +2096,36 @@ export function GardenSection({
                   Every emoji you buy or add is saved, even when a harvest resets.
                 </Text>
               </View>
+              {selectedInventoryEmoji && (
+                <View style={styles.emojiStatsContainer}>
+                  <View style={styles.emojiStatsHeader}>
+                    <View style={styles.emojiStatsIconContainer}>
+                      <Text style={styles.emojiStatsIcon}>{selectedInventoryEmoji.emoji}</Text>
+                    </View>
+                    <View style={styles.emojiStatsInfo}>
+                      <Text style={styles.emojiStatsName}>{selectedInventoryEmoji.name}</Text>
+                      <Text style={styles.emojiStatsCategory}>
+                        {CATEGORY_ICONS[selectedInventoryEmoji.category]} {CATEGORY_LABELS[selectedInventoryEmoji.category]}
+                      </Text>
+                    </View>
+                    <Pressable
+                      onPress={() => setSelectedInventoryEmoji(null)}
+                      style={styles.emojiStatsCloseButton}>
+                      <Text style={styles.emojiStatsCloseText}>×</Text>
+                    </Pressable>
+                  </View>
+                  <View style={styles.emojiStatsDetails}>
+                    <Text style={styles.emojiStatsDescription}>{formatEmojiDescription(selectedInventoryEmoji)}</Text>
+                    <View style={styles.emojiStatsTags}>
+                      {selectedInventoryEmoji.tags.slice(0, 3).map((tag, index) => (
+                        <View key={index} style={styles.emojiStatsTag}>
+                          <Text style={styles.emojiStatsTagText}>#{tag}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+              )}
             </View>
             <View style={styles.categoryFilterBlock}>
               <ScrollView
@@ -2133,6 +2198,9 @@ type InventoryTileItemProps = {
   categoryIcon: string;
   canReorder: boolean;
   onSelect: (emojiId: string, owned: boolean) => void;
+  onInventorySelect?: (item: InventoryEntry) => void;
+  onInventoryLongPress?: (item: InventoryEntry) => void;
+  isInWallet?: boolean;
   onLayout: (event: LayoutChangeEvent) => void;
   beginDrag: (emojiId: string, index: number) => void;
   updateDrag: (dx: number, dy: number) => void;
@@ -2150,6 +2218,9 @@ function InventoryTileItem({
   categoryIcon,
   canReorder,
   onSelect,
+  onInventorySelect,
+  onInventoryLongPress,
+  isInWallet,
   onLayout,
   beginDrag,
   updateDrag,
@@ -2174,11 +2245,22 @@ function InventoryTileItem({
   }, [shouldShake, wiggle]);
 
   const longPressGesture = Gesture.LongPress()
-    .minDuration(250)
+    .minDuration(400)
     .onStart(() => {
-      if (!canReorder) {
+      console.log('🔄 Long press gesture triggered for:', item.name);
+      
+      // Prioritize wallet functionality over drag reordering
+      if (onInventoryLongPress && !draggingIdRef.current) {
+        console.log('🎯 Calling wallet handler for:', item.name);
+        runOnJS(onInventoryLongPress)(item);
         return;
       }
+      
+      if (!canReorder) {
+        console.log('❌ Cannot reorder, skipping drag');
+        return;
+      }
+      console.log('🔀 Starting drag for:', item.name);
       runOnJS(beginDrag)(item.id, index);
     })
     .onEnd(() => {
@@ -2193,7 +2275,7 @@ function InventoryTileItem({
       }
       runOnJS(endDrag)();
     })
-    .enabled(canReorder);
+    .enabled(true); // Always enabled for wallet functionality
 
   const panGesture = Gesture.Pan()
     .onUpdate((event) => {
@@ -2231,15 +2313,21 @@ function InventoryTileItem({
             styles.shopTile,
             isSelected && styles.shopTilePressed,
             isDragging && styles.shopTilePressed,
+            isInWallet && styles.walletHighlight,
           ]}
           onPress={() => {
             if (draggingIdRef.current) {
               return;
             }
-            onSelect(item.id, item.owned);
+            // Use inventory select handler if available (for stats display)
+            if (onInventorySelect) {
+              onInventorySelect(item);
+            } else {
+              onSelect(item.id, item.owned);
+            }
           }}
           accessibilityLabel={`${item.name} (${categoryLabel}) emoji`}
-          accessibilityHint="Select to ready this decoration."
+          accessibilityHint="Tap for stats, long press to add to wallet."
         >
           <View style={styles.shopTileAura}>
             <View style={styles.shopTileHalo} />
@@ -3878,5 +3966,154 @@ const styles = StyleSheet.create({
   },
   inventoryTileEmoji: {
     fontSize: 32,
+  },
+  emojiStatsContainer: {
+    backgroundColor: '#f0fdf4',
+    borderRadius: 16,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  emojiStatsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  emojiStatsIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    borderWidth: 2,
+    borderColor: '#22c55e',
+    shadowColor: 'rgba(34, 197, 94, 0.2)',
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  emojiStatsIcon: {
+    fontSize: 32,
+  },
+  emojiStatsInfo: {
+    flex: 1,
+  },
+  emojiStatsName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 2,
+  },
+  emojiStatsCategory: {
+    fontSize: 14,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  emojiStatsDetails: {
+    gap: 8,
+  },
+  emojiStatsDescription: {
+    fontSize: 14,
+    color: '#374151',
+    lineHeight: 20,
+  },
+  emojiStatsTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  emojiStatsTag: {
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#86efac',
+  },
+  emojiStatsTagText: {
+    fontSize: 12,
+    color: '#166534',
+    fontWeight: '600',
+  },
+  emojiStatsCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  emojiStatsCloseText: {
+    fontSize: 20,
+    color: '#64748b',
+    fontWeight: '600',
+  },
+  walletContainer: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    marginHorizontal: 16,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  walletTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#334155',
+    marginBottom: 8,
+  },
+  walletGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    justifyContent: 'space-between',
+  },
+  walletSlot: {
+    width: 52,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  walletSlotEmpty: {
+    backgroundColor: '#f1f5f9',
+    borderColor: '#e2e8f0',
+    borderStyle: 'dashed',
+  },
+  walletSlotActive: {
+    backgroundColor: '#fef3c7',
+    borderColor: '#f59e0b',
+    borderWidth: 2,
+  },
+  walletEmoji: {
+    fontSize: 24,
+  },
+  walletEmpty: {
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  walletEmptyText: {
+    fontSize: 12,
+    color: '#94a3b8',
+    fontStyle: 'italic',
+  },
+  walletHighlight: {
+    backgroundColor: 'rgba(251, 191, 36, 0.1)',
+    borderWidth: 2,
+    borderColor: '#fbbf24',
+    shadowColor: '#f59e0b',
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
   },
 });

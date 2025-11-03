@@ -19,7 +19,7 @@ import { OrbitingUpgradeEmojis } from '@/components/OrbitingUpgradeEmojis';
 import { MusicContent } from '@/app/music';
 import { ProfileContent } from '@/app/profile';
 import { useGame } from '@/context/GameContext';
-import { gardenEmojiCatalog, formatClickValue } from '@/constants/emojiCatalog';
+import { gardenEmojiCatalog } from '@/constants/emojiCatalog';
 import type { EmojiDefinition, HomeEmojiTheme } from '@/context/GameContext';
 import { useAmbientAudio } from '@/context/AmbientAudioContext';
 import { preloadRewardedAd, showRewardedAd } from '@/lib/rewardedAd';
@@ -29,14 +29,6 @@ const DAILY_BONUS_LAST_CLAIM_KEY = 'lettuce-click:daily-bonus-last-claim';
 const BONUS_REWARD_OPTIONS = [75, 125, 200, 325, 500, 650];
 const BONUS_ADDITIONAL_SPINS = 2;
 const DAILY_BONUS_INTERVAL_MS = 24 * 60 * 60 * 1000;
-const TOTAL_GARDEN_EMOJI_COUNT = 3953;
-const BONUS_CATEGORY_LABELS: Record<EmojiDefinition['category'], string> = {
-  plants: 'Garden Plant',
-  scenery: 'Scenery Accent',
-  creatures: 'Garden Creature',
-  features: 'Garden Feature',
-  accents: 'Garden Accent',
-};
 const LEDGER_THEMES = [
   {
     backgroundColor: 'rgba(255, 255, 255, 0.32)',
@@ -155,10 +147,6 @@ export default function HomeScreen() {
 
   const lockedShopEmojis = useMemo(
     () => gardenEmojiCatalog.filter((emoji) => !emojiInventory[emoji.id]),
-    [emojiInventory]
-  );
-  const totalOwnedEmojis = useMemo(
-    () => Object.values(emojiInventory).filter(Boolean).length,
     [emojiInventory]
   );
   const [showGrowModal, setShowGrowModal] = useState(false);
@@ -653,9 +641,8 @@ export default function HomeScreen() {
         );
       } else {
         setLastUnlockedEmoji(null);
-        const ownedTotalAfterSpin = totalOwnedEmojis;
         setBonusMessage(
-          lockedEmojis.length === 0 && ownedTotalAfterSpin >= TOTAL_GARDEN_EMOJI_COUNT
+          lockedEmojis.length === 0
             ? `You earned ${reward.toLocaleString()} clicks! Every Garden Shop emoji is already yours.`
             : `You earned ${reward.toLocaleString()} clicks!`
         );
@@ -670,7 +657,6 @@ export default function HomeScreen() {
     isSpinningBonus,
     lockedShopEmojis,
     grantEmojiUnlock,
-    totalOwnedEmojis,
   ]);
 
   const handleWatchBonusAd = useCallback(async () => {
@@ -1267,32 +1253,17 @@ export default function HomeScreen() {
               <Text style={styles.bonusReward}>Last reward: {lastBonusReward.toLocaleString()} clicks</Text>
             ) : null}
             {bonusMessage ? <Text style={styles.bonusMessage}>{bonusMessage}</Text> : null}
-            {lastUnlockedEmoji
-              ? (() => {
-                  const categoryLabel = BONUS_CATEGORY_LABELS[lastUnlockedEmoji.category];
-                  const tagLine = lastUnlockedEmoji.tags.slice(0, 2).join(' • ');
-                  const priceLabel = `${formatClickValue(lastUnlockedEmoji.cost)} clicks`;
-
-                  return (
-                    <View style={styles.bonusUnlockCard}>
-                      <Text style={styles.bonusUnlockLabel}>Newest emoji reward</Text>
-                      <View style={styles.bonusUnlockBody}>
-                        <View style={styles.bonusUnlockGlyphWrap}>
-                          <Text style={styles.bonusUnlockGlyph}>{lastUnlockedEmoji.emoji}</Text>
-                        </View>
-                        <View style={styles.bonusUnlockDetails}>
-                          <Text style={styles.bonusUnlockName}>{lastUnlockedEmoji.name}</Text>
-                          <Text style={styles.bonusUnlockCategory}>{categoryLabel}</Text>
-                          <Text style={styles.bonusUnlockCost}>{priceLabel}</Text>
-                          {tagLine.length > 0 ? (
-                            <Text style={styles.bonusUnlockTags}>{tagLine}</Text>
-                          ) : null}
-                        </View>
-                      </View>
-                    </View>
-                  );
-                })()
-              : null}
+            {lastUnlockedEmoji ? (
+              <View style={styles.bonusUnlockCard}>
+                <Text style={styles.bonusUnlockLabel}>Newest emoji reward</Text>
+                <View style={styles.bonusUnlockRow}>
+                  <View style={styles.bonusUnlockGlyphWrap}>
+                    <Text style={styles.bonusUnlockGlyph}>{lastUnlockedEmoji.emoji}</Text>
+                  </View>
+                  <Text style={styles.bonusUnlockName}>{lastUnlockedEmoji.name}</Text>
+                </View>
+              </View>
+            ) : null}
             <Pressable
               style={[styles.bonusPrimaryButton, (isSpinningBonus || availableBonusSpins <= 0) && styles.bonusButtonDisabled]}
               onPress={handleSpinBonus}
@@ -2053,70 +2024,42 @@ const styles = StyleSheet.create({
   },
   bonusUnlockCard: {
     width: '100%',
-    borderRadius: 20,
-    backgroundColor: '#fef3c7',
-    borderWidth: 1.5,
-    borderColor: 'rgba(245, 158, 11, 0.65)',
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    gap: 10,
+    borderRadius: 18,
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    gap: 6,
     alignItems: 'flex-start',
-    shadowColor: 'rgba(180, 83, 9, 0.24)',
-    shadowOpacity: 0.24,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 4,
   },
   bonusUnlockLabel: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#92400e',
+    color: '#047857',
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
-  bonusUnlockBody: {
+  bonusUnlockRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 12,
   },
   bonusUnlockGlyphWrap: {
-    width: 54,
-    height: 54,
-    borderRadius: 16,
-    backgroundColor: '#fde68a',
-    borderWidth: 1,
-    borderColor: 'rgba(217, 119, 6, 0.45)',
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#d1fae5',
     alignItems: 'center',
     justifyContent: 'center',
   },
   bonusUnlockGlyph: {
-    fontSize: 30,
-  },
-  bonusUnlockDetails: {
-    flex: 1,
-    gap: 2,
+    fontSize: 26,
   },
   bonusUnlockName: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#7c2d12',
-  },
-  bonusUnlockCategory: {
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    color: '#b45309',
-  },
-  bonusUnlockCost: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#92400e',
-  },
-  bonusUnlockTags: {
-    fontSize: 11,
-    color: '#78350f',
-    opacity: 0.8,
+    color: '#0f3d2b',
   },
   bonusPrimaryButton: {
     width: '100%',

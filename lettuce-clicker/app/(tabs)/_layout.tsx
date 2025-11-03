@@ -81,11 +81,11 @@ export default function TabLayout() {
   }, [colorScheme, homeEmojiTheme, premiumAccentColor]);
 
   const inactiveAccent = useMemo(() => {
-    if (!baseAccent.startsWith('#')) {
+    if (!baseAccent) {
       return Colors[colorScheme].tabIconDefault;
     }
 
-    return lightenColor(baseAccent, colorScheme === 'dark' ? 0.4 : 0.7);
+    return baseAccent;
   }, [baseAccent, colorScheme]);
 
   const tabBackground = useMemo(() => {

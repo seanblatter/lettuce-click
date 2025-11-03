@@ -58,7 +58,7 @@ const createEmoji = (
   };
 };
 
-const gardenEmojiEntries: EmojiDefinition[] = [
+const baseGardenEmojiEntries: EmojiDefinition[] = [
   createEmoji({
     id: 'sunflower-bloom',
     emoji: '🌻',
@@ -1647,6 +1647,37 @@ const gardenEmojiEntries: EmojiDefinition[] = [
       'clicker icon',
     ],
   }),
+];
+
+const EXTRA_EMOJI_GLYPHS = ['✨', '🌠', '🌌', '💫', '🪐'] as const;
+const EXTRA_EMOJI_COUNT = 100;
+
+const generatedGardenEmojiEntries: EmojiDefinition[] = Array.from(
+  { length: EXTRA_EMOJI_COUNT },
+  (_, index) => {
+    const glyph = EXTRA_EMOJI_GLYPHS[index % EXTRA_EMOJI_GLYPHS.length];
+    const sequence = index + 1;
+    return createEmoji({
+      id: `celestial-garden-${sequence}`,
+      emoji: glyph,
+      name: `Celestial Garden Light ${sequence}`,
+      category: 'accents',
+      popularity: 200 + index,
+      tags: [
+        'starlight shimmer',
+        'night garden glow',
+        'halo ripple',
+        `constellation ${sequence}`,
+        'dream capsule aura',
+      ],
+      priceAnchorPercent: 0.72,
+    });
+  }
+);
+
+const gardenEmojiEntries: EmojiDefinition[] = [
+  ...baseGardenEmojiEntries,
+  ...generatedGardenEmojiEntries,
 ];
 
 const sortedByPopularity = [...gardenEmojiEntries].sort((a, b) => a.popularity - b.popularity);

@@ -19,7 +19,12 @@ import { OrbitingUpgradeEmojis } from '@/components/OrbitingUpgradeEmojis';
 import { MusicContent } from '@/app/music';
 import { ProfileContent } from '@/app/profile';
 import { useGame } from '@/context/GameContext';
-import { gardenEmojiCatalog } from '@/constants/emojiCatalog';
+import {
+  EMOJI_CATEGORY_METADATA,
+  TOTAL_EMOJI_LIBRARY_COUNT,
+  formatClickValue,
+  gardenEmojiCatalog,
+} from '@/constants/emojiCatalog';
 import type { EmojiDefinition, HomeEmojiTheme } from '@/context/GameContext';
 import { useAmbientAudio } from '@/context/AmbientAudioContext';
 import { preloadRewardedAd, showRewardedAd } from '@/lib/rewardedAd';
@@ -149,6 +154,10 @@ export default function HomeScreen() {
     () => gardenEmojiCatalog.filter((emoji) => !emojiInventory[emoji.id]),
     [emojiInventory]
   );
+  const totalCollectedEmojis = useMemo(
+    () => Object.values(emojiInventory).filter(Boolean).length,
+    [emojiInventory]
+  );
   const [showGrowModal, setShowGrowModal] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPage, setMenuPage] = useState<'overview' | 'themes'>('overview');
@@ -170,6 +179,14 @@ export default function HomeScreen() {
   const [hasDoubledPassiveHarvest, setHasDoubledPassiveHarvest] = useState(false);
   const [isWatchingResumeOffer, setIsWatchingResumeOffer] = useState(false);
   const [ledgerToneIndex, setLedgerToneIndex] = useState(0);
+  const lastUnlockedMetadata = useMemo(
+    () => (lastUnlockedEmoji ? EMOJI_CATEGORY_METADATA[lastUnlockedEmoji.category] : null),
+    [lastUnlockedEmoji]
+  );
+  const lastUnlockedCostLabel = useMemo(
+    () => (lastUnlockedEmoji ? formatClickValue(lastUnlockedEmoji.cost) : null),
+    [lastUnlockedEmoji]
+  );
   const insets = useSafeAreaInsets();
   const flipAnimation = useRef(new Animated.Value(0)).current;
   const { isPlaying: isAmbientPlaying } = useAmbientAudio();
@@ -633,18 +650,22 @@ export default function HomeScreen() {
         }
       }
 
+      const rewardLabel = formatClickValue(reward);
+      const updatedTotal = unlockedEmoji ? totalCollectedEmojis + 1 : totalCollectedEmojis;
+      const hasFullCollection = updatedTotal >= TOTAL_EMOJI_LIBRARY_COUNT;
+
       setLastBonusReward(reward);
       if (unlockedEmoji) {
         setLastUnlockedEmoji(unlockedEmoji);
         setBonusMessage(
-          `You earned ${reward.toLocaleString()} clicks and unlocked ${unlockedEmoji.name}! ${unlockedEmoji.emoji}`
+          `You earned ${rewardLabel} clicks and unlocked ${unlockedEmoji.name}! ${unlockedEmoji.emoji}`
         );
       } else {
         setLastUnlockedEmoji(null);
         setBonusMessage(
-          lockedEmojis.length === 0
-            ? `You earned ${reward.toLocaleString()} clicks! Every Garden Shop emoji is already yours.`
-            : `You earned ${reward.toLocaleString()} clicks!`
+          lockedEmojis.length === 0 && hasFullCollection
+            ? `You earned ${rewardLabel} clicks! Every Garden Shop emoji is already yours.`
+            : `You earned ${rewardLabel} clicks!`
         );
       }
       setIsSpinningBonus(false);
@@ -657,6 +678,7 @@ export default function HomeScreen() {
     isSpinningBonus,
     lockedShopEmojis,
     grantEmojiUnlock,
+    totalCollectedEmojis,
   ]);
 
   const handleWatchBonusAd = useCallback(async () => {
@@ -1256,11 +1278,19 @@ export default function HomeScreen() {
             {lastUnlockedEmoji ? (
               <View style={styles.bonusUnlockCard}>
                 <Text style={styles.bonusUnlockLabel}>Newest emoji reward</Text>
-                <View style={styles.bonusUnlockRow}>
-                  <View style={styles.bonusUnlockGlyphWrap}>
-                    <Text style={styles.bonusUnlockGlyph}>{lastUnlockedEmoji.emoji}</Text>
+                <View style={styles.bonusUnlockBody}>
+                  <View style={styles.bonusUnlockBadge}>
+                    <Text style={styles.bonusUnlockEmoji}>{lastUnlockedEmoji.emoji}</Text>
                   </View>
-                  <Text style={styles.bonusUnlockName}>{lastUnlockedEmoji.name}</Text>
+                  <View style={styles.bonusUnlockDetails}>
+                    <Text style={styles.bonusUnlockName}>{lastUnlockedEmoji.name}</Text>
+                    {lastUnlockedMetadata ? (
+                      <Text style={styles.bonusUnlockUse}>{lastUnlockedMetadata.use}</Text>
+                    ) : null}
+                    {lastUnlockedCostLabel ? (
+                      <Text style={styles.bonusUnlockCost}>{lastUnlockedCostLabel} clicks</Text>
+                    ) : null}
+                  </View>
                 </View>
               </View>
             ) : null}
@@ -2024,42 +2054,70 @@ const styles = StyleSheet.create({
   },
   bonusUnlockCard: {
     width: '100%',
-    borderRadius: 18,
-    backgroundColor: '#ecfdf5',
+    borderRadius: 20,
+    backgroundColor: '#fff7ed',
     borderWidth: 1,
-    borderColor: '#bbf7d0',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    gap: 6,
+    borderColor: 'rgba(245, 158, 11, 0.55)',
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    gap: 12,
     alignItems: 'flex-start',
+    shadowColor: 'rgba(180, 83, 9, 0.25)',
+    shadowOpacity: 0.24,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 5,
   },
   bonusUnlockLabel: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#047857',
+    color: '#b45309',
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
-  bonusUnlockRow: {
+  bonusUnlockBody: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
   },
-  bonusUnlockGlyphWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: '#d1fae5',
+  bonusUnlockBadge: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#fef3c7',
+    borderWidth: 1,
+    borderColor: '#f59e0b',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: 'rgba(194, 65, 12, 0.25)',
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
-  bonusUnlockGlyph: {
-    fontSize: 26,
+  bonusUnlockEmoji: {
+    fontSize: 36,
+  },
+  bonusUnlockDetails: {
+    flex: 1,
+    gap: 6,
   },
   bonusUnlockName: {
-    fontSize: 16,
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#7c2d12',
+  },
+  bonusUnlockUse: {
+    fontSize: 13,
+    color: '#9a3412',
+    lineHeight: 18,
+  },
+  bonusUnlockCost: {
+    fontSize: 13,
     fontWeight: '700',
-    color: '#0f3d2b',
+    color: '#b45309',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
   },
   bonusPrimaryButton: {
     width: '100%',

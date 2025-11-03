@@ -35,7 +35,12 @@ import Animated, {
 import { captureRef } from 'react-native-view-shot';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { emojiCategoryOrder, formatClickValue } from '@/constants/emojiCatalog';
+import {
+  EMOJI_CATEGORY_METADATA,
+  TOTAL_EMOJI_LIBRARY_COUNT,
+  emojiCategoryOrder,
+  formatClickValue,
+} from '@/constants/emojiCatalog';
 import { EmojiDefinition, Placement, TextStyleId } from '@/context/GameContext';
 
 type Props = {
@@ -125,8 +130,7 @@ const PEN_SIZES = [3, 5, 8, 12];
 const TEXT_SCALE_MIN = 0.7;
 const TEXT_SCALE_MAX = 2;
 const TEXT_SLIDER_THUMB_SIZE = 24;
-const TOTAL_EMOJI_LIBRARY_COUNT = 3953;
-const GRID_COLUMN_COUNT = 4;
+const GRID_COLUMN_COUNT = 3;
 const GRID_VISIBLE_ROW_COUNT = 3;
 const GRID_ROW_HEIGHT = 148;
 
@@ -195,32 +199,23 @@ const TEXT_STYLE_MAP = TEXT_STYLE_OPTIONS.reduce<Record<TextStyleId, TextStyle>>
   return acc;
 }, {} as Record<TextStyleId, TextStyle>);
 
-const CATEGORY_LABELS: Record<EmojiDefinition['category'], string> = {
-  plants: 'Plants & Foliage',
-  scenery: 'Scenery & Sky',
-  creatures: 'Garden Creatures',
-  features: 'Garden Features',
-  accents: 'Atmosphere & Accents',
-};
-
-const CATEGORY_ICONS: Record<EmojiDefinition['category'], string> = {
-  plants: '🪴',
-  scenery: '🌅',
-  creatures: '🦋',
-  features: '🏡',
-  accents: '✨',
-};
-
 type CategoryFilter = 'all' | EmojiDefinition['category'];
 
 const CATEGORY_OPTIONS: { id: CategoryFilter; label: string; icon: string }[] = [
   { id: 'all', label: 'All Items', icon: '🌼' },
-  { id: 'plants', label: 'Plants', icon: '🪴' },
-  { id: 'scenery', label: 'Scenery', icon: '🌅' },
-  { id: 'creatures', label: 'Creatures', icon: '🦋' },
-  { id: 'features', label: 'Features', icon: '🏡' },
-  { id: 'accents', label: 'Accents', icon: '✨' },
+  ...emojiCategoryOrder.map((category) => ({
+    id: category,
+    label: EMOJI_CATEGORY_METADATA[category].label,
+    icon: EMOJI_CATEGORY_METADATA[category].icon,
+  })),
 ];
+
+const CATEGORY_USE_HINTS = emojiCategoryOrder.reduce<
+  Record<EmojiDefinition['category'], string>
+>((acc, category) => {
+  acc[category] = EMOJI_CATEGORY_METADATA[category].use;
+  return acc;
+}, {} as Record<EmojiDefinition['category'], string>);
 
 const INVENTORY_COLUMNS = 3;
 const INVENTORY_COLUMN_GAP = 12;
@@ -282,6 +277,7 @@ export function GardenSection({
   const [shopEmoji, setShopEmoji] = useState('🏡');
   const [inventoryEmoji, setInventoryEmoji] = useState('🧰');
   const [activeEmojiPicker, setActiveEmojiPicker] = useState<'shop' | 'inventory' | null>(null);
+  const [previewedShopEmoji, setPreviewedShopEmoji] = useState<InventoryEntry | null>(null);
   const [isDrawingGestureActive, setIsDrawingGestureActive] = useState(false);
   const [activeDrag, setActiveDrag] = useState<{ id: string; point: { x: number; y: number } } | null>(null);
   const [penButtonLayout, setPenButtonLayout] = useState<LayoutRectangle | null>(null);
@@ -360,7 +356,7 @@ export function GardenSection({
           const normalizedTags = item.tags.map((tag) => tag.toLowerCase());
           const normalizedName = item.name.toLowerCase();
           const condensedName = normalizedName.replace(/\s+/g, '');
-          const categoryLabel = CATEGORY_LABELS[item.category].toLowerCase();
+          const categoryLabel = EMOJI_CATEGORY_METADATA[item.category].label.toLowerCase();
           const normalizedEmoji = stripVariationSelectors(item.emoji).toLowerCase();
           const searchBlob = Array.from(
             new Set([
@@ -712,13 +708,34 @@ export function GardenSection({
     setIsDrawingMode(false);
   }, []);
 
-  const handlePurchase = (emojiId: string) => {
-    const success = purchaseEmoji(emojiId);
+  const handlePurchase = useCallback(
+    (emojiId: string) => {
+      const success = purchaseEmoji(emojiId);
 
-    if (!success) {
-      Alert.alert('Not enough clicks', 'Gather more clicks to unlock this decoration.');
+      if (!success) {
+        Alert.alert('Not enough clicks', 'Gather more clicks to unlock this decoration.');
+      }
+
+      return success;
+    },
+    [purchaseEmoji]
+  );
+
+  const handleClosePreview = useCallback(() => {
+    setPreviewedShopEmoji(null);
+  }, []);
+
+  const handleConfirmPreviewPurchase = useCallback(() => {
+    if (!previewedShopEmoji) {
+      return;
     }
-  };
+
+    const success = handlePurchase(previewedShopEmoji.id);
+
+    if (success) {
+      setPreviewedShopEmoji(null);
+    }
+  }, [handlePurchase, previewedShopEmoji]);
 
   const handleSelectPenColor = useCallback(
     (color: string) => {
@@ -1099,6 +1116,7 @@ export function GardenSection({
   const handleCloseSheet = useCallback(() => {
     setActiveSheet(null);
     setActiveEmojiPicker(null);
+    setPreviewedShopEmoji(null);
   }, []);
   const handleOpenSheet = useCallback((sheet: 'shop' | 'inventory') => setActiveSheet(sheet), []);
   const togglePriceSortOrder = useCallback(
@@ -1127,14 +1145,22 @@ export function GardenSection({
       `${totalCollected.toLocaleString()} / ${TOTAL_EMOJI_LIBRARY_COUNT.toLocaleString()}`,
     [totalCollected]
   );
+  const previewMetadata = useMemo(
+    () => (previewedShopEmoji ? EMOJI_CATEGORY_METADATA[previewedShopEmoji.category] : null),
+    [previewedShopEmoji]
+  );
+  const previewUseHint = useMemo(
+    () => (previewedShopEmoji ? CATEGORY_USE_HINTS[previewedShopEmoji.category] : ''),
+    [previewedShopEmoji]
+  );
+  const previewCanAfford = previewedShopEmoji ? harvest >= previewedShopEmoji.cost : false;
 
   const renderShopItem: ListRenderItem<InventoryEntry> = ({ item }) => {
     const owned = item.owned;
     const isSelected = selectedEmoji === item.id;
     const canAfford = harvest >= item.cost;
     const locked = !owned;
-    const categoryLabel = CATEGORY_LABELS[item.category];
-    const categoryIcon = CATEGORY_ICONS[item.category];
+    const { label: categoryLabel, icon: categoryIcon } = EMOJI_CATEGORY_METADATA[item.category];
 
     const handleTilePress = () => {
       if (owned) {
@@ -1154,13 +1180,13 @@ export function GardenSection({
         );
         return;
       }
-      handlePurchase(item.id);
+      setPreviewedShopEmoji(item);
     };
 
     const accessibilityHint = locked
       ? canAfford
-        ? `Unlock this ${categoryLabel.toLowerCase()} decoration.`
-        : `Earn more harvest to unlock this ${categoryLabel.toLowerCase()} decoration.`
+        ? `Open details to unlock this ${categoryLabel.toLowerCase()} decoration.`
+        : `Open details to learn more about this ${categoryLabel.toLowerCase()} decoration.`
       : 'Select to ready this decoration.';
 
     return (
@@ -1188,7 +1214,9 @@ export function GardenSection({
                 <Text style={styles.emojiLockGlyph}>🔒</Text>
               </View>
             ) : null}
-            <View style={[styles.emojiBadgeGlow, isSelected && styles.emojiBadgeGlowActive]} />
+            <View
+              style={[styles.emojiBadgeGlow, isSelected && styles.emojiBadgeGlowActive, locked && styles.emojiBadgeGlowLocked]}
+            />
             <View
               style={[
                 styles.emojiBadgeCore,
@@ -1224,8 +1252,7 @@ export function GardenSection({
 
   const renderInventoryItem: ListRenderItem<InventoryEntry> = ({ item, index }) => {
     const isSelected = selectedEmoji === item.id;
-    const categoryLabel = CATEGORY_LABELS[item.category];
-    const categoryIcon = CATEGORY_ICONS[item.category];
+    const { label: categoryLabel, icon: categoryIcon } = EMOJI_CATEGORY_METADATA[item.category];
     const isDragging = draggingInventoryId === item.id;
     const shouldShake = Boolean(draggingInventoryId);
 
@@ -2016,6 +2043,71 @@ export function GardenSection({
           </View>
         </View>
       </Modal>
+      <Modal
+        visible={Boolean(previewedShopEmoji)}
+        transparent
+        animationType="fade"
+        onRequestClose={handleClosePreview}
+      >
+        <View style={styles.previewOverlay}>
+          <Pressable
+            style={styles.previewBackdrop}
+            onPress={handleClosePreview}
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss emoji details"
+          />
+          {previewedShopEmoji ? (
+            <View style={styles.previewCard}>
+              <View style={styles.previewEmojiBadge}>
+                <View style={styles.previewEmojiGlow} />
+                <View style={styles.previewEmojiCore}>
+                  <Text style={styles.previewEmojiGlyph}>{previewedShopEmoji.emoji}</Text>
+                </View>
+              </View>
+              {previewMetadata ? (
+                <Text style={styles.previewCategory}>{`${previewMetadata.icon} ${previewMetadata.label}`}</Text>
+              ) : null}
+              <Text style={styles.previewName} numberOfLines={2}>
+                {previewedShopEmoji.name}
+              </Text>
+              {previewUseHint ? <Text style={styles.previewUseCopy}>{previewUseHint}</Text> : null}
+              <View style={styles.previewCostRow}>
+                <Text style={styles.previewCostLabel}>Price</Text>
+                <Text style={styles.previewCostValue}>
+                  {formatClickValue(previewedShopEmoji.cost)} clicks
+                </Text>
+              </View>
+              {!previewCanAfford ? (
+                <Text style={styles.previewAffordHint}>Earn more harvest to unlock this emoji.</Text>
+              ) : null}
+              <View style={styles.previewActions}>
+                <Pressable
+                  style={styles.previewCancelButton}
+                  onPress={handleClosePreview}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel emoji purchase"
+                >
+                  <Text style={styles.previewCancelText}>Not now</Text>
+                </Pressable>
+                <Pressable
+                  style={[
+                    styles.previewPurchaseButton,
+                    !previewCanAfford && styles.previewPurchaseButtonDisabled,
+                  ]}
+                  onPress={handleConfirmPreviewPurchase}
+                  disabled={!previewCanAfford}
+                  accessibilityRole="button"
+                  accessibilityLabel="Unlock emoji"
+                >
+                  <Text style={styles.previewPurchaseText}>
+                    {previewCanAfford ? 'Unlock emoji' : 'Need more clicks'}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -2540,9 +2632,9 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   emojiTileLocked: {
-    backgroundColor: '#f5d08a',
+    backgroundColor: '#fef3c7',
     borderColor: '#f59e0b',
-    shadowColor: '#b45309',
+    shadowColor: '#c2410c',
   },
   emojiTileDisabled: {
     opacity: 0.65,
@@ -2557,7 +2649,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   emojiBadgeLocked: {
-    opacity: 0.9,
+    opacity: 0.96,
   },
   emojiBadgeGlow: {
     ...StyleSheet.absoluteFillObject,
@@ -2566,6 +2658,9 @@ const styles = StyleSheet.create({
   },
   emojiBadgeGlowActive: {
     backgroundColor: 'rgba(34, 197, 94, 0.2)',
+  },
+  emojiBadgeGlowLocked: {
+    backgroundColor: 'rgba(249, 115, 22, 0.22)',
   },
   emojiBadgeCore: {
     width: 56,
@@ -2587,9 +2682,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(21, 128, 61, 0.45)',
   },
   emojiBadgeCoreLocked: {
-    backgroundColor: '#fef3c7',
-    borderColor: 'rgba(245, 158, 11, 0.65)',
-    shadowColor: '#b45309',
+    backgroundColor: '#fff7ed',
+    borderColor: '#f59e0b',
+    shadowColor: '#c2410c',
   },
   emojiBadgeSelected: {
     shadowColor: '#0f172a',
@@ -2601,7 +2696,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: 1.05 }],
   },
   emojiGlyphLocked: {
-    opacity: 0.7,
+    color: '#b45309',
   },
   emojiTileLabel: {
     fontSize: 13,
@@ -3024,6 +3119,152 @@ const styles = StyleSheet.create({
     color: '#f0fff4',
     fontWeight: '700',
     fontSize: 16,
+  },
+  previewOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 31, 23, 0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  previewBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  previewCard: {
+    width: 320,
+    minHeight: 320,
+    borderRadius: 28,
+    backgroundColor: '#f8fffb',
+    paddingVertical: 26,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 14,
+    shadowColor: 'rgba(15, 23, 42, 0.35)',
+    shadowOpacity: 0.25,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 10,
+  },
+  previewEmojiBadge: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'visible',
+  },
+  previewEmojiGlow: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 55,
+    backgroundColor: 'rgba(245, 158, 11, 0.18)',
+  },
+  previewEmojiCore: {
+    width: 86,
+    height: 86,
+    borderRadius: 43,
+    backgroundColor: '#fff7ed',
+    borderWidth: 2,
+    borderColor: '#f59e0b',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#c2410c',
+    shadowOpacity: 0.3,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
+  },
+  previewEmojiGlyph: {
+    fontSize: 54,
+  },
+  previewCategory: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#92400e',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+  },
+  previewName: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#0f5132',
+    textAlign: 'center',
+  },
+  previewUseCopy: {
+    fontSize: 14,
+    color: '#1f2937',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  previewCostRow: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderRadius: 16,
+    backgroundColor: '#fff7ed',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.5)',
+  },
+  previewCostLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#b45309',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  previewCostValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#92400e',
+  },
+  previewAffordHint: {
+    fontSize: 12,
+    color: '#9a3412',
+    textAlign: 'center',
+  },
+  previewActions: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  previewCancelButton: {
+    flex: 1,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#cbd5f5',
+    backgroundColor: '#eef2ff',
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  previewCancelText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#3730a3',
+  },
+  previewPurchaseButton: {
+    flex: 1,
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: 'center',
+    backgroundColor: '#b45309',
+    shadowColor: '#c2410c',
+    shadowOpacity: 0.22,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 5,
+  },
+  previewPurchaseButtonDisabled: {
+    backgroundColor: 'rgba(180, 83, 9, 0.35)',
+    shadowOpacity: 0,
+  },
+  previewPurchaseText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#fef3c7',
   },
   paletteOverlay: {
     flex: 1,

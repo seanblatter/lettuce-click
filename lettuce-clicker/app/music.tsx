@@ -749,13 +749,13 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
     },
     sleepCardScroll: {
       flexGrow: 0,
-      maxHeight: sleepSheetMaxHeight - 72,
+      maxHeight: sleepSheetMaxHeight - 64,
     },
     sleepContent: {
       paddingHorizontal: 20,
       paddingTop: 18,
       paddingBottom: 24,
-      gap: 18,
+      gap: 16,
     },
     sleepHeaderRow: {
       flexDirection: 'row',
@@ -800,12 +800,12 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
     sleepColumns: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: 18,
+      gap: 14,
     },
     sleepColumn: {
       flex: 1,
       minWidth: 200,
-      gap: 14,
+      gap: 12,
     },
     sleepColumnPrimary: {
       maxWidth: 280,
@@ -815,7 +815,7 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
     },
     sleepModeList: {
       flexDirection: 'column',
-      gap: 10,
+      gap: 8,
     },
     sleepModeButton: {
       flex: 1,
@@ -859,24 +859,6 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
     sleepTimerReadoutCard: {
       alignItems: 'flex-start',
       gap: 4,
-    },
-    sleepStatusPanel: {
-      borderRadius: 14,
-      padding: 12,
-      backgroundColor: palette.sleepModeBackground,
-      borderWidth: 1,
-      borderColor: palette.sleepModeBorder,
-      gap: 4,
-    },
-    sleepStatusHeadline: {
-      fontSize: 13,
-      fontWeight: '700',
-      color: palette.sleepModeLabel,
-    },
-    sleepStatusCopy: {
-      fontSize: 11,
-      color: palette.sleepModeDescription,
-      lineHeight: 15,
     },
     sleepTimerReadoutValue: {
       fontSize: 22,
@@ -953,7 +935,7 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
       color: palette.sleepTimerText,
     },
     sleepActiveSummary: {
-      gap: 4,
+      gap: 3,
       alignItems: 'flex-start',
     },
     sleepActiveHeadline: {
@@ -967,7 +949,7 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
     },
     sleepActions: {
       flexDirection: 'row',
-      gap: 14,
+      gap: 12,
     },
     sleepClearButton: {
       flex: 1,
@@ -975,7 +957,7 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
       borderWidth: 1,
       borderColor: palette.sleepClearBorder,
       alignItems: 'center',
-      paddingVertical: 14,
+      paddingVertical: 12,
     },
     sleepClearButtonText: {
       fontSize: 15,
@@ -987,7 +969,7 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
       borderRadius: 16,
       backgroundColor: palette.sleepApplyBackground,
       alignItems: 'center',
-      paddingVertical: 14,
+      paddingVertical: 12,
       shadowColor: palette.sleepApplyShadow,
       shadowOpacity: isDark ? 0.4 : 0.25,
       shadowRadius: isDark ? 12 : 10,
@@ -1820,7 +1802,7 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
             </View>
             <ScrollView
               style={styles.sleepCardScroll}
-              contentContainerStyle={[styles.sleepContent, { paddingBottom: insets.bottom + 16 }]}
+              contentContainerStyle={[styles.sleepContent, { paddingBottom: insets.bottom + 12 }]}
               showsVerticalScrollIndicator={false}
               bounces={false}
             >
@@ -1871,12 +1853,7 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
                         })}
                       </View>
                     </>
-                  ) : (
-                    <View style={styles.sleepStatusPanel}>
-                      <Text style={styles.sleepStatusHeadline}>{sleepSummary.headline}</Text>
-                      <Text style={styles.sleepStatusCopy}>{sleepSummary.detail}</Text>
-                    </View>
-                  )}
+                  ) : null}
                 </View>
                 <View style={[styles.sleepColumn, styles.sleepColumnSecondary]}>
                   <Text style={styles.sleepSectionLabel}>

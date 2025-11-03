@@ -510,7 +510,7 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
       letterSpacing: 0.8,
       textTransform: 'uppercase',
     },
-    sleepStatusHeadline: {
+    sleepStatusBlockHeadline: {
       fontSize: 14,
       fontWeight: '600',
       color: palette.sleepStatusHeadline,
@@ -1576,7 +1576,7 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
           </View>
           <View style={styles.sleepStatusBlock}>
             <Text style={styles.sleepStatusLabel}>Dream Capsule</Text>
-            <Text style={styles.sleepStatusHeadline}>{sleepSummary.detail}</Text>
+            <Text style={styles.sleepStatusBlockHeadline}>{sleepSummary.detail}</Text>
             {ambientError ? (
               <Text style={styles.sleepStatusWarning}>
                 Ambient mix playback is unavailable. Try another sound or reconnect audio.

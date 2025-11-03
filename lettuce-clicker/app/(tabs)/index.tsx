@@ -19,6 +19,7 @@ import { OrbitingUpgradeEmojis } from '@/components/OrbitingUpgradeEmojis';
 import { MusicContent } from '@/app/music';
 import { ProfileContent } from '@/app/profile';
 import { useGame } from '@/context/GameContext';
+import { gardenEmojiCatalog } from '@/constants/emojiCatalog';
 import type { EmojiDefinition, HomeEmojiTheme } from '@/context/GameContext';
 import { useAmbientAudio } from '@/context/AmbientAudioContext';
 import { preloadRewardedAd, showRewardedAd } from '@/lib/rewardedAd';
@@ -117,7 +118,6 @@ export default function HomeScreen() {
     homeEmojiTheme,
     setHomeEmojiTheme,
     emojiThemes,
-    emojiCatalog,
     emojiInventory,
     ownedThemes,
     profileName,
@@ -132,6 +132,11 @@ export default function HomeScreen() {
     spendHarvestAmount,
     grantEmojiUnlock,
   } = useGame();
+
+  const lockedShopEmojis = useMemo(
+    () => gardenEmojiCatalog.filter((emoji) => !emojiInventory[emoji.id]),
+    [emojiInventory]
+  );
   const [showGrowModal, setShowGrowModal] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPage, setMenuPage] = useState<'overview' | 'themes'>('overview');
@@ -599,7 +604,7 @@ export default function HomeScreen() {
           // persistence best effort only
         });
       }
-      const lockedEmojis = emojiCatalog.filter((emoji) => !emojiInventory[emoji.id]);
+      const lockedEmojis = lockedShopEmojis;
       let unlockedEmoji: EmojiDefinition | null = null;
 
       if (lockedEmojis.length > 0) {
@@ -638,8 +643,7 @@ export default function HomeScreen() {
     flipAnimation,
     isDailySpinAvailable,
     isSpinningBonus,
-    emojiCatalog,
-    emojiInventory,
+    lockedShopEmojis,
     grantEmojiUnlock,
   ]);
 

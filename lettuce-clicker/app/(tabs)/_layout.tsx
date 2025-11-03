@@ -65,7 +65,7 @@ const lightenColor = (hex: string, factor: number) => {
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
-  const { homeEmojiTheme, premiumAccentColor } = useGame();
+  const { homeEmojiTheme, premiumAccentColor, gardenBackgroundColor } = useGame();
 
   const baseAccent = useMemo(() => {
     if (premiumAccentColor) {
@@ -80,27 +80,37 @@ export default function TabLayout() {
     return Colors[colorScheme].tint;
   }, [colorScheme, homeEmojiTheme, premiumAccentColor]);
 
-  const tabBackground = useMemo(() => {
+  const inactiveAccent = useMemo(() => {
     if (!baseAccent.startsWith('#')) {
-      return baseAccent;
+      return Colors[colorScheme].tabIconDefault;
     }
 
-    return lightenColor(baseAccent, colorScheme === 'dark' ? 0.25 : 0.75);
+    return lightenColor(baseAccent, colorScheme === 'dark' ? 0.4 : 0.7);
   }, [baseAccent, colorScheme]);
+
+  const tabBackground = useMemo(() => {
+    const baseBackground = gardenBackgroundColor || Colors[colorScheme].background;
+
+    if (typeof baseBackground === 'string' && baseBackground.startsWith('#')) {
+      return lightenColor(baseBackground, colorScheme === 'dark' ? 0.12 : 0.5);
+    }
+
+    return baseBackground;
+  }, [colorScheme, gardenBackgroundColor]);
 
   const tabBorder = useMemo(() => {
     if (!baseAccent.startsWith('#')) {
       return Colors[colorScheme].background;
     }
 
-    return lightenColor(baseAccent, colorScheme === 'dark' ? 0.45 : 0.92);
+    return lightenColor(baseAccent, colorScheme === 'dark' ? 0.55 : 0.92);
   }, [baseAccent, colorScheme]);
 
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: baseAccent,
-        tabBarInactiveTintColor: Colors[colorScheme].tabIconDefault,
+        tabBarInactiveTintColor: inactiveAccent,
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarStyle: {

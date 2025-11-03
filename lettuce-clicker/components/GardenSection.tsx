@@ -128,7 +128,7 @@ const TEXT_SLIDER_THUMB_SIZE = 24;
 const TOTAL_EMOJI_LIBRARY_COUNT = 3953;
 const GRID_COLUMN_COUNT = 4;
 const GRID_VISIBLE_ROW_COUNT = 3;
-const GRID_ROW_HEIGHT = 148;
+const GRID_ROW_HEIGHT = 124;
 
 const TEXT_STYLE_OPTIONS: { id: TextStyleId; label: string; textStyle: TextStyle; preview: string }[] = [
   { id: 'sprout', label: 'Sprout', textStyle: { fontSize: 18, fontWeight: '600' }, preview: 'Hello' },
@@ -285,6 +285,7 @@ export function GardenSection({
   const [isDrawingGestureActive, setIsDrawingGestureActive] = useState(false);
   const [activeDrag, setActiveDrag] = useState<{ id: string; point: { x: number; y: number } } | null>(null);
   const [penButtonLayout, setPenButtonLayout] = useState<LayoutRectangle | null>(null);
+  const [previewEmoji, setPreviewEmoji] = useState<InventoryEntry | null>(null);
   const canvasRef = useRef<View | null>(null);
   const filteredOwnedInventoryRef = useRef<InventoryEntry[]>([]);
   const draggingInventoryIdRef = useRef<string | null>(null);
@@ -712,13 +713,68 @@ export function GardenSection({
     setIsDrawingMode(false);
   }, []);
 
-  const handlePurchase = (emojiId: string) => {
-    const success = purchaseEmoji(emojiId);
+  const handlePurchase = useCallback(
+    (emojiId: string) => {
+      const success = purchaseEmoji(emojiId);
 
-    if (!success) {
-      Alert.alert('Not enough clicks', 'Gather more clicks to unlock this decoration.');
+      if (!success) {
+        Alert.alert('Not enough clicks', 'Gather more clicks to unlock this decoration.');
+      }
+
+      return success;
+    },
+    [purchaseEmoji]
+  );
+
+  const handleOpenPreview = useCallback((entry: InventoryEntry) => {
+    setPreviewEmoji(entry);
+  }, []);
+
+  const handleClosePreview = useCallback(() => {
+    setPreviewEmoji(null);
+  }, []);
+
+  const handlePreviewPurchase = useCallback(() => {
+    if (!previewEmoji) {
+      return;
     }
-  };
+
+    const success = handlePurchase(previewEmoji.id);
+
+    if (success) {
+      setPreviewEmoji((previous) => (previous ? { ...previous, owned: true } : previous));
+    }
+  }, [handlePurchase, previewEmoji]);
+
+  const handlePreviewPlace = useCallback(() => {
+    if (!previewEmoji) {
+      return;
+    }
+
+    handleSelect(previewEmoji.id, true);
+    setPreviewEmoji(null);
+  }, [handleSelect, previewEmoji]);
+
+  const handlePreviewInventory = useCallback(() => {
+    if (!previewEmoji) {
+      return;
+    }
+
+    setPreviewEmoji(null);
+    handleOpenSheet('inventory');
+  }, [handleOpenSheet, previewEmoji]);
+
+  useEffect(() => {
+    if (!previewEmoji) {
+      return;
+    }
+
+    const latest = inventoryList.find((item) => item.id === previewEmoji.id);
+
+    if (latest && latest.owned !== previewEmoji.owned) {
+      setPreviewEmoji(latest);
+    }
+  }, [inventoryList, previewEmoji]);
 
   const handleSelectPenColor = useCallback(
     (color: string) => {
@@ -1134,89 +1190,46 @@ export function GardenSection({
     const canAfford = harvest >= item.cost;
     const locked = !owned;
     const categoryLabel = CATEGORY_LABELS[item.category];
-    const categoryIcon = CATEGORY_ICONS[item.category];
-
-    const handleTilePress = () => {
-      if (owned) {
-        Alert.alert(
-          'Already unlocked',
-          'Open your inventory to place this decoration.',
-          [
-            {
-              text: 'Go to inventory',
-              onPress: () => handleOpenSheet('inventory'),
-            },
-            {
-              text: 'Close',
-              style: 'cancel',
-            },
-          ]
-        );
-        return;
-      }
-      handlePurchase(item.id);
-    };
-
     const accessibilityHint = locked
       ? canAfford
-        ? `Unlock this ${categoryLabel.toLowerCase()} decoration.`
-        : `Earn more harvest to unlock this ${categoryLabel.toLowerCase()} decoration.`
-      : 'Select to ready this decoration.';
+        ? `View details to unlock this ${categoryLabel.toLowerCase()} decoration.`
+        : `View details and earn more harvest to unlock this ${categoryLabel.toLowerCase()} decoration.`
+      : 'View details to place or inspect this decoration.';
 
     return (
       <View style={styles.sheetTileWrapper}>
         <Pressable
           style={({ pressed }) => [
-            styles.emojiTile,
-            isSelected && styles.emojiTileSelected,
-            locked && styles.emojiTileLocked,
-            !canAfford && locked && styles.emojiTileDisabled,
-            pressed && styles.emojiTilePressed,
+            styles.shopOrbButton,
+            locked && styles.shopOrbButtonLocked,
+            isSelected && styles.shopOrbButtonSelected,
+            pressed && styles.shopOrbButtonPressed,
           ]}
-          onPress={handleTilePress}
+          onPress={() => handleOpenPreview(item)}
           accessibilityLabel={`${item.name} (${categoryLabel}) emoji`}
           accessibilityHint={`${accessibilityHint} Price ${formatClickValue(item.cost)} clicks.`}
         >
-          <View pointerEvents="none" style={styles.emojiTileCategoryMarker}>
-            <Text style={styles.emojiTileCategoryMarkerText}>{categoryIcon}</Text>
-          </View>
           <View
-            style={[styles.emojiBadge, isSelected && styles.emojiBadgeSelected, locked && styles.emojiBadgeLocked]}
+            style={[
+              styles.shopOrbHalo,
+              locked && styles.shopOrbHaloLocked,
+              isSelected && styles.shopOrbHaloSelected,
+            ]}
+          />
+          <View
+            style={[
+              styles.shopOrbCore,
+              locked && styles.shopOrbCoreLocked,
+              isSelected && styles.shopOrbCoreSelected,
+            ]}
           >
-            {locked ? (
-              <View pointerEvents="none" style={styles.emojiLockOverlay}>
-                <Text style={styles.emojiLockGlyph}>🔒</Text>
-              </View>
-            ) : null}
-            <View style={[styles.emojiBadgeGlow, isSelected && styles.emojiBadgeGlowActive]} />
-            <View
-              style={[
-                styles.emojiBadgeCore,
-                isSelected && styles.emojiBadgeCoreSelected,
-                locked && styles.emojiBadgeCoreLocked,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.emojiGlyphLarge,
-                  isSelected && styles.emojiGlyphSelected,
-                  locked && styles.emojiGlyphLocked,
-                ]}
-              >
-                {item.emoji}
-              </Text>
-            </View>
+            <Text style={[styles.shopOrbGlyph, locked && styles.shopOrbGlyphLocked]}>{item.emoji}</Text>
           </View>
-          <Text style={styles.emojiTileLabel} numberOfLines={2}>
-            {item.name}
-          </Text>
-          <View style={styles.emojiTileFooter}>
-            <View style={styles.emojiTileCostBadge}>
-              <Text style={styles.emojiTileCostText} numberOfLines={1}>
-                {formatClickValue(item.cost)} clicks
-              </Text>
+          {locked ? (
+            <View style={styles.shopOrbStatusBadge}>
+              <Text style={styles.shopOrbStatusText}>🔒</Text>
             </View>
-          </View>
+          ) : null}
         </Pressable>
       </View>
     );
@@ -1249,6 +1262,10 @@ export function GardenSection({
       />
     );
   };
+
+  const previewCategoryLabel = previewEmoji ? CATEGORY_LABELS[previewEmoji.category] : null;
+  const previewCanAfford = previewEmoji ? harvest >= previewEmoji.cost : false;
+  const previewTagLine = previewEmoji ? previewEmoji.tags.slice(0, 3).join(' · ') : '';
 
   return (
     <View style={containerStyle}>
@@ -2016,6 +2033,92 @@ export function GardenSection({
           </View>
         </View>
       </Modal>
+      <Modal
+        visible={Boolean(previewEmoji)}
+        transparent
+        animationType="fade"
+        onRequestClose={handleClosePreview}
+      >
+        <View style={styles.shopPreviewOverlay}>
+          <Pressable style={styles.shopPreviewBackdrop} onPress={handleClosePreview} />
+          {previewEmoji ? (
+            <View style={styles.shopPreviewCard}>
+              <View style={styles.shopPreviewEmojiWrap}>
+                <View style={styles.shopPreviewHalo} />
+                <View style={styles.shopPreviewEmojiCore}>
+                  <Text style={styles.shopPreviewEmoji}>{previewEmoji.emoji}</Text>
+                </View>
+              </View>
+              <Text style={styles.shopPreviewName}>{previewEmoji.name}</Text>
+              {previewCategoryLabel ? (
+                <View style={styles.shopPreviewMetaRow}>
+                  <Text style={styles.shopPreviewMetaLabel}>Use</Text>
+                  <Text style={styles.shopPreviewMetaValue}>{previewCategoryLabel}</Text>
+                </View>
+              ) : null}
+              <View style={styles.shopPreviewMetaRow}>
+                <Text style={styles.shopPreviewMetaLabel}>Price</Text>
+                <Text style={styles.shopPreviewMetaValue}>
+                  {formatClickValue(previewEmoji.cost)} clicks
+                </Text>
+              </View>
+              {previewTagLine ? (
+                <Text style={styles.shopPreviewTags}>Inspiration: {previewTagLine}</Text>
+              ) : null}
+              <View style={styles.shopPreviewActions}>
+                {previewEmoji.owned ? (
+                  <>
+                    <Text style={styles.shopPreviewOwnedHint}>Already in your inventory.</Text>
+                    <Pressable
+                      style={styles.shopPreviewPrimaryButton}
+                      onPress={handlePreviewPlace}
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.shopPreviewPrimaryText}>Place in garden</Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.shopPreviewSecondaryButton}
+                      onPress={handlePreviewInventory}
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.shopPreviewSecondaryText}>Open inventory</Text>
+                    </Pressable>
+                  </>
+                ) : (
+                  <>
+                    <Pressable
+                      style={[
+                        styles.shopPreviewPrimaryButton,
+                        !previewCanAfford && styles.shopPreviewPrimaryButtonDisabled,
+                      ]}
+                      onPress={handlePreviewPurchase}
+                      disabled={!previewCanAfford}
+                      accessibilityRole="button"
+                      accessibilityState={{ disabled: !previewCanAfford }}
+                    >
+                      <Text style={styles.shopPreviewPrimaryText}>
+                        Unlock for {formatClickValue(previewEmoji.cost)} clicks
+                      </Text>
+                    </Pressable>
+                    {!previewCanAfford ? (
+                      <Text style={styles.shopPreviewHint}>
+                        Gather more harvest to unlock this decoration.
+                      </Text>
+                    ) : null}
+                    <Pressable
+                      style={styles.shopPreviewSecondaryButton}
+                      onPress={handleClosePreview}
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.shopPreviewSecondaryText}>Not now</Text>
+                    </Pressable>
+                  </>
+                )}
+              </View>
+            </View>
+          ) : null}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -2501,6 +2604,82 @@ const styles = StyleSheet.create({
     color: '#2d3748',
     textAlign: 'center',
     lineHeight: 18,
+  },
+  shopOrbButton: {
+    width: '100%',
+    maxWidth: 108,
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 999,
+    padding: 10,
+    position: 'relative',
+  },
+  shopOrbButtonSelected: {
+    transform: [{ scale: 1.02 }],
+  },
+  shopOrbButtonLocked: {},
+  shopOrbButtonPressed: {
+    transform: [{ scale: 0.95 }],
+  },
+  shopOrbHalo: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 999,
+    backgroundColor: 'rgba(226, 232, 240, 0.55)',
+  },
+  shopOrbHaloSelected: {
+    backgroundColor: 'rgba(74, 222, 128, 0.28)',
+  },
+  shopOrbHaloLocked: {
+    backgroundColor: 'rgba(249, 115, 22, 0.28)',
+  },
+  shopOrbCore: {
+    width: '68%',
+    height: '68%',
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: 'rgba(15, 118, 110, 0.2)',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  shopOrbCoreSelected: {
+    borderColor: 'rgba(34, 197, 94, 0.45)',
+    shadowOpacity: 0.22,
+  },
+  shopOrbCoreLocked: {
+    backgroundColor: '#fff7ed',
+    borderColor: 'rgba(249, 115, 22, 0.55)',
+    shadowColor: '#fb923c',
+  },
+  shopOrbGlyph: {
+    fontSize: 32,
+  },
+  shopOrbGlyphLocked: {
+    opacity: 0.8,
+  },
+  shopOrbStatusBadge: {
+    position: 'absolute',
+    bottom: 6,
+    alignSelf: 'center',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    backgroundColor: 'rgba(15, 23, 42, 0.78)',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  shopOrbStatusText: {
+    fontSize: 13,
+    color: '#f8fafc',
   },
   emojiTile: {
     width: '100%',
@@ -3012,6 +3191,8 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 4,
     minWidth: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sheetCloseButton: {
     marginTop: 12,
@@ -3024,6 +3205,143 @@ const styles = StyleSheet.create({
     color: '#f0fff4',
     fontWeight: '700',
     fontSize: 16,
+  },
+  shopPreviewOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  shopPreviewBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  shopPreviewCard: {
+    width: '90%',
+    maxWidth: 360,
+    borderRadius: 28,
+    backgroundColor: '#f8fffb',
+    paddingHorizontal: 24,
+    paddingVertical: 26,
+    alignItems: 'center',
+    gap: 10,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.22,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+  },
+  shopPreviewEmojiWrap: {
+    width: 108,
+    height: 108,
+    borderRadius: 54,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+    position: 'relative',
+  },
+  shopPreviewHalo: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 54,
+    backgroundColor: 'rgba(59, 130, 246, 0.16)',
+  },
+  shopPreviewEmojiCore: {
+    width: '70%',
+    height: '70%',
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: 'rgba(15, 118, 110, 0.3)',
+    shadowColor: '#0f766e',
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  shopPreviewEmoji: {
+    fontSize: 44,
+  },
+  shopPreviewName: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#134e32',
+    textAlign: 'center',
+  },
+  shopPreviewMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  shopPreviewMetaLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0f766e',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  shopPreviewMetaValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  shopPreviewTags: {
+    fontSize: 12,
+    color: '#334155',
+    textAlign: 'center',
+  },
+  shopPreviewActions: {
+    width: '100%',
+    marginTop: 8,
+    alignItems: 'center',
+    gap: 10,
+  },
+  shopPreviewOwnedHint: {
+    fontSize: 13,
+    color: '#047857',
+    textAlign: 'center',
+  },
+  shopPreviewPrimaryButton: {
+    width: '100%',
+    borderRadius: 18,
+    paddingVertical: 12,
+    alignItems: 'center',
+    backgroundColor: '#0f766e',
+    shadowColor: '#0f766e',
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  shopPreviewPrimaryButtonDisabled: {
+    backgroundColor: '#94a3b8',
+    shadowOpacity: 0.1,
+  },
+  shopPreviewPrimaryText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#f0fff4',
+  },
+  shopPreviewSecondaryButton: {
+    width: '100%',
+    borderRadius: 18,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#0f766e',
+    backgroundColor: '#ecfdf5',
+  },
+  shopPreviewSecondaryText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0f766e',
+  },
+  shopPreviewHint: {
+    fontSize: 12,
+    color: '#b91c1c',
+    textAlign: 'center',
   },
   paletteOverlay: {
     flex: 1,

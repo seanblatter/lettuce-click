@@ -40,6 +40,11 @@ const WHEEL_ITEM_HEIGHT = 46;
 const WHEEL_VISIBLE_ROWS = 5;
 const WHEEL_CONTAINER_HEIGHT = WHEEL_ITEM_HEIGHT * WHEEL_VISIBLE_ROWS;
 const WHEEL_PADDING = (WHEEL_CONTAINER_HEIGHT - WHEEL_ITEM_HEIGHT) / 2;
+const HORIZONTAL_WHEEL_VISIBLE_ITEMS = 3;
+const HORIZONTAL_WHEEL_ITEM_WIDTH = 56;
+const HORIZONTAL_WHEEL_CONTAINER_WIDTH = HORIZONTAL_WHEEL_ITEM_WIDTH * HORIZONTAL_WHEEL_VISIBLE_ITEMS;
+const HORIZONTAL_WHEEL_PADDING =
+  (HORIZONTAL_WHEEL_CONTAINER_WIDTH - HORIZONTAL_WHEEL_ITEM_WIDTH) / 2;
 const ALARM_SOUND_URI = ALARM_CHIME_DATA_URI;
 
 type Palette = {
@@ -860,24 +865,6 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
       alignItems: 'flex-start',
       gap: 4,
     },
-    sleepStatusPanel: {
-      borderRadius: 14,
-      padding: 12,
-      backgroundColor: palette.sleepModeBackground,
-      borderWidth: 1,
-      borderColor: palette.sleepModeBorder,
-      gap: 4,
-    },
-    sleepStatusHeadline: {
-      fontSize: 13,
-      fontWeight: '700',
-      color: palette.sleepModeLabel,
-    },
-    sleepStatusCopy: {
-      fontSize: 11,
-      color: palette.sleepModeDescription,
-      lineHeight: 15,
-    },
     sleepTimerReadoutValue: {
       fontSize: 22,
       fontWeight: '700',
@@ -923,8 +910,8 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
     alarmPickerRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 12,
-      justifyContent: 'space-between',
+      gap: 16,
+      justifyContent: 'center',
     },
     alarmPickerSeparator: {
       fontSize: 24,
@@ -939,6 +926,7 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
       borderWidth: 1,
       borderColor: palette.sleepModeBorder,
       gap: 4,
+      alignItems: 'flex-start',
     },
     alarmSummaryLabel: {
       fontSize: 12,
@@ -1036,6 +1024,46 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
       color: palette.wheelText,
     },
     wheelPickerTextActive: {
+      color: palette.wheelTextActive,
+    },
+    wheelPickerHorizontalContainer: {
+      width: HORIZONTAL_WHEEL_CONTAINER_WIDTH,
+      height: 70,
+      borderRadius: 20,
+      backgroundColor: palette.wheelBackground,
+      borderWidth: 1,
+      borderColor: palette.wheelBorder,
+      overflow: 'hidden',
+    },
+    wheelPickerHorizontalHighlight: {
+      position: 'absolute',
+      top: 0,
+      bottom: 0,
+      left: (HORIZONTAL_WHEEL_CONTAINER_WIDTH - HORIZONTAL_WHEEL_ITEM_WIDTH) / 2,
+      width: HORIZONTAL_WHEEL_ITEM_WIDTH,
+      borderLeftWidth: 1,
+      borderRightWidth: 1,
+      borderColor: palette.wheelHighlightBorder,
+      backgroundColor: palette.wheelHighlightBackground,
+    },
+    wheelPickerHorizontalScroll: {
+      flex: 1,
+    },
+    wheelPickerHorizontalContent: {
+      paddingHorizontal: HORIZONTAL_WHEEL_PADDING,
+      alignItems: 'center',
+    },
+    wheelPickerHorizontalItem: {
+      width: HORIZONTAL_WHEEL_ITEM_WIDTH,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    wheelPickerHorizontalText: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: palette.wheelText,
+    },
+    wheelPickerHorizontalTextActive: {
       color: palette.wheelTextActive,
     },
   });
@@ -1871,12 +1899,7 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
                         })}
                       </View>
                     </>
-                  ) : (
-                    <View style={styles.sleepStatusPanel}>
-                      <Text style={styles.sleepStatusHeadline}>{sleepSummary.headline}</Text>
-                      <Text style={styles.sleepStatusCopy}>{sleepSummary.detail}</Text>
-                    </View>
-                  )}
+                  ) : null}
                 </View>
                 <View style={[styles.sleepColumn, styles.sleepColumnSecondary]}>
                   <Text style={styles.sleepSectionLabel}>
@@ -1916,6 +1939,7 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
                           onChange={setAlarmHour}
                           label="Alarm hour"
                           styles={styles}
+                          orientation="horizontal"
                         />
                         <Text style={styles.alarmPickerSeparator}>:</Text>
                         <WheelPicker
@@ -1925,6 +1949,7 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
                           formatter={(value) => value.toString().padStart(2, '0')}
                           label="Alarm minute"
                           styles={styles}
+                          orientation="horizontal"
                         />
                         <WheelPicker
                           data={ALARM_PERIOD_OPTIONS}
@@ -1932,6 +1957,7 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
                           onChange={setAlarmPeriod}
                           label="AM or PM"
                           styles={styles}
+                          orientation="horizontal"
                         />
                       </View>
                     </>
@@ -2086,6 +2112,7 @@ type WheelPickerProps<T extends WheelValue> = {
   formatter?: (value: T) => string;
   label?: string;
   styles: ThemedStyles;
+  orientation?: 'vertical' | 'horizontal';
 };
 
 function WheelPicker<T extends WheelValue>({
@@ -2095,53 +2122,77 @@ function WheelPicker<T extends WheelValue>({
   formatter,
   label = 'Alarm time selector',
   styles,
+  orientation = 'vertical',
 }: WheelPickerProps<T>) {
   const scrollRef = useRef<ScrollView | null>(null);
 
   const formatValue = useCallback((item: T) => (formatter ? formatter(item) : String(item)), [formatter]);
 
+  const isHorizontal = orientation === 'horizontal';
+  const itemSize = isHorizontal ? HORIZONTAL_WHEEL_ITEM_WIDTH : WHEEL_ITEM_HEIGHT;
+  const containerStyle = isHorizontal ? styles.wheelPickerHorizontalContainer : styles.wheelPickerContainer;
+  const highlightStyle = isHorizontal ? styles.wheelPickerHorizontalHighlight : styles.wheelPickerHighlight;
+  const scrollStyle = isHorizontal ? styles.wheelPickerHorizontalScroll : styles.wheelPickerScroll;
+  const contentStyle = isHorizontal ? styles.wheelPickerHorizontalContent : styles.wheelPickerContent;
+  const itemStyle = isHorizontal ? styles.wheelPickerHorizontalItem : styles.wheelPickerItem;
+  const textStyle = isHorizontal ? styles.wheelPickerHorizontalText : styles.wheelPickerText;
+  const textActiveStyle = isHorizontal ? styles.wheelPickerHorizontalTextActive : styles.wheelPickerTextActive;
+
   useEffect(() => {
     const index = data.findIndex((item) => item === value);
     if (index >= 0 && scrollRef.current) {
-      scrollRef.current.scrollTo({ y: index * WHEEL_ITEM_HEIGHT, animated: true });
+      const offset = index * itemSize;
+      if (isHorizontal) {
+        scrollRef.current.scrollTo({ x: offset, y: 0, animated: true });
+      } else {
+        scrollRef.current.scrollTo({ x: 0, y: offset, animated: true });
+      }
     }
-  }, [data, value]);
+  }, [data, isHorizontal, itemSize, value]);
 
   const handleMomentumEnd = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const offset = event.nativeEvent.contentOffset.y;
-      const index = Math.min(data.length - 1, Math.max(0, Math.round(offset / WHEEL_ITEM_HEIGHT)));
+      const offset = isHorizontal
+        ? event.nativeEvent.contentOffset.x
+        : event.nativeEvent.contentOffset.y;
+      const index = Math.min(data.length - 1, Math.max(0, Math.round(offset / itemSize)));
       const next = data[index];
       if (next !== undefined && next !== value) {
         onChange(next);
       }
     },
-    [data, onChange, value]
+    [data, isHorizontal, itemSize, onChange, value]
   );
 
   const initialIndex = Math.max(data.findIndex((item) => item === value), 0);
 
   return (
-    <View style={styles.wheelPickerContainer} accessible accessibilityLabel={label}>
-      <View style={styles.wheelPickerHighlight} pointerEvents="none" />
+    <View style={containerStyle} accessible accessibilityLabel={label}>
+      <View style={highlightStyle} pointerEvents="none" />
       <ScrollView
         ref={scrollRef}
-        style={styles.wheelPickerScroll}
-        contentContainerStyle={styles.wheelPickerContent}
+        style={scrollStyle}
+        contentContainerStyle={contentStyle}
         showsVerticalScrollIndicator={false}
-        snapToInterval={WHEEL_ITEM_HEIGHT}
+        showsHorizontalScrollIndicator={false}
+        horizontal={isHorizontal}
+        snapToInterval={itemSize}
         decelerationRate="fast"
         snapToAlignment="center"
         onMomentumScrollEnd={handleMomentumEnd}
         onScrollEndDrag={handleMomentumEnd}
-        contentOffset={{ x: 0, y: initialIndex * WHEEL_ITEM_HEIGHT }}
+        contentOffset={
+          isHorizontal
+            ? { x: initialIndex * itemSize, y: 0 }
+            : { x: 0, y: initialIndex * itemSize }
+        }
       >
         {data.map((item) => {
           const formatted = formatValue(item);
           const isActive = item === value;
           return (
-            <View key={String(item)} style={styles.wheelPickerItem}>
-              <Text style={[styles.wheelPickerText, isActive && styles.wheelPickerTextActive]}>{formatted}</Text>
+            <View key={String(item)} style={itemStyle}>
+              <Text style={[textStyle, isActive && textActiveStyle]}>{formatted}</Text>
             </View>
           );
         })}

@@ -27,45 +27,9 @@ const THEME_ACCENTS: Partial<Record<HomeEmojiTheme, string>> = {
   supernova: '#f97316',
 };
 
-const lightenColor = (hex: string, factor: number) => {
-  const normalized = hex.replace('#', '');
-
-  if (!normalized || (normalized.length !== 6 && normalized.length !== 3)) {
-    return hex;
-  }
-
-  const expanded =
-    normalized.length === 3
-      ? normalized
-          .split('')
-          .map((char) => char + char)
-          .join('')
-      : normalized;
-
-  const value = Number.parseInt(expanded, 16);
-
-  if (!Number.isFinite(value)) {
-    return hex;
-  }
-
-  const clampChannel = (channelValue: number) => {
-    const boundedFactor = Math.min(Math.max(factor, 0), 1);
-    const next = Math.round(channelValue + (255 - channelValue) * boundedFactor);
-    return Math.max(0, Math.min(255, next));
-  };
-
-  const r = clampChannel((value >> 16) & 0xff);
-  const g = clampChannel((value >> 8) & 0xff);
-  const b = clampChannel(value & 0xff);
-
-  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b
-    .toString(16)
-    .padStart(2, '0')}`;
-};
-
 export default function TabLayout() {
   const colorScheme = useColorScheme();
-  const { homeEmojiTheme, premiumAccentColor, gardenBackgroundColor } = useGame();
+  const { homeEmojiTheme, premiumAccentColor } = useGame();
 
   const baseAccent = useMemo(() => {
     if (premiumAccentColor) {
@@ -80,37 +44,23 @@ export default function TabLayout() {
     return Colors[colorScheme].tint;
   }, [colorScheme, homeEmojiTheme, premiumAccentColor]);
 
-  const inactiveAccent = useMemo(() => {
+  const activeAccent = useMemo(() => {
     if (!baseAccent.startsWith('#')) {
-      return Colors[colorScheme].tabIconDefault;
+      return '#ffffff';
     }
 
-    return lightenColor(baseAccent, colorScheme === 'dark' ? 0.4 : 0.7);
-  }, [baseAccent, colorScheme]);
+    return lightenColor(baseAccent, 0.2);
+  }, [baseAccent]);
 
-  const tabBackground = useMemo(() => {
-    const baseBackground = gardenBackgroundColor || Colors[colorScheme].background;
+  const tabBackground = useMemo(() => '#000000', []);
 
-    if (typeof baseBackground === 'string' && baseBackground.startsWith('#')) {
-      return lightenColor(baseBackground, colorScheme === 'dark' ? 0.12 : 0.5);
-    }
-
-    return baseBackground;
-  }, [colorScheme, gardenBackgroundColor]);
-
-  const tabBorder = useMemo(() => {
-    if (!baseAccent.startsWith('#')) {
-      return Colors[colorScheme].background;
-    }
-
-    return lightenColor(baseAccent, colorScheme === 'dark' ? 0.55 : 0.92);
-  }, [baseAccent, colorScheme]);
+  const tabBorder = useMemo(() => 'rgba(255, 255, 255, 0.12)', []);
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: baseAccent,
-        tabBarInactiveTintColor: inactiveAccent,
+        tabBarActiveTintColor: activeAccent,
+        tabBarInactiveTintColor: 'rgba(255, 255, 255, 0.68)',
         tabBarLabelStyle: {
           fontSize: 12,
           fontWeight: '700',
@@ -162,3 +112,39 @@ export default function TabLayout() {
     </Tabs>
   );
 }
+const lightenColor = (hex: string, factor: number) => {
+  const normalized = hex.replace('#', '');
+
+  if (!normalized || (normalized.length !== 6 && normalized.length !== 3)) {
+    return hex;
+  }
+
+  const expanded =
+    normalized.length === 3
+      ? normalized
+          .split('')
+          .map((char) => char + char)
+          .join('')
+      : normalized;
+
+  const value = Number.parseInt(expanded, 16);
+
+  if (!Number.isFinite(value)) {
+    return hex;
+  }
+
+  const clampChannel = (channelValue: number) => {
+    const boundedFactor = Math.min(Math.max(factor, 0), 1);
+    const next = Math.round(channelValue + (255 - channelValue) * boundedFactor);
+    return Math.max(0, Math.min(255, next));
+  };
+
+  const r = clampChannel((value >> 16) & 0xff);
+  const g = clampChannel((value >> 8) & 0xff);
+  const b = clampChannel(value & 0xff);
+
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b
+    .toString(16)
+    .padStart(2, '0')}`;
+};
+

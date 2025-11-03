@@ -1,4 +1,5 @@
-import React, { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Fragment, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ShopPreviewModal } from './ShopPreviewModal';
 import {
   Alert,
   FlatList,
@@ -125,7 +126,7 @@ const PEN_SIZES = [3, 5, 8, 12];
 const TEXT_SCALE_MIN = 0.7;
 const TEXT_SCALE_MAX = 2;
 const TEXT_SLIDER_THUMB_SIZE = 24;
-const TOTAL_EMOJI_LIBRARY_COUNT = 4053;
+const TOTAL_EMOJI_LIBRARY_COUNT = 3953;
 const GRID_COLUMN_COUNT = 4;
 const GRID_VISIBLE_ROW_COUNT = 3;
 const GRID_ROW_HEIGHT = 148;
@@ -301,7 +302,13 @@ export function GardenSection({
   const [shopEmoji, setShopEmoji] = useState('🏡');
   const [inventoryEmoji, setInventoryEmoji] = useState('🧰');
   const [activeEmojiPicker, setActiveEmojiPicker] = useState<'shop' | 'inventory' | null>(null);
+  const [shopPreview, setShopPreview] = useState<InventoryEntry | null>(null);
   const [isDrawingGestureActive, setIsDrawingGestureActive] = useState(false);
+  
+  // Debug shopPreview state changes
+  useEffect(() => {
+    console.log('🔍 shopPreview state changed:', shopPreview ? shopPreview.name : 'null');
+  }, [shopPreview]);
   const [activeDrag, setActiveDrag] = useState<{ id: string; point: { x: number; y: number } } | null>(null);
   const [penButtonLayout, setPenButtonLayout] = useState<LayoutRectangle | null>(null);
   const canvasRef = useRef<View | null>(null);
@@ -1188,7 +1195,11 @@ export function GardenSection({
             locked && styles.shopTileLocked,
             pressed && styles.shopTilePressed,
           ]}
-          onPress={() => setShopPreview(item)}
+          onPress={() => {
+            console.log('🛒 Shop item clicked:', item.name);
+            console.log('🛒 Setting shopPreview to:', item.id);
+            setShopPreview(item);
+          }}
           accessibilityLabel={`${item.name} emoji`}
           accessibilityHint={`${accessibilityHint} Price ${formatClickValue(item.cost)} clicks.`}
         >
@@ -1232,7 +1243,8 @@ export function GardenSection({
   };
 
   return (
-    <View style={containerStyle}>
+    <Fragment>
+      <View style={containerStyle}>
       <ScrollView
         style={styles.contentScroll}
         contentInsetAdjustmentBehavior="never"
@@ -1846,6 +1858,94 @@ export function GardenSection({
                 })}
               </ScrollView>
             </View>
+            
+            {/* Shop Preview Section - Shows selected emoji details */}
+            {shopPreview && (
+              <View style={{
+                backgroundColor: '#f0f9ff',
+                borderWidth: 2,
+                borderColor: '#0ea5e9',
+                borderRadius: 12,
+                padding: 16,
+                margin: 16,
+                marginBottom: 8,
+              }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                  <View style={{
+                    width: 60,
+                    height: 60,
+                    borderRadius: 30,
+                    backgroundColor: '#ffffff',
+                    borderWidth: 2,
+                    borderColor: shopPreview.owned ? '#16a34a' : '#f59e0b',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginRight: 12,
+                  }}>
+                    <Text style={{ fontSize: 32 }}>{shopPreview.emoji}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#0f172a' }}>
+                      {shopPreview.name}
+                    </Text>
+                    <Text style={{ fontSize: 14, color: '#64748b', marginTop: 2 }}>
+                      {shopPreview.owned ? 'Owned' : `${formatClickValue(shopPreview.cost)} lettuce`}
+                    </Text>
+                  </View>
+                  <Pressable
+                    style={{ padding: 8 }}
+                    onPress={() => setShopPreview(null)}
+                  >
+                    <Text style={{ fontSize: 16, color: '#64748b' }}>✕</Text>
+                  </Pressable>
+                </View>
+                
+                {shopPreview.tags.length > 0 && (
+                  <Text style={{ fontSize: 14, color: '#374151', marginBottom: 12 }}>
+                    {shopPreview.tags.slice(0, 3).join(' • ')}
+                  </Text>
+                )}
+                
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  {!shopPreview.owned && (
+                    <Pressable
+                      style={{
+                        backgroundColor: '#16a34a',
+                        paddingHorizontal: 20,
+                        paddingVertical: 10,
+                        borderRadius: 8,
+                        flex: 1,
+                      }}
+                      onPress={() => {
+                        const success = purchaseEmoji(shopPreview.id);
+                        if (success) {
+                          setShopPreview(null);
+                        }
+                      }}
+                    >
+                      <Text style={{ color: 'white', fontWeight: 'bold', textAlign: 'center' }}>
+                        Buy for {formatClickValue(shopPreview.cost)}
+                      </Text>
+                    </Pressable>
+                  )}
+                  <Pressable
+                    style={{
+                      backgroundColor: '#f3f4f6',
+                      paddingHorizontal: 20,
+                      paddingVertical: 10,
+                      borderRadius: 8,
+                      flex: shopPreview.owned ? 1 : 0,
+                    }}
+                    onPress={() => setShopPreview(null)}
+                  >
+                    <Text style={{ color: '#374151', fontWeight: '500', textAlign: 'center' }}>
+                      {shopPreview.owned ? 'Close' : 'Cancel'}
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            )}
+            
             <FlatList
               style={styles.sheetList}
               data={filteredShopInventory}
@@ -1997,62 +2097,10 @@ export function GardenSection({
           </View>
         </View>
       </Modal>
-      <Modal
-        visible={Boolean(shopPreview)}
-        animationType="fade"
-        transparent
-        onRequestClose={handleDismissShopPreview}
-      >
-        <View style={styles.shopPreviewOverlay}>
-          <Pressable style={styles.shopPreviewBackdrop} onPress={handleDismissShopPreview} />
-          {shopPreview ? (
-            <View style={styles.shopPreviewCard}>
-              <View style={styles.shopPreviewAura}>
-                <View style={styles.shopPreviewHalo} />
-                <View
-                  style={[
-                    styles.shopPreviewCircle,
-                    shopPreview.owned && { borderColor: '#16a34a' },
-                    !shopPreview.owned && { borderColor: '#b45309' },
-                  ]}
-                >
-                  <Text style={styles.shopPreviewEmoji}>{shopPreview.emoji}</Text>
-                </View>
-              </View>
-              <Text style={styles.shopPreviewTitle}>{shopPreview.name}</Text>
-              <Text style={styles.shopPreviewDescription}>{formatEmojiDescription(shopPreview)}</Text>
-              <Text style={styles.shopPreviewPrice}>
-                {formatClickValue(shopPreview.cost)} clicks
-              </Text>
-              <View style={styles.shopPreviewActions}>
-                <Pressable
-                  style={[
-                    styles.shopPreviewButton,
-                    (!shopPreview.owned && harvest < shopPreview.cost) && styles.shopPreviewButtonDisabled,
-                  ]}
-                  onPress={handleUnlockPreview}
-                  disabled={!shopPreview.owned && harvest < shopPreview.cost}
-                >
-                  <Text style={styles.shopPreviewButtonText}>
-                    {shopPreview.owned
-                      ? 'Open in inventory'
-                      : harvest >= shopPreview.cost
-                      ? `Unlock for ${formatClickValue(shopPreview.cost)} clicks`
-                      : 'Need more clicks'}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={styles.shopPreviewSecondaryButton}
-                  onPress={handleDismissShopPreview}
-                >
-                  <Text style={styles.shopPreviewSecondaryButtonText}>Close</Text>
-                </Pressable>
-              </View>
-            </View>
-          ) : null}
-        </View>
-      </Modal>
-    </View>
+      </View>
+      
+
+    </Fragment>
   );
 }
 
@@ -2165,7 +2213,11 @@ function InventoryTileItem({
       <Animated.View style={[styles.sheetTileWrapper, animatedStyle]}>
         <Pressable
           onLayout={onLayout}
-          style={[styles.emojiTile, isSelected && styles.emojiTileSelected, isDragging && styles.emojiTileDragging]}
+          style={[
+            styles.shopTile,
+            isSelected && styles.shopTilePressed,
+            isDragging && styles.shopTilePressed,
+          ]}
           onPress={() => {
             if (draggingIdRef.current) {
               return;
@@ -2175,18 +2227,15 @@ function InventoryTileItem({
           accessibilityLabel={`${item.name} (${categoryLabel}) emoji`}
           accessibilityHint="Select to ready this decoration."
         >
-          <View pointerEvents="none" style={styles.emojiTileCategoryMarker}>
-            <Text style={styles.emojiTileCategoryMarkerText}>{categoryIcon}</Text>
-          </View>
-          <View style={[styles.emojiBadge, isSelected && styles.emojiBadgeSelected]}>
-            <View style={[styles.emojiBadgeGlow, isSelected && styles.emojiBadgeGlowActive]} />
-            <View style={[styles.emojiBadgeCore, isSelected && styles.emojiBadgeCoreSelected]}>
-              <Text style={[styles.emojiGlyphLarge, isSelected && styles.emojiGlyphSelected]}>{item.emoji}</Text>
+          <View style={styles.shopTileAura}>
+            <View style={styles.shopTileHalo} />
+            <View style={[
+              styles.shopTileCircle, 
+              isSelected && { borderColor: '#0f766e', backgroundColor: '#ecfdf3' }
+            ]}>
+              <Text style={styles.shopTileEmoji}>{item.emoji}</Text>
             </View>
           </View>
-          <Text style={styles.emojiTileLabel} numberOfLines={2}>
-            {item.name}
-          </Text>
         </Pressable>
       </Animated.View>
     </GestureDetector>
@@ -3076,25 +3125,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
-    gap: 10,
+    gap: 8,
   },
   shopTileHalo: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
     backgroundColor: 'rgba(125, 211, 161, 0.18)',
     borderWidth: 1,
     borderColor: 'rgba(22, 101, 52, 0.2)',
     shadowColor: 'rgba(21, 128, 61, 0.35)',
     shadowOpacity: 0.18,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
     position: 'absolute',
   },
   shopTileCircle: {
-    width: 86,
-    height: 86,
-    borderRadius: 43,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#ffffff',
@@ -3102,8 +3151,8 @@ const styles = StyleSheet.create({
     borderColor: '#15803d',
     shadowColor: 'rgba(21, 128, 61, 0.32)',
     shadowOpacity: 0.18,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
     elevation: 4,
   },
   shopTileCircleLocked: {
@@ -3111,7 +3160,7 @@ const styles = StyleSheet.create({
     shadowColor: 'rgba(180, 83, 9, 0.32)',
   },
   shopTileEmoji: {
-    fontSize: 42,
+    fontSize: 32,
   },
   sheetCloseButton: {
     marginTop: 12,
@@ -3586,10 +3635,11 @@ const styles = StyleSheet.create({
   },
   shopPreviewOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 32,
+    zIndex: 1000,
   },
   shopPreviewBackdrop: {
     ...StyleSheet.absoluteFillObject,
@@ -3606,7 +3656,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.28,
     shadowRadius: 28,
     shadowOffset: { width: 0, height: 16 },
-    elevation: 10,
+    elevation: 20,
+    zIndex: 1001,
   },
   shopPreviewAura: {
     width: 160,
@@ -3661,6 +3712,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0f5132',
   },
+  shopPreviewUnicode: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#6b7280',
+    textAlign: 'center',
+    marginBottom: 8,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
   shopPreviewActions: {
     alignSelf: 'stretch',
     gap: 12,
@@ -3691,5 +3750,60 @@ const styles = StyleSheet.create({
     color: '#0f5132',
     fontWeight: '600',
     fontSize: 15,
+  },
+  inventoryTileAura: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    gap: 8,
+  },
+  inventoryTileHalo: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: 'rgba(125, 211, 161, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(22, 101, 52, 0.15)',
+    shadowColor: 'rgba(21, 128, 61, 0.25)',
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    position: 'absolute',
+  },
+  inventoryTileHaloSelected: {
+    backgroundColor: 'rgba(34, 197, 94, 0.25)',
+    borderColor: 'rgba(22, 101, 52, 0.35)',
+    shadowColor: 'rgba(21, 128, 61, 0.45)',
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+  },
+  inventoryTileCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: '#15803d',
+    shadowColor: 'rgba(21, 128, 61, 0.25)',
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+  },
+  inventoryTileCircleSelected: {
+    borderColor: '#0f766e',
+    backgroundColor: '#ecfdf3',
+    shadowColor: 'rgba(15, 118, 110, 0.35)',
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
+    transform: [{ scale: 1.05 }],
+  },
+  inventoryTileEmoji: {
+    fontSize: 32,
   },
 });

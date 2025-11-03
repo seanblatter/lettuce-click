@@ -112,13 +112,13 @@ export default function TabLayout() {
         tabBarActiveTintColor: baseAccent,
         tabBarInactiveTintColor: inactiveAccent,
         tabBarLabelStyle: {
-          fontSize: 13,
-          fontWeight: '800',
-          letterSpacing: 0.5,
+          fontSize: 12,
+          fontWeight: '700',
+          letterSpacing: 0.35,
           textTransform: 'uppercase',
-          textShadowColor: 'rgba(15, 23, 42, 0.45)',
+          textShadowColor: 'rgba(15, 23, 42, 0.35)',
           textShadowOffset: { width: 0, height: 1 },
-          textShadowRadius: 3,
+          textShadowRadius: 2,
         },
         tabBarAllowFontScaling: false,
         headerShown: false,
@@ -126,18 +126,15 @@ export default function TabLayout() {
         tabBarStyle: {
           backgroundColor: tabBackground,
           borderTopColor: tabBorder,
-          borderTopWidth: 2,
-          height: 78,
-          paddingTop: 12,
-          paddingBottom: 14,
-          shadowColor: 'rgba(15, 23, 42, 0.25)',
-          shadowOpacity: 0.24,
-          shadowRadius: 24,
-          shadowOffset: { width: 0, height: -6 },
-          elevation: 10,
-        },
-        tabBarItemStyle: {
-          paddingVertical: 6,
+          borderTopWidth: 1,
+          height: 66,
+          paddingTop: 8,
+          paddingBottom: 10,
+          shadowColor: 'rgba(15, 23, 42, 0.18)',
+          shadowOpacity: 0.18,
+          shadowRadius: 18,
+          shadowOffset: { width: 0, height: -4 },
+          elevation: 8,
         },
       }}
     >
@@ -145,21 +142,21 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 26, color }}>🏠</Text>,
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 22, color }}>🏠</Text>,
         }}
       />
       <Tabs.Screen
         name="garden"
         options={{
           title: 'Garden',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 26, color }}>🌲</Text>,
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 22, color }}>🌲</Text>,
         }}
       />
       <Tabs.Screen
         name="upgrades"
         options={{
           title: 'Upgrades',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 26, color }}>⚡️</Text>,
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 22, color }}>⚡️</Text>,
         }}
       />
     </Tabs>

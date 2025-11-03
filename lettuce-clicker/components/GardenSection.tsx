@@ -126,9 +126,9 @@ const TEXT_SCALE_MIN = 0.7;
 const TEXT_SCALE_MAX = 2;
 const TEXT_SLIDER_THUMB_SIZE = 24;
 const TOTAL_EMOJI_LIBRARY_COUNT = 3953;
-const GRID_COLUMN_COUNT = 3;
+const GRID_COLUMN_COUNT = 4;
 const GRID_VISIBLE_ROW_COUNT = 3;
-const GRID_ROW_HEIGHT = 164;
+const GRID_ROW_HEIGHT = 148;
 
 const TEXT_STYLE_OPTIONS: { id: TextStyleId; label: string; textStyle: TextStyle; preview: string }[] = [
   { id: 'sprout', label: 'Sprout', textStyle: { fontSize: 18, fontWeight: '600' }, preview: 'Hello' },
@@ -284,7 +284,6 @@ export function GardenSection({
   const [activeEmojiPicker, setActiveEmojiPicker] = useState<'shop' | 'inventory' | null>(null);
   const [isDrawingGestureActive, setIsDrawingGestureActive] = useState(false);
   const [activeDrag, setActiveDrag] = useState<{ id: string; point: { x: number; y: number } } | null>(null);
-  const [previewedShopEmojiId, setPreviewedShopEmojiId] = useState<string | null>(null);
   const [penButtonLayout, setPenButtonLayout] = useState<LayoutRectangle | null>(null);
   const canvasRef = useRef<View | null>(null);
   const filteredOwnedInventoryRef = useRef<InventoryEntry[]>([]);
@@ -713,19 +712,13 @@ export function GardenSection({
     setIsDrawingMode(false);
   }, []);
 
-  const handlePurchase = useCallback(
-    (emojiId: string) => {
-      const success = purchaseEmoji(emojiId);
+  const handlePurchase = (emojiId: string) => {
+    const success = purchaseEmoji(emojiId);
 
-      if (!success) {
-        Alert.alert('Not enough clicks', 'Gather more clicks to unlock this decoration.');
-        return false;
-      }
-
-      return true;
-    },
-    [purchaseEmoji]
-  );
+    if (!success) {
+      Alert.alert('Not enough clicks', 'Gather more clicks to unlock this decoration.');
+    }
+  };
 
   const handleSelectPenColor = useCallback(
     (color: string) => {
@@ -1144,14 +1137,31 @@ export function GardenSection({
     const categoryIcon = CATEGORY_ICONS[item.category];
 
     const handleTilePress = () => {
-      setPreviewedShopEmojiId(item.id);
+      if (owned) {
+        Alert.alert(
+          'Already unlocked',
+          'Open your inventory to place this decoration.',
+          [
+            {
+              text: 'Go to inventory',
+              onPress: () => handleOpenSheet('inventory'),
+            },
+            {
+              text: 'Close',
+              style: 'cancel',
+            },
+          ]
+        );
+        return;
+      }
+      handlePurchase(item.id);
     };
 
     const accessibilityHint = locked
       ? canAfford
-        ? `Open details and unlock this ${categoryLabel.toLowerCase()} decoration.`
-        : `Open details and learn about this ${categoryLabel.toLowerCase()} decoration.`
-      : 'View details and quick actions for this decoration.';
+        ? `Unlock this ${categoryLabel.toLowerCase()} decoration.`
+        : `Earn more harvest to unlock this ${categoryLabel.toLowerCase()} decoration.`
+      : 'Select to ready this decoration.';
 
     return (
       <View style={styles.sheetTileWrapper}>
@@ -1170,19 +1180,15 @@ export function GardenSection({
           <View pointerEvents="none" style={styles.emojiTileCategoryMarker}>
             <Text style={styles.emojiTileCategoryMarkerText}>{categoryIcon}</Text>
           </View>
-          <View style={[styles.emojiBadge, isSelected && styles.emojiBadgeSelected, locked && styles.emojiBadgeLocked]}>
+          <View
+            style={[styles.emojiBadge, isSelected && styles.emojiBadgeSelected, locked && styles.emojiBadgeLocked]}
+          >
             {locked ? (
               <View pointerEvents="none" style={styles.emojiLockOverlay}>
                 <Text style={styles.emojiLockGlyph}>🔒</Text>
               </View>
             ) : null}
-            <View
-              style={[
-                styles.emojiBadgeGlow,
-                isSelected && styles.emojiBadgeGlowActive,
-                locked && styles.emojiBadgeGlowLocked,
-              ]}
-            />
+            <View style={[styles.emojiBadgeGlow, isSelected && styles.emojiBadgeGlowActive]} />
             <View
               style={[
                 styles.emojiBadgeCore,
@@ -2010,100 +2016,6 @@ export function GardenSection({
           </View>
         </View>
       </Modal>
-      <Modal
-        visible={Boolean(previewedShopEmojiId)}
-        animationType="fade"
-        transparent
-        onRequestClose={() => setPreviewedShopEmojiId(null)}
-      >
-        <View style={styles.previewOverlay}>
-          <Pressable
-            style={styles.previewBackdrop}
-            onPress={() => setPreviewedShopEmojiId(null)}
-            accessibilityLabel="Close emoji preview"
-          />
-          {(() => {
-            if (!previewedShopEmojiId) {
-              return null;
-            }
-
-            const previewed = inventoryList.find((entry) => entry.id === previewedShopEmojiId) ?? null;
-
-            if (!previewed) {
-              return null;
-            }
-
-            const owned = previewed.owned;
-            const categoryLabel = CATEGORY_LABELS[previewed.category];
-            const priceLabel = `${formatClickValue(previewed.cost)} clicks`;
-            const topTags = previewed.tags.slice(0, 3).join(' • ');
-
-            const handleUnlock = () => {
-              const success = handlePurchase(previewed.id);
-              if (!success) {
-                return;
-              }
-            };
-
-            const handleEquip = () => {
-              if (!owned) {
-                return;
-              }
-
-              setSelectedEmoji(previewed.id);
-              setActiveSheet('inventory');
-              setIsDrawingMode(false);
-              setPreviewedShopEmojiId(null);
-            };
-
-            return (
-              <View style={styles.previewCard}>
-                <View style={styles.previewEmojiBadge}>
-                  <Text style={styles.previewEmojiGlyph}>{previewed.emoji}</Text>
-                </View>
-                <Text style={styles.previewName}>{previewed.name}</Text>
-                <Text style={styles.previewCategory}>{categoryLabel}</Text>
-                {topTags.length > 0 ? (
-                  <Text style={styles.previewTags}>{topTags}</Text>
-                ) : null}
-                <View style={styles.previewPriceBadge}>
-                  <Text style={styles.previewPriceText}>{priceLabel}</Text>
-                </View>
-                <Text style={styles.previewCopy}>
-                  {owned
-                    ? 'This emoji is ready in your inventory. Equip it now to place it in your garden.'
-                    : 'Unlock this emoji to add it to your inventory and decorate with it whenever you like.'}
-                </Text>
-                <View style={styles.previewActions}>
-                  {owned ? (
-                    <Pressable style={styles.previewPrimaryButton} onPress={handleEquip} accessibilityRole="button">
-                      <Text style={styles.previewPrimaryText}>Equip from inventory</Text>
-                    </Pressable>
-                  ) : (
-                    <Pressable
-                      style={[styles.previewPrimaryButton, harvest < previewed.cost && styles.previewPrimaryDisabled]}
-                      onPress={handleUnlock}
-                      disabled={harvest < previewed.cost}
-                      accessibilityRole="button"
-                    >
-                      <Text style={styles.previewPrimaryText}>
-                        {harvest < previewed.cost ? 'Not enough clicks' : 'Unlock emoji'}
-                      </Text>
-                    </Pressable>
-                  )}
-                  <Pressable
-                    style={styles.previewSecondaryButton}
-                    onPress={() => setPreviewedShopEmojiId(null)}
-                    accessibilityRole="button"
-                  >
-                    <Text style={styles.previewSecondaryText}>Close</Text>
-                  </Pressable>
-                </View>
-              </View>
-            );
-          })()}
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -2592,15 +2504,15 @@ const styles = StyleSheet.create({
   },
   emojiTile: {
     width: '100%',
-    minHeight: 144,
+    minHeight: 120,
     backgroundColor: '#f8fafc',
     borderRadius: 18,
-    paddingVertical: 18,
-    paddingHorizontal: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 10,
     borderWidth: 1.5,
     borderColor: 'rgba(15, 118, 110, 0.18)',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
     position: 'relative',
     shadowColor: '#0f172a',
     shadowOpacity: 0.08,
@@ -2628,8 +2540,8 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   emojiTileLocked: {
-    backgroundColor: '#fef3c7',
-    borderColor: 'rgba(245, 158, 11, 0.85)',
+    backgroundColor: '#f5d08a',
+    borderColor: '#f59e0b',
     shadowColor: '#b45309',
   },
   emojiTileDisabled: {
@@ -2645,7 +2557,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   emojiBadgeLocked: {
-    opacity: 0.95,
+    opacity: 0.9,
   },
   emojiBadgeGlow: {
     ...StyleSheet.absoluteFillObject,
@@ -2654,9 +2566,6 @@ const styles = StyleSheet.create({
   },
   emojiBadgeGlowActive: {
     backgroundColor: 'rgba(34, 197, 94, 0.2)',
-  },
-  emojiBadgeGlowLocked: {
-    backgroundColor: 'rgba(251, 191, 36, 0.25)',
   },
   emojiBadgeCore: {
     width: 56,
@@ -2679,7 +2588,7 @@ const styles = StyleSheet.create({
   },
   emojiBadgeCoreLocked: {
     backgroundColor: '#fef3c7',
-    borderColor: 'rgba(245, 158, 11, 0.75)',
+    borderColor: 'rgba(245, 158, 11, 0.65)',
     shadowColor: '#b45309',
   },
   emojiBadgeSelected: {
@@ -2692,7 +2601,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: 1.05 }],
   },
   emojiGlyphLocked: {
-    opacity: 0.9,
+    opacity: 0.7,
   },
   emojiTileLabel: {
     fontSize: 13,
@@ -3056,16 +2965,16 @@ const styles = StyleSheet.create({
     color: '#0f766e',
   },
   sheetColumn: {
-    gap: 16,
-    marginBottom: 16,
+    gap: 12,
+    marginBottom: 12,
   },
   sheetList: {
     maxHeight: GRID_VISIBLE_ROW_COUNT * GRID_ROW_HEIGHT,
     flexGrow: 0,
   },
   sheetListContent: {
-    paddingBottom: 32,
-    paddingHorizontal: 12,
+    paddingBottom: 24,
+    paddingHorizontal: 4,
   },
   categoryFilterBlock: {
     marginTop: 4,
@@ -3101,7 +3010,7 @@ const styles = StyleSheet.create({
   },
   sheetTileWrapper: {
     flex: 1,
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
     minWidth: 0,
   },
   sheetCloseButton: {
@@ -3115,121 +3024,6 @@ const styles = StyleSheet.create({
     color: '#f0fff4',
     fontWeight: '700',
     fontSize: 16,
-  },
-  previewOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  previewBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  previewCard: {
-    width: 320,
-    maxWidth: '90%',
-    backgroundColor: '#ffffff',
-    borderRadius: 24,
-    paddingVertical: 26,
-    paddingHorizontal: 22,
-    alignItems: 'center',
-    gap: 10,
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.2,
-    shadowRadius: 26,
-    shadowOffset: { width: 0, height: 16 },
-    elevation: 12,
-  },
-  previewEmojiBadge: {
-    width: 96,
-    height: 96,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#fef3c7',
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.55)',
-    shadowColor: '#f97316',
-    shadowOpacity: 0.2,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 8,
-  },
-  previewEmojiGlyph: {
-    fontSize: 56,
-  },
-  previewName: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#134e32',
-    textAlign: 'center',
-  },
-  previewCategory: {
-    fontSize: 13,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    color: '#92400e',
-  },
-  previewTags: {
-    fontSize: 12,
-    color: '#4b5563',
-    textAlign: 'center',
-  },
-  previewPriceBadge: {
-    marginTop: 4,
-    borderRadius: 999,
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(253, 230, 138, 0.55)',
-    borderWidth: 1,
-    borderColor: 'rgba(217, 119, 6, 0.4)',
-  },
-  previewPriceText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#b45309',
-    letterSpacing: 0.4,
-  },
-  previewCopy: {
-    fontSize: 13,
-    color: '#1f2937',
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  previewActions: {
-    width: '100%',
-    gap: 12,
-    marginTop: 8,
-  },
-  previewPrimaryButton: {
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    backgroundColor: '#166534',
-    alignItems: 'center',
-  },
-  previewPrimaryDisabled: {
-    backgroundColor: '#94a3b8',
-  },
-  previewPrimaryText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#f0fff4',
-  },
-  previewSecondaryButton: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#bbf7d0',
-    paddingVertical: 12,
-    alignItems: 'center',
-    backgroundColor: '#ffffff',
-  },
-  previewSecondaryText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#14532d',
   },
   paletteOverlay: {
     flex: 1,

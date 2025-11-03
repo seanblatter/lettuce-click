@@ -29,7 +29,6 @@ const DAILY_BONUS_LAST_CLAIM_KEY = 'lettuce-click:daily-bonus-last-claim';
 const BONUS_REWARD_OPTIONS = [75, 125, 200, 325, 500, 650];
 const BONUS_ADDITIONAL_SPINS = 2;
 const DAILY_BONUS_INTERVAL_MS = 24 * 60 * 60 * 1000;
-const TOTAL_EMOJI_LIBRARY_COUNT = gardenEmojiCatalog.length;
 const LEDGER_THEMES = [
   {
     backgroundColor: 'rgba(255, 255, 255, 0.32)',
@@ -150,14 +149,6 @@ export default function HomeScreen() {
     () => gardenEmojiCatalog.filter((emoji) => !emojiInventory[emoji.id]),
     [emojiInventory]
   );
-  const ownedEmojiCount = useMemo(
-    () => Object.values(emojiInventory).filter(Boolean).length,
-    [emojiInventory]
-  );
-  const currentLockedEmoji = useMemo(
-    () => lockedShopEmojis[0] ?? null,
-    [lockedShopEmojis]
-  );
   const [showGrowModal, setShowGrowModal] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPage, setMenuPage] = useState<'overview' | 'themes'>('overview');
@@ -203,8 +194,6 @@ export default function HomeScreen() {
   const accentColor = useMemo(() => premiumAccentColor || '#1f6f4a', [premiumAccentColor]);
   const accentSurface = useMemo(() => lightenColor(accentColor, 0.65), [accentColor]);
   const accentHighlight = useMemo(() => lightenColor(accentColor, 0.85), [accentColor]);
-  const spotlightEmoji = lastUnlockedEmoji ?? currentLockedEmoji;
-  const isSpotlightLocked = !lastUnlockedEmoji && Boolean(currentLockedEmoji);
   const audioPrimaryScale = useMemo(
     () => audioPulsePrimary.interpolate({ inputRange: [0, 1], outputRange: [1, 1.3] }),
     [audioPulsePrimary]
@@ -652,9 +641,8 @@ export default function HomeScreen() {
         );
       } else {
         setLastUnlockedEmoji(null);
-        const completedCollection = ownedEmojiCount >= TOTAL_EMOJI_LIBRARY_COUNT;
         setBonusMessage(
-          lockedEmojis.length === 0 && completedCollection
+          lockedEmojis.length === 0
             ? `You earned ${reward.toLocaleString()} clicks! Every Garden Shop emoji is already yours.`
             : `You earned ${reward.toLocaleString()} clicks!`
         );
@@ -669,7 +657,6 @@ export default function HomeScreen() {
     isSpinningBonus,
     lockedShopEmojis,
     grantEmojiUnlock,
-    ownedEmojiCount,
   ]);
 
   const handleWatchBonusAd = useCallback(async () => {
@@ -1266,35 +1253,14 @@ export default function HomeScreen() {
               <Text style={styles.bonusReward}>Last reward: {lastBonusReward.toLocaleString()} clicks</Text>
             ) : null}
             {bonusMessage ? <Text style={styles.bonusMessage}>{bonusMessage}</Text> : null}
-            {spotlightEmoji ? (
-              <View
-                style={[
-                  styles.bonusUnlockCard,
-                  isSpotlightLocked ? styles.bonusUnlockCardLocked : styles.bonusUnlockCardUnlocked,
-                ]}
-              >
-                <Text
-                  style={[styles.bonusUnlockLabel, isSpotlightLocked && styles.bonusUnlockLabelLocked]}
-                >
-                  {isSpotlightLocked ? 'Locked emoji spotlight' : 'Newest emoji reward'}
-                </Text>
+            {lastUnlockedEmoji ? (
+              <View style={styles.bonusUnlockCard}>
+                <Text style={styles.bonusUnlockLabel}>Newest emoji reward</Text>
                 <View style={styles.bonusUnlockRow}>
-                  <View
-                    style={[
-                      styles.bonusUnlockGlyphWrap,
-                      isSpotlightLocked && styles.bonusUnlockGlyphWrapLocked,
-                    ]}
-                  >
-                    <Text style={styles.bonusUnlockGlyph}>{spotlightEmoji.emoji}</Text>
+                  <View style={styles.bonusUnlockGlyphWrap}>
+                    <Text style={styles.bonusUnlockGlyph}>{lastUnlockedEmoji.emoji}</Text>
                   </View>
-                  <View style={styles.bonusUnlockTextBlock}>
-                    <Text style={styles.bonusUnlockName}>{spotlightEmoji.name}</Text>
-                    {isSpotlightLocked ? (
-                      <Text style={styles.bonusUnlockHint}>
-                        Spin the wheel for a chance to add this decoration.
-                      </Text>
-                    ) : null}
-                  </View>
+                  <Text style={styles.bonusUnlockName}>{lastUnlockedEmoji.name}</Text>
                 </View>
               </View>
             ) : null}
@@ -2059,19 +2025,13 @@ const styles = StyleSheet.create({
   bonusUnlockCard: {
     width: '100%',
     borderRadius: 18,
-    borderWidth: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    gap: 10,
-    alignItems: 'stretch',
-  },
-  bonusUnlockCardUnlocked: {
     backgroundColor: '#ecfdf5',
+    borderWidth: 1,
     borderColor: '#bbf7d0',
-  },
-  bonusUnlockCardLocked: {
-    backgroundColor: '#fff7ed',
-    borderColor: '#fdba74',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    gap: 6,
+    alignItems: 'flex-start',
   },
   bonusUnlockLabel: {
     fontSize: 12,
@@ -2079,9 +2039,6 @@ const styles = StyleSheet.create({
     color: '#047857',
     textTransform: 'uppercase',
     letterSpacing: 0.6,
-  },
-  bonusUnlockLabelLocked: {
-    color: '#c2410c',
   },
   bonusUnlockRow: {
     flexDirection: 'row',
@@ -2096,24 +2053,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  bonusUnlockGlyphWrapLocked: {
-    backgroundColor: '#fde68a',
-  },
   bonusUnlockGlyph: {
     fontSize: 26,
-  },
-  bonusUnlockTextBlock: {
-    flex: 1,
-    gap: 4,
   },
   bonusUnlockName: {
     fontSize: 16,
     fontWeight: '700',
     color: '#0f3d2b',
-  },
-  bonusUnlockHint: {
-    fontSize: 12,
-    color: '#92400e',
   },
   bonusPrimaryButton: {
     width: '100%',

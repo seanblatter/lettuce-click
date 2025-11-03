@@ -36,21 +36,8 @@ const TIMER_MINUTE_OPTIONS = Array.from({ length: 36 }, (_, index) => (index + 1
 const ALARM_HOUR_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1);
 const ALARM_MINUTE_OPTIONS = Array.from({ length: 60 }, (_, index) => index);
 const ALARM_PERIOD_OPTIONS: AlarmPeriod[] = ['AM', 'PM'];
-const WAKE_ENERGY_OPTIONS = [
-  {
-    id: 'burst',
-    title: 'Energy burst',
-    description: 'Wake with bright chimes and invigorating ambience.',
-  },
-  {
-    id: 'gentle',
-    title: 'Sunrise glide',
-    description: 'Ease into the day with warm harmonies and soft tones.',
-  },
-] as const;
-type WakeEnergyId = (typeof WAKE_ENERGY_OPTIONS)[number]['id'];
 const WHEEL_ITEM_HEIGHT = 46;
-const WHEEL_VISIBLE_ROWS = 3;
+const WHEEL_VISIBLE_ROWS = 5;
 const WHEEL_CONTAINER_HEIGHT = WHEEL_ITEM_HEIGHT * WHEEL_VISIBLE_ROWS;
 const WHEEL_PADDING = (WHEEL_CONTAINER_HEIGHT - WHEEL_ITEM_HEIGHT) / 2;
 const ALARM_SOUND_URI = ALARM_CHIME_DATA_URI;
@@ -936,14 +923,8 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
     alarmPickerRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
       gap: 12,
-      backgroundColor: palette.wheelBackground,
-      borderRadius: 18,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderWidth: 1,
-      borderColor: palette.wheelBorder,
+      justifyContent: 'space-between',
     },
     alarmPickerSeparator: {
       fontSize: 24,
@@ -954,16 +935,10 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
       borderRadius: 20,
       paddingVertical: 14,
       paddingHorizontal: 16,
-      borderWidth: 1,
-      gap: 4,
-    },
-    alarmSummaryCardVibrant: {
-      backgroundColor: palette.sleepTimerBackgroundActive,
-      borderColor: palette.sleepTimerBorderActive,
-    },
-    alarmSummaryCardGentle: {
       backgroundColor: palette.sleepModeBackground,
+      borderWidth: 1,
       borderColor: palette.sleepModeBorder,
+      gap: 4,
     },
     alarmSummaryLabel: {
       fontSize: 12,
@@ -1026,7 +1001,7 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
     },
     wheelPickerContainer: {
       height: WHEEL_CONTAINER_HEIGHT,
-      width: 68,
+      width: 64,
       borderRadius: 18,
       backgroundColor: palette.wheelBackground,
       borderWidth: 1,
@@ -1206,7 +1181,6 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
   const [alarmHour, setAlarmHour] = useState<number>(7);
   const [alarmMinute, setAlarmMinute] = useState<number>(0);
   const [alarmPeriod, setAlarmPeriod] = useState<AlarmPeriod>('AM');
-  const [wakeEnergyMode, setWakeEnergyMode] = useState<WakeEnergyId>('burst');
   const [sleepCircle, setSleepCircle] = useState<SleepCircleState>(null);
   const [sleepNow, setSleepNow] = useState(() => Date.now());
   const sleepTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1846,10 +1820,7 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
             </View>
             <ScrollView
               style={styles.sleepCardScroll}
-              contentContainerStyle={[
-                styles.sleepContent,
-                { paddingBottom: sleepMode === 'alarm' ? insets.bottom + 8 : insets.bottom + 16 },
-              ]}
+              contentContainerStyle={[styles.sleepContent, { paddingBottom: insets.bottom + 16 }]}
               showsVerticalScrollIndicator={false}
               bounces={false}
             >
@@ -1901,30 +1872,10 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
                       </View>
                     </>
                   ) : (
-                    <>
-                      <Text style={styles.sleepSectionLabel}>Wake energy</Text>
-                      <View style={styles.timerActionList}>
-                        {WAKE_ENERGY_OPTIONS.map((option) => {
-                          const isActive = wakeEnergyMode === option.id;
-                          return (
-                            <Pressable
-                              key={option.id}
-                              style={[styles.timerActionCard, isActive && styles.timerActionCardActive]}
-                              onPress={() => setWakeEnergyMode(option.id)}
-                              accessibilityRole="button"
-                              accessibilityState={{ selected: isActive }}
-                            >
-                              <Text
-                                style={[styles.timerActionLabel, isActive && styles.timerActionLabelActive]}
-                              >
-                                {option.title}
-                              </Text>
-                              <Text style={styles.timerActionDescription}>{option.description}</Text>
-                            </Pressable>
-                          );
-                        })}
-                      </View>
-                    </>
+                    <View style={styles.sleepStatusPanel}>
+                      <Text style={styles.sleepStatusHeadline}>{sleepSummary.headline}</Text>
+                      <Text style={styles.sleepStatusCopy}>{sleepSummary.detail}</Text>
+                    </View>
                   )}
                 </View>
                 <View style={[styles.sleepColumn, styles.sleepColumnSecondary]}>
@@ -1952,14 +1903,7 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
                     </>
                   ) : (
                     <>
-                      <View
-                        style={[
-                          styles.alarmSummaryCard,
-                          wakeEnergyMode === 'burst'
-                            ? styles.alarmSummaryCardVibrant
-                            : styles.alarmSummaryCardGentle,
-                        ]}
-                      >
+                      <View style={styles.alarmSummaryCard}>
                         <Text style={styles.alarmSummaryLabel}>Next wake chime</Text>
                         <Text style={styles.alarmSummaryValue}>
                           {formatAlarmDisplay(alarmHour, alarmMinute, alarmPeriod)}
@@ -1970,7 +1914,6 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
                           data={ALARM_HOUR_OPTIONS}
                           value={alarmHour}
                           onChange={setAlarmHour}
-                          formatter={(value) => value.toString().padStart(2, '0')}
                           label="Alarm hour"
                           styles={styles}
                         />

@@ -128,7 +128,7 @@ const TEXT_SLIDER_THUMB_SIZE = 24;
 const TOTAL_EMOJI_LIBRARY_COUNT = 3953;
 const GRID_COLUMN_COUNT = 4;
 const GRID_VISIBLE_ROW_COUNT = 3;
-const GRID_ROW_HEIGHT = 148;
+const GRID_ROW_HEIGHT = 118;
 
 const TEXT_STYLE_OPTIONS: { id: TextStyleId; label: string; textStyle: TextStyle; preview: string }[] = [
   { id: 'sprout', label: 'Sprout', textStyle: { fontSize: 18, fontWeight: '600' }, preview: 'Hello' },
@@ -284,6 +284,9 @@ export function GardenSection({
   const [activeEmojiPicker, setActiveEmojiPicker] = useState<'shop' | 'inventory' | null>(null);
   const [isDrawingGestureActive, setIsDrawingGestureActive] = useState(false);
   const [activeDrag, setActiveDrag] = useState<{ id: string; point: { x: number; y: number } } | null>(null);
+  const [previewSelection, setPreviewSelection] = useState<
+    { item: InventoryEntry; context: 'shop' | 'inventory' } | null
+  >(null);
   const [penButtonLayout, setPenButtonLayout] = useState<LayoutRectangle | null>(null);
   const canvasRef = useRef<View | null>(null);
   const filteredOwnedInventoryRef = useRef<InventoryEntry[]>([]);
@@ -712,13 +715,18 @@ export function GardenSection({
     setIsDrawingMode(false);
   }, []);
 
-  const handlePurchase = (emojiId: string) => {
-    const success = purchaseEmoji(emojiId);
+  const handlePurchase = useCallback(
+    (emojiId: string) => {
+      const success = purchaseEmoji(emojiId);
 
-    if (!success) {
-      Alert.alert('Not enough clicks', 'Gather more clicks to unlock this decoration.');
-    }
-  };
+      if (!success) {
+        Alert.alert('Not enough clicks', 'Gather more clicks to unlock this decoration.');
+      }
+
+      return success;
+    },
+    [purchaseEmoji]
+  );
 
   const handleSelectPenColor = useCallback(
     (color: string) => {
@@ -1113,6 +1121,39 @@ export function GardenSection({
     [endInventoryDrag]
   );
 
+  const handleOpenPreview = useCallback(
+    (item: InventoryEntry, context: 'shop' | 'inventory') => {
+      setPreviewSelection({ item, context });
+    },
+    []
+  );
+
+  const handleClosePreview = useCallback(() => setPreviewSelection(null), []);
+
+  const handlePreviewPurchase = useCallback(() => {
+    setPreviewSelection((current) => {
+      if (!current) {
+        return current;
+      }
+
+      const success = handlePurchase(current.item.id);
+      if (!success) {
+        return current;
+      }
+
+      return { ...current, item: { ...current.item, owned: true } };
+    });
+  }, [handlePurchase]);
+
+  const handlePreviewReady = useCallback(() => {
+    if (!previewSelection || !previewSelection.item.owned) {
+      return;
+    }
+
+    handleSelect(previewSelection.item.id, true);
+    setPreviewSelection(null);
+  }, [handleSelect, previewSelection]);
+
   const keyExtractor = useCallback((item: InventoryEntry) => item.id, []);
 
   const bannerTopPadding = insets.top + 24;
@@ -1127,6 +1168,12 @@ export function GardenSection({
       `${totalCollected.toLocaleString()} / ${TOTAL_EMOJI_LIBRARY_COUNT.toLocaleString()}`,
     [totalCollected]
   );
+  const previewCategoryLabel = previewSelection
+    ? CATEGORY_LABELS[previewSelection.item.category]
+    : '';
+  const previewPriceLabel = previewSelection ? formatClickValue(previewSelection.item.cost) : '';
+  const previewIsLocked = previewSelection ? !previewSelection.item.owned : false;
+  const previewCanAfford = previewSelection ? harvest >= previewSelection.item.cost : false;
 
   const renderShopItem: ListRenderItem<InventoryEntry> = ({ item }) => {
     const owned = item.owned;
@@ -1136,59 +1183,40 @@ export function GardenSection({
     const categoryLabel = CATEGORY_LABELS[item.category];
     const categoryIcon = CATEGORY_ICONS[item.category];
 
-    const handleTilePress = () => {
-      if (owned) {
-        Alert.alert(
-          'Already unlocked',
-          'Open your inventory to place this decoration.',
-          [
-            {
-              text: 'Go to inventory',
-              onPress: () => handleOpenSheet('inventory'),
-            },
-            {
-              text: 'Close',
-              style: 'cancel',
-            },
-          ]
-        );
-        return;
-      }
-      handlePurchase(item.id);
-    };
-
     const accessibilityHint = locked
       ? canAfford
-        ? `Unlock this ${categoryLabel.toLowerCase()} decoration.`
+        ? `Preview and unlock this ${categoryLabel.toLowerCase()} decoration.`
         : `Earn more harvest to unlock this ${categoryLabel.toLowerCase()} decoration.`
-      : 'Select to ready this decoration.';
+      : 'Preview details or ready this decoration.';
 
     return (
       <View style={styles.sheetTileWrapper}>
         <Pressable
           style={({ pressed }) => [
-            styles.emojiTile,
-            isSelected && styles.emojiTileSelected,
-            locked && styles.emojiTileLocked,
-            !canAfford && locked && styles.emojiTileDisabled,
-            pressed && styles.emojiTilePressed,
+            styles.emojiOrbButton,
+            locked ? styles.emojiOrbButtonLocked : styles.emojiOrbButtonUnlocked,
+            isSelected && styles.emojiOrbButtonSelected,
+            !canAfford && locked && styles.emojiOrbButtonDisabled,
+            pressed && styles.emojiOrbButtonPressed,
           ]}
-          onPress={handleTilePress}
+          onPress={() => handleOpenPreview(item, 'shop')}
           accessibilityLabel={`${item.name} (${categoryLabel}) emoji`}
           accessibilityHint={`${accessibilityHint} Price ${formatClickValue(item.cost)} clicks.`}
         >
-          <View pointerEvents="none" style={styles.emojiTileCategoryMarker}>
-            <Text style={styles.emojiTileCategoryMarkerText}>{categoryIcon}</Text>
+          <View pointerEvents="none" style={styles.emojiOrbCategoryMarker}>
+            <Text style={styles.emojiOrbCategoryText}>{categoryIcon}</Text>
           </View>
           <View
             style={[styles.emojiBadge, isSelected && styles.emojiBadgeSelected, locked && styles.emojiBadgeLocked]}
           >
             {locked ? (
-              <View pointerEvents="none" style={styles.emojiLockOverlay}>
+              <View pointerEvents="none" style={styles.emojiOrbLock}>
                 <Text style={styles.emojiLockGlyph}>🔒</Text>
               </View>
             ) : null}
-            <View style={[styles.emojiBadgeGlow, isSelected && styles.emojiBadgeGlowActive]} />
+            <View
+              style={[styles.emojiBadgeGlow, (isSelected || !locked) && styles.emojiBadgeGlowActive]}
+            />
             <View
               style={[
                 styles.emojiBadgeCore,
@@ -1204,16 +1232,6 @@ export function GardenSection({
                 ]}
               >
                 {item.emoji}
-              </Text>
-            </View>
-          </View>
-          <Text style={styles.emojiTileLabel} numberOfLines={2}>
-            {item.name}
-          </Text>
-          <View style={styles.emojiTileFooter}>
-            <View style={styles.emojiTileCostBadge}>
-              <Text style={styles.emojiTileCostText} numberOfLines={1}>
-                {formatClickValue(item.cost)} clicks
               </Text>
             </View>
           </View>
@@ -1239,13 +1257,13 @@ export function GardenSection({
         categoryLabel={categoryLabel}
         categoryIcon={categoryIcon}
         canReorder={canReorderInventory}
-        onSelect={handleSelect}
         onLayout={handleInventoryTileLayout}
         beginDrag={beginInventoryDrag}
         updateDrag={updateInventoryDrag}
         endDrag={endInventoryDrag}
         draggingIdRef={draggingInventoryIdRef}
         shouldShake={shouldShake}
+        onPreview={(entry) => handleOpenPreview(entry, 'inventory')}
       />
     );
   };
@@ -2016,6 +2034,89 @@ export function GardenSection({
           </View>
         </View>
       </Modal>
+      <Modal
+        visible={Boolean(previewSelection)}
+        animationType="fade"
+        transparent
+        onRequestClose={handleClosePreview}
+      >
+        <View style={styles.previewOverlay}>
+          <Pressable style={styles.previewBackdrop} onPress={handleClosePreview} />
+          {previewSelection ? (
+            <View style={styles.previewCard}>
+              <View style={styles.previewEmojiWrap}>
+                <View
+                  style={[
+                    styles.emojiBadge,
+                    styles.previewEmojiBadge,
+                    previewSelection.item.owned && styles.previewEmojiBadgeOwned,
+                    previewIsLocked && styles.previewEmojiBadgeLocked,
+                  ]}
+                >
+                  <View style={[styles.emojiBadgeGlow, styles.emojiBadgeGlowActive]} />
+                  <View
+                    style={[
+                      styles.emojiBadgeCore,
+                      styles.previewEmojiCore,
+                      !previewIsLocked && styles.previewEmojiCoreOwned,
+                      previewIsLocked && styles.emojiBadgeCoreLocked,
+                    ]}
+                  >
+                    <Text style={[styles.previewEmojiGlyph]}>{previewSelection.item.emoji}</Text>
+                  </View>
+                </View>
+              </View>
+              <Text style={styles.previewName}>{previewSelection.item.name}</Text>
+              <Text style={styles.previewMeta}>{`Use: ${previewCategoryLabel}`}</Text>
+              <Text style={styles.previewMeta}>{`Price: ${previewPriceLabel} clicks`}</Text>
+              <Text
+                style={[
+                  styles.previewStatus,
+                  previewIsLocked ? styles.previewStatusLocked : styles.previewStatusUnlocked,
+                ]}
+              >
+                {previewIsLocked
+                  ? 'Locked — unlock this decoration to add it to your garden.'
+                  : 'Unlocked and ready to place in your garden.'}
+              </Text>
+              {previewSelection.context === 'inventory' ? (
+                <Text style={styles.previewContext}>Pulled from your inventory shelves.</Text>
+              ) : null}
+              <View style={styles.previewActions}>
+                {previewIsLocked ? (
+                  <Pressable
+                    style={[styles.previewPrimaryButton, !previewCanAfford && styles.previewPrimaryButtonDisabled]}
+                    onPress={handlePreviewPurchase}
+                    disabled={!previewCanAfford}
+                    accessibilityLabel="Unlock emoji"
+                  >
+                    <Text style={styles.previewPrimaryText}>
+                      {previewCanAfford
+                        ? `Unlock for ${previewPriceLabel} clicks`
+                        : 'Earn more clicks to unlock'}
+                    </Text>
+                  </Pressable>
+                ) : (
+                  <Pressable
+                    style={styles.previewPrimaryButton}
+                    onPress={handlePreviewReady}
+                    accessibilityLabel="Ready this emoji for placement"
+                  >
+                    <Text style={styles.previewPrimaryText}>Ready to place</Text>
+                  </Pressable>
+                )}
+                <Pressable
+                  style={styles.previewSecondaryButton}
+                  onPress={handleClosePreview}
+                  accessibilityLabel="Close emoji preview"
+                >
+                  <Text style={styles.previewSecondaryText}>Close</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -2034,13 +2135,13 @@ type InventoryTileItemProps = {
   categoryLabel: string;
   categoryIcon: string;
   canReorder: boolean;
-  onSelect: (emojiId: string, owned: boolean) => void;
   onLayout: (event: LayoutChangeEvent) => void;
   beginDrag: (emojiId: string, index: number) => void;
   updateDrag: (dx: number, dy: number) => void;
   endDrag: () => void;
   draggingIdRef: React.MutableRefObject<string | null>;
   shouldShake: boolean;
+  onPreview: (item: InventoryEntry) => void;
 };
 
 function InventoryTileItem({
@@ -2051,13 +2152,13 @@ function InventoryTileItem({
   categoryLabel,
   categoryIcon,
   canReorder,
-  onSelect,
   onLayout,
   beginDrag,
   updateDrag,
   endDrag,
   draggingIdRef,
   shouldShake,
+  onPreview,
 }: InventoryTileItemProps) {
   const wiggle = useSharedValue(0);
   const scale = useSharedValue(isDragging ? 1.05 : 1);
@@ -2129,28 +2230,31 @@ function InventoryTileItem({
       <Animated.View style={[styles.sheetTileWrapper, animatedStyle]}>
         <Pressable
           onLayout={onLayout}
-          style={[styles.emojiTile, isSelected && styles.emojiTileSelected, isDragging && styles.emojiTileDragging]}
+          style={({ pressed }) => [
+            styles.emojiOrbButton,
+            styles.emojiOrbButtonUnlocked,
+            isSelected && styles.emojiOrbButtonSelected,
+            pressed && styles.emojiOrbButtonPressed,
+            isDragging && styles.emojiOrbButtonDragging,
+          ]}
           onPress={() => {
             if (draggingIdRef.current) {
               return;
             }
-            onSelect(item.id, item.owned);
+            onPreview(item);
           }}
           accessibilityLabel={`${item.name} (${categoryLabel}) emoji`}
-          accessibilityHint="Select to ready this decoration."
+          accessibilityHint="Preview details or ready this decoration."
         >
-          <View pointerEvents="none" style={styles.emojiTileCategoryMarker}>
-            <Text style={styles.emojiTileCategoryMarkerText}>{categoryIcon}</Text>
+          <View pointerEvents="none" style={styles.emojiOrbCategoryMarker}>
+            <Text style={styles.emojiOrbCategoryText}>{categoryIcon}</Text>
           </View>
           <View style={[styles.emojiBadge, isSelected && styles.emojiBadgeSelected]}>
-            <View style={[styles.emojiBadgeGlow, isSelected && styles.emojiBadgeGlowActive]} />
+            <View style={[styles.emojiBadgeGlow, styles.emojiBadgeGlowActive]} />
             <View style={[styles.emojiBadgeCore, isSelected && styles.emojiBadgeCoreSelected]}>
               <Text style={[styles.emojiGlyphLarge, isSelected && styles.emojiGlyphSelected]}>{item.emoji}</Text>
             </View>
           </View>
-          <Text style={styles.emojiTileLabel} numberOfLines={2}>
-            {item.name}
-          </Text>
         </Pressable>
       </Animated.View>
     </GestureDetector>
@@ -2502,80 +2606,99 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
   },
-  emojiTile: {
+  emojiOrbButton: {
     width: '100%',
-    minHeight: 120,
-    backgroundColor: '#f8fafc',
-    borderRadius: 18,
-    paddingVertical: 14,
-    paddingHorizontal: 10,
-    borderWidth: 1.5,
-    borderColor: 'rgba(15, 118, 110, 0.18)',
+    aspectRatio: 1,
+    borderRadius: 999,
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'center',
     position: 'relative',
     shadowColor: '#0f172a',
     shadowOpacity: 0.08,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
-    elevation: 3,
+    elevation: 2,
   },
-  emojiTileSelected: {
-    borderColor: '#0f766e',
-    backgroundColor: '#ecfdf3',
-    shadowColor: '#0f766e',
-    shadowOpacity: 0.18,
-    shadowRadius: 14,
+  emojiOrbButtonUnlocked: {
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1.5,
+    borderColor: 'rgba(21, 128, 61, 0.28)',
+  },
+  emojiOrbButtonLocked: {
+    backgroundColor: '#fff7ed',
+    borderWidth: 1.5,
+    borderColor: 'rgba(249, 115, 22, 0.42)',
+    shadowColor: '#b45309',
+  },
+  emojiOrbButtonSelected: {
+    backgroundColor: '#dcfce7',
+    borderColor: '#047857',
+    shadowColor: '#047857',
+    shadowOpacity: 0.24,
+    shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },
-    elevation: 4,
+    elevation: 6,
   },
-  emojiTilePressed: {
-    transform: [{ scale: 0.99 }],
+  emojiOrbButtonPressed: {
+    transform: [{ scale: 0.97 }],
   },
-  emojiTileDragging: {
-    transform: [{ scale: 1.05 }],
+  emojiOrbButtonDisabled: {
+    opacity: 0.65,
+  },
+  emojiOrbButtonDragging: {
+    transform: [{ scale: 1.06 }],
     shadowOpacity: 0.28,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 10 },
     elevation: 6,
   },
-  emojiTileLocked: {
-    backgroundColor: '#f5d08a',
-    borderColor: '#f59e0b',
-    shadowColor: '#b45309',
-  },
-  emojiTileDisabled: {
-    opacity: 0.65,
-  },
-  emojiBadge: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+  emojiOrbCategoryMarker: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
+    backgroundColor: 'rgba(15, 23, 42, 0.08)',
+  },
+  emojiOrbCategoryText: {
+    fontSize: 16,
+  },
+  emojiOrbLock: {
+    position: 'absolute',
+    top: -12,
+    alignSelf: 'center',
+  },
+  emojiBadge: {
+    width: 74,
+    height: 74,
+    borderRadius: 37,
+    alignItems: 'center',
+    justifyContent: 'center',
     position: 'relative',
   },
   emojiBadgeLocked: {
-    opacity: 0.9,
+    opacity: 0.95,
   },
   emojiBadgeGlow: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 36,
-    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+    borderRadius: 37,
+    backgroundColor: 'rgba(22, 163, 74, 0.18)',
   },
   emojiBadgeGlowActive: {
-    backgroundColor: 'rgba(34, 197, 94, 0.2)',
+    backgroundColor: 'rgba(21, 128, 61, 0.28)',
   },
   emojiBadgeCore: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: 'rgba(15, 118, 110, 0.25)',
+    borderWidth: 1.2,
+    borderColor: 'rgba(15, 118, 110, 0.3)',
     shadowColor: '#0f766e',
     shadowOpacity: 0.16,
     shadowRadius: 12,
@@ -2595,62 +2718,13 @@ const styles = StyleSheet.create({
     shadowColor: '#0f172a',
   },
   emojiGlyphLarge: {
-    fontSize: 34,
+    fontSize: 36,
   },
   emojiGlyphSelected: {
     transform: [{ scale: 1.05 }],
   },
   emojiGlyphLocked: {
-    opacity: 0.7,
-  },
-  emojiTileLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#134e32',
-    textAlign: 'center',
-    alignSelf: 'stretch',
-    lineHeight: 18,
-    minHeight: 36,
-    paddingHorizontal: 6,
-    flexShrink: 1,
-    letterSpacing: 0.25,
-    textTransform: 'capitalize',
-  },
-  emojiTileFooter: {
-    marginTop: 'auto',
-    width: '100%',
-    alignItems: 'center',
-  },
-  emojiTileCostBadge: {
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(15, 118, 110, 0.12)',
-  },
-  emojiTileCostText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#0f766e',
-    letterSpacing: 0.2,
-  },
-  emojiTileCategoryMarker: {
-    position: 'absolute',
-    top: 10,
-    right: 12,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(15, 23, 42, 0.08)',
-  },
-  emojiTileCategoryMarkerText: {
-    fontSize: 18,
-  },
-  emojiLockOverlay: {
-    position: 'absolute',
-    top: -14,
-    alignSelf: 'center',
+    opacity: 0.75,
   },
   emojiLockGlyph: {
     fontSize: 22,
@@ -2966,7 +3040,7 @@ const styles = StyleSheet.create({
   },
   sheetColumn: {
     gap: 12,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   sheetList: {
     maxHeight: GRID_VISIBLE_ROW_COUNT * GRID_ROW_HEIGHT,
@@ -3010,7 +3084,8 @@ const styles = StyleSheet.create({
   },
   sheetTileWrapper: {
     flex: 1,
-    paddingHorizontal: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 6,
     minWidth: 0,
   },
   sheetCloseButton: {
@@ -3024,6 +3099,116 @@ const styles = StyleSheet.create({
     color: '#f0fff4',
     fontWeight: '700',
     fontSize: 16,
+  },
+  previewOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  previewBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  previewCard: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 24,
+    backgroundColor: '#f8fffb',
+    padding: 24,
+    alignItems: 'center',
+    gap: 12,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.22,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 10,
+  },
+  previewEmojiWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewEmojiBadge: {
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+  },
+  previewEmojiBadgeOwned: {
+    shadowColor: '#047857',
+  },
+  previewEmojiBadgeLocked: {
+    shadowColor: '#c2410c',
+  },
+  previewEmojiCore: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+  },
+  previewEmojiCoreOwned: {
+    backgroundColor: '#ecfdf3',
+  },
+  previewEmojiGlyph: {
+    fontSize: 44,
+  },
+  previewName: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#134e32',
+    textAlign: 'center',
+  },
+  previewMeta: {
+    fontSize: 14,
+    color: '#1f2937',
+    textAlign: 'center',
+  },
+  previewStatus: {
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  previewStatusLocked: {
+    color: '#c2410c',
+  },
+  previewStatusUnlocked: {
+    color: '#047857',
+  },
+  previewContext: {
+    fontSize: 12,
+    color: '#475569',
+    textAlign: 'center',
+  },
+  previewActions: {
+    marginTop: 4,
+    gap: 10,
+    width: '100%',
+  },
+  previewPrimaryButton: {
+    borderRadius: 16,
+    paddingVertical: 12,
+    backgroundColor: '#0f766e',
+    alignItems: 'center',
+  },
+  previewPrimaryButtonDisabled: {
+    backgroundColor: '#d1d5db',
+  },
+  previewPrimaryText: {
+    color: '#f0fff4',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  previewSecondaryButton: {
+    borderRadius: 16,
+    paddingVertical: 10,
+    backgroundColor: '#ecfeff',
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+    alignItems: 'center',
+  },
+  previewSecondaryText: {
+    fontWeight: '600',
+    color: '#0f172a',
+    fontSize: 14,
   },
   paletteOverlay: {
     flex: 1,

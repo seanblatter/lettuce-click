@@ -80,14 +80,6 @@ export default function TabLayout() {
     return Colors[colorScheme].tint;
   }, [colorScheme, homeEmojiTheme, premiumAccentColor]);
 
-  const inactiveAccent = useMemo(() => {
-    if (!baseAccent.startsWith('#')) {
-      return Colors[colorScheme].tabIconDefault;
-    }
-
-    return lightenColor(baseAccent, colorScheme === 'dark' ? 0.4 : 0.7);
-  }, [baseAccent, colorScheme]);
-
   const tabBackground = useMemo(() => {
     const baseBackground = gardenBackgroundColor || Colors[colorScheme].background;
 
@@ -109,14 +101,15 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: baseAccent,
-        tabBarInactiveTintColor: inactiveAccent,
+        tabBarActiveTintColor: '#0f172a',
+        tabBarInactiveTintColor: '#475569',
         tabBarLabelStyle: {
           fontSize: 12,
           fontWeight: '700',
           letterSpacing: 0.35,
           textTransform: 'uppercase',
-          textShadowColor: 'rgba(15, 23, 42, 0.35)',
+          color: '#0f172a',
+          textShadowColor: 'transparent',
           textShadowOffset: { width: 0, height: 1 },
           textShadowRadius: 2,
         },

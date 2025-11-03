@@ -1,38 +1,5 @@
 import type { EmojiCategory, EmojiDefinition } from '@/context/GameContext';
 
-export const TOTAL_EMOJI_LIBRARY_COUNT = 3953;
-
-export const EMOJI_CATEGORY_METADATA: Record<
-  EmojiCategory,
-  { label: string; icon: string; use: string }
-> = {
-  plants: {
-    label: 'Plants & Foliage',
-    icon: '🪴',
-    use: 'Adds lush greenery, blooms, and sprouting life to your beds.',
-  },
-  scenery: {
-    label: 'Scenery & Sky',
-    icon: '🌅',
-    use: 'Frames the garden with skies, horizons, and calming backdrops.',
-  },
-  creatures: {
-    label: 'Garden Creatures',
-    icon: '🦋',
-    use: 'Invites gentle wildlife and pollinators into your sanctuary.',
-  },
-  features: {
-    label: 'Garden Features',
-    icon: '🏡',
-    use: 'Builds cozy structures, paths, and landmarks for visitors.',
-  },
-  accents: {
-    label: 'Atmosphere & Accents',
-    icon: '✨',
-    use: 'Sprinkles magical highlights and finishing touches everywhere.',
-  },
-};
-
 export const MIN_EMOJI_COST = 120;
 export const MAX_EMOJI_COST = 250_000;
 

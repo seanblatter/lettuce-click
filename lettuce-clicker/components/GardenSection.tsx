@@ -126,6 +126,9 @@ const TEXT_SCALE_MIN = 0.7;
 const TEXT_SCALE_MAX = 2;
 const TEXT_SLIDER_THUMB_SIZE = 24;
 const TOTAL_EMOJI_LIBRARY_COUNT = 3953;
+const GRID_COLUMN_COUNT = 4;
+const GRID_VISIBLE_ROW_COUNT = 3;
+const GRID_ROW_HEIGHT = 148;
 
 const TEXT_STYLE_OPTIONS: { id: TextStyleId; label: string; textStyle: TextStyle; preview: string }[] = [
   { id: 'sprout', label: 'Sprout', textStyle: { fontSize: 18, fontWeight: '600' }, preview: 'Hello' },
@@ -1168,6 +1171,35 @@ export function GardenSection({
               <Text style={styles.tileStatusBadgeText}>Locked</Text>
             </View>
           ) : null}
+          {locked ? (
+            <View style={styles.tileUnlockContainer}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.tileUnlockChip,
+                  !canAfford && styles.tileUnlockChipDisabled,
+                  pressed && canAfford && styles.tileUnlockChipPressed,
+                ]}
+                onPress={(event: GestureResponderEvent) => {
+                  event.stopPropagation();
+                  if (!canAfford) {
+                    return;
+                  }
+                  handlePurchase(item.id);
+                }}
+                disabled={!canAfford}
+                accessibilityLabel={`Unlock ${item.name}`}
+                accessibilityHint={
+                  canAfford
+                    ? 'Unlocks this decoration for unlimited placements.'
+                    : 'Gather more clicks to unlock this decoration.'
+                }
+              >
+                <Text style={styles.tileUnlockChipText}>
+                  {canAfford ? 'Unlock' : 'Need more harvest'}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
           <View
             style={[styles.emojiBadge, isSelected && styles.emojiBadgeSelected, locked && styles.emojiBadgeLocked]}
           >
@@ -1197,35 +1229,6 @@ export function GardenSection({
             <Text style={[styles.emojiTileMeta, styles.emojiTileCostText]} numberOfLines={1}>
               {formatClickValue(item.cost)} clicks
             </Text>
-            {locked ? (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.tileUnlockChip,
-                  !canAfford && styles.tileUnlockChipDisabled,
-                  pressed && canAfford && styles.tileUnlockChipPressed,
-                ]}
-                onPress={(event: GestureResponderEvent) => {
-                  event.stopPropagation();
-                  if (!canAfford) {
-                    return;
-                  }
-                  handlePurchase(item.id);
-                }}
-                disabled={!canAfford}
-                accessibilityLabel={`Unlock ${item.name}`}
-                accessibilityHint={
-                  canAfford
-                    ? 'Unlocks this decoration for unlimited placements.'
-                    : 'Gather more clicks to unlock this decoration.'
-                }
-              >
-                <Text style={styles.tileUnlockChipText}>
-                  {canAfford ? 'Unlock' : 'Need more harvest'}
-                </Text>
-              </Pressable>
-            ) : (
-              <Text style={styles.tileReadyText}>Ready to place</Text>
-            )}
           </View>
         </Pressable>
       </View>
@@ -1878,7 +1881,7 @@ export function GardenSection({
               data={filteredShopInventory}
               renderItem={renderShopItem}
               keyExtractor={keyExtractor}
-              numColumns={3}
+              numColumns={GRID_COLUMN_COUNT}
               columnWrapperStyle={styles.sheetColumn}
               showsVerticalScrollIndicator
               contentContainerStyle={styles.sheetListContent}
@@ -2004,7 +2007,7 @@ export function GardenSection({
               data={filteredOwnedInventory}
               renderItem={renderInventoryItem}
               keyExtractor={keyExtractor}
-              numColumns={3}
+              numColumns={GRID_COLUMN_COUNT}
               columnWrapperStyle={styles.sheetColumn}
               showsVerticalScrollIndicator
               contentContainerStyle={styles.sheetListContent}
@@ -2388,7 +2391,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     shadowRadius: 12,
     elevation: 4,
-    gap: 8,
+    gap: 4,
     alignItems: 'center',
   },
   harvestTitle: {
@@ -2978,7 +2981,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sheetList: {
-    flexGrow: 1,
+    maxHeight: GRID_VISIBLE_ROW_COUNT * GRID_ROW_HEIGHT,
+    flexGrow: 0,
   },
   sheetListContent: {
     paddingBottom: 24,
@@ -3019,6 +3023,7 @@ const styles = StyleSheet.create({
   sheetTileWrapper: {
     flex: 1,
     paddingHorizontal: 4,
+    minWidth: 0,
   },
   tileStatusBadge: {
     position: 'absolute',
@@ -3036,8 +3041,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#78350f',
   },
+  tileUnlockContainer: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   tileUnlockChip: {
-    marginTop: 2,
     borderRadius: 999,
     paddingVertical: 6,
     paddingHorizontal: 14,
@@ -3061,12 +3070,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#422006',
-  },
-  tileReadyText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#134e32',
-    marginTop: 6,
   },
   sheetCloseButton: {
     marginTop: 12,

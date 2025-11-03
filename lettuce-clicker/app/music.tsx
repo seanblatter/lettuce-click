@@ -749,13 +749,13 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
     },
     sleepCardScroll: {
       flexGrow: 0,
-      maxHeight: sleepSheetMaxHeight - 72,
+      maxHeight: sleepSheetMaxHeight - 64,
     },
     sleepContent: {
-      paddingHorizontal: 20,
-      paddingTop: 18,
-      paddingBottom: 24,
-      gap: 18,
+      paddingHorizontal: 18,
+      paddingTop: 16,
+      paddingBottom: 20,
+      gap: 14,
     },
     sleepHeaderRow: {
       flexDirection: 'row',
@@ -805,7 +805,7 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
     sleepColumn: {
       flex: 1,
       minWidth: 200,
-      gap: 14,
+      gap: 12,
     },
     sleepColumnPrimary: {
       maxWidth: 280,
@@ -1103,6 +1103,7 @@ type SleepMode = (typeof SLEEP_MODE_OPTIONS)[number]['id'];
 type AlarmPeriod = 'AM' | 'PM';
 
 type TimerAction = 'stop' | 'alarm';
+type AlarmSetting = 'sound' | 'volume' | 'advanced';
 
 const TIMER_ACTION_OPTIONS: { id: TimerAction; title: string; description: string }[] = [
   { id: 'stop', title: 'Fade out audio', description: 'Stop ambience when the timer completes.' },
@@ -1110,6 +1111,24 @@ const TIMER_ACTION_OPTIONS: { id: TimerAction; title: string; description: strin
     id: 'alarm',
     title: 'Pause & chime',
     description: 'Pause ambience and play a gentle alarm until you stop it.',
+  },
+];
+
+const ALARM_SETTING_OPTIONS: { id: AlarmSetting; title: string; description: string }[] = [
+  {
+    id: 'sound',
+    title: 'Alarm sound',
+    description: 'Pick the chime that wakes you up feeling refreshed.',
+  },
+  {
+    id: 'volume',
+    title: 'Volume',
+    description: 'Set a comfortable level that rises with the sunrise.',
+  },
+  {
+    id: 'advanced',
+    title: 'Advanced settings',
+    description: 'Customize snooze length, fade-ins, and pre-alarm reminders.',
   },
 ];
 
@@ -1178,6 +1197,7 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
   const [sleepMode, setSleepMode] = useState<SleepMode>('timer');
   const [sleepTimerMinutes, setSleepTimerMinutes] = useState<number>(30);
   const [sleepTimerAction, setSleepTimerAction] = useState<TimerAction>('stop');
+  const [activeAlarmSetting, setActiveAlarmSetting] = useState<AlarmSetting>('sound');
   const [alarmHour, setAlarmHour] = useState<number>(7);
   const [alarmMinute, setAlarmMinute] = useState<number>(0);
   const [alarmPeriod, setAlarmPeriod] = useState<AlarmPeriod>('AM');
@@ -1820,7 +1840,7 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
             </View>
             <ScrollView
               style={styles.sleepCardScroll}
-              contentContainerStyle={[styles.sleepContent, { paddingBottom: insets.bottom + 16 }]}
+              contentContainerStyle={[styles.sleepContent, { paddingBottom: insets.bottom + 12 }]}
               showsVerticalScrollIndicator={false}
               bounces={false}
             >
@@ -1872,10 +1892,30 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
                       </View>
                     </>
                   ) : (
-                    <View style={styles.sleepStatusPanel}>
-                      <Text style={styles.sleepStatusHeadline}>{sleepSummary.headline}</Text>
-                      <Text style={styles.sleepStatusCopy}>{sleepSummary.detail}</Text>
-                    </View>
+                    <>
+                      <Text style={styles.sleepSectionLabel}>Alarm setup</Text>
+                      <View style={styles.timerActionList}>
+                        {ALARM_SETTING_OPTIONS.map((option) => {
+                          const isActive = activeAlarmSetting === option.id;
+                          return (
+                            <Pressable
+                              key={option.id}
+                              style={[styles.timerActionCard, isActive && styles.timerActionCardActive]}
+                              onPress={() => setActiveAlarmSetting(option.id)}
+                              accessibilityRole="button"
+                              accessibilityState={{ selected: isActive }}
+                            >
+                              <Text
+                                style={[styles.timerActionLabel, isActive && styles.timerActionLabelActive]}
+                              >
+                                {option.title}
+                              </Text>
+                              <Text style={styles.timerActionDescription}>{option.description}</Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </>
                   )}
                 </View>
                 <View style={[styles.sleepColumn, styles.sleepColumnSecondary]}>

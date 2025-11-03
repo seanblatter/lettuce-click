@@ -1,5 +1,13 @@
 import type { EmojiCategory, EmojiDefinition } from '@/context/GameContext';
 
+export const emojiCategoryLabels: Record<EmojiCategory, string> = {
+  plants: 'Plants & Foliage',
+  scenery: 'Scenery & Sky',
+  creatures: 'Garden Creatures',
+  features: 'Garden Features',
+  accents: 'Atmosphere & Accents',
+};
+
 export const MIN_EMOJI_COST = 120;
 export const MAX_EMOJI_COST = 250_000;
 

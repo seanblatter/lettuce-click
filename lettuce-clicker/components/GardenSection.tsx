@@ -35,7 +35,7 @@ import Animated, {
 import { captureRef } from 'react-native-view-shot';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { emojiCategoryOrder, formatClickValue } from '@/constants/emojiCatalog';
+import { emojiCategoryLabels, emojiCategoryOrder, formatClickValue } from '@/constants/emojiCatalog';
 import { EmojiDefinition, Placement, TextStyleId } from '@/context/GameContext';
 
 type Props = {
@@ -128,7 +128,7 @@ const TEXT_SLIDER_THUMB_SIZE = 24;
 const TOTAL_EMOJI_LIBRARY_COUNT = 3953;
 const GRID_COLUMN_COUNT = 4;
 const GRID_VISIBLE_ROW_COUNT = 3;
-const GRID_ROW_HEIGHT = 148;
+const GRID_ROW_HEIGHT = 120;
 
 const TEXT_STYLE_OPTIONS: { id: TextStyleId; label: string; textStyle: TextStyle; preview: string }[] = [
   { id: 'sprout', label: 'Sprout', textStyle: { fontSize: 18, fontWeight: '600' }, preview: 'Hello' },
@@ -195,13 +195,7 @@ const TEXT_STYLE_MAP = TEXT_STYLE_OPTIONS.reduce<Record<TextStyleId, TextStyle>>
   return acc;
 }, {} as Record<TextStyleId, TextStyle>);
 
-const CATEGORY_LABELS: Record<EmojiDefinition['category'], string> = {
-  plants: 'Plants & Foliage',
-  scenery: 'Scenery & Sky',
-  creatures: 'Garden Creatures',
-  features: 'Garden Features',
-  accents: 'Atmosphere & Accents',
-};
+const CATEGORY_LABELS: Record<EmojiDefinition['category'], string> = emojiCategoryLabels;
 
 const CATEGORY_ICONS: Record<EmojiDefinition['category'], string> = {
   plants: '🪴',
@@ -258,6 +252,7 @@ export function GardenSection({
   const insets = useSafeAreaInsets();
   const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null);
   const [activeSheet, setActiveSheet] = useState<'shop' | 'inventory' | null>(null);
+  const [activeShopItemId, setActiveShopItemId] = useState<string | null>(null);
   const [shopFilter, setShopFilter] = useState('');
   const [priceSortOrder, setPriceSortOrder] = useState<'asc' | 'desc'>('asc');
   const [showPalette, setShowPalette] = useState(false);
@@ -399,6 +394,11 @@ export function GardenSection({
     [emojiCatalog, emojiInventory]
   );
 
+  const activeShopItem = useMemo(
+    () => inventoryList.find((item) => item.id === activeShopItemId) ?? null,
+    [activeShopItemId, inventoryList]
+  );
+  const canAffordActiveShopItem = activeShopItem ? harvest >= activeShopItem.cost : false;
   const ownedInventory = useMemo(() => inventoryList.filter((item) => item.owned), [inventoryList]);
   const normalizedFilter = shopFilter.trim().toLowerCase();
   const normalizedFilterEmoji = useMemo(() => stripVariationSelectors(normalizedFilter), [normalizedFilter]);
@@ -712,13 +712,19 @@ export function GardenSection({
     setIsDrawingMode(false);
   }, []);
 
-  const handlePurchase = (emojiId: string) => {
-    const success = purchaseEmoji(emojiId);
+  const handlePurchase = useCallback(
+    (emojiId: string) => {
+      const success = purchaseEmoji(emojiId);
 
-    if (!success) {
-      Alert.alert('Not enough clicks', 'Gather more clicks to unlock this decoration.');
-    }
-  };
+      if (!success) {
+        Alert.alert('Not enough clicks', 'Gather more clicks to unlock this decoration.');
+        return false;
+      }
+
+      return true;
+    },
+    [purchaseEmoji]
+  );
 
   const handleSelectPenColor = useCallback(
     (color: string) => {
@@ -1099,7 +1105,9 @@ export function GardenSection({
   const handleCloseSheet = useCallback(() => {
     setActiveSheet(null);
     setActiveEmojiPicker(null);
+    setActiveShopItemId(null);
   }, []);
+  const handleCloseShopDetail = useCallback(() => setActiveShopItemId(null), []);
   const handleOpenSheet = useCallback((sheet: 'shop' | 'inventory') => setActiveSheet(sheet), []);
   const togglePriceSortOrder = useCallback(
     () => setPriceSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc')),
@@ -1128,95 +1136,64 @@ export function GardenSection({
     [totalCollected]
   );
 
+  const describeEmojiUse = useCallback((item: InventoryEntry) => {
+    if (item.tags.length > 0) {
+      const formatted = item.tags
+        .slice(0, 4)
+        .map((tag) =>
+          tag
+            .split(/[\s-_]+/)
+            .filter(Boolean)
+            .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+            .join(' ')
+        )
+        .join(', ');
+
+      if (formatted.length > 0) {
+        return formatted;
+      }
+    }
+
+    return CATEGORY_LABELS[item.category];
+  }, []);
+
   const renderShopItem: ListRenderItem<InventoryEntry> = ({ item }) => {
     const owned = item.owned;
-    const isSelected = selectedEmoji === item.id;
-    const canAfford = harvest >= item.cost;
     const locked = !owned;
+    const canAfford = harvest >= item.cost;
     const categoryLabel = CATEGORY_LABELS[item.category];
-    const categoryIcon = CATEGORY_ICONS[item.category];
-
-    const handleTilePress = () => {
-      if (owned) {
-        Alert.alert(
-          'Already unlocked',
-          'Open your inventory to place this decoration.',
-          [
-            {
-              text: 'Go to inventory',
-              onPress: () => handleOpenSheet('inventory'),
-            },
-            {
-              text: 'Close',
-              style: 'cancel',
-            },
-          ]
-        );
-        return;
-      }
-      handlePurchase(item.id);
-    };
 
     const accessibilityHint = locked
       ? canAfford
-        ? `Unlock this ${categoryLabel.toLowerCase()} decoration.`
+        ? `Inspect to unlock this ${categoryLabel.toLowerCase()} decoration for ${formatClickValue(
+            item.cost
+          )} clicks.`
         : `Earn more harvest to unlock this ${categoryLabel.toLowerCase()} decoration.`
-      : 'Select to ready this decoration.';
+      : 'Inspect details or ready it for placement.';
 
     return (
-      <View style={styles.sheetTileWrapper}>
+      <View style={styles.shopOrbTileWrapper}>
         <Pressable
           style={({ pressed }) => [
-            styles.emojiTile,
-            isSelected && styles.emojiTileSelected,
-            locked && styles.emojiTileLocked,
-            !canAfford && locked && styles.emojiTileDisabled,
-            pressed && styles.emojiTilePressed,
+            styles.shopOrbButton,
+            locked && styles.shopOrbButtonLocked,
+            !canAfford && locked && styles.shopOrbButtonUnaffordable,
+            pressed && styles.shopOrbButtonPressed,
           ]}
-          onPress={handleTilePress}
-          accessibilityLabel={`${item.name} (${categoryLabel}) emoji`}
-          accessibilityHint={`${accessibilityHint} Price ${formatClickValue(item.cost)} clicks.`}
+          onPress={() => setActiveShopItemId(item.id)}
+          accessibilityRole="button"
+          accessibilityLabel={`${item.name} ${locked ? 'locked' : 'unlocked'} decoration`}
+          accessibilityHint={accessibilityHint}
         >
-          <View pointerEvents="none" style={styles.emojiTileCategoryMarker}>
-            <Text style={styles.emojiTileCategoryMarkerText}>{categoryIcon}</Text>
+          <View style={[styles.shopOrbBackdrop, locked && styles.shopOrbBackdropLocked]} />
+          <View style={[styles.shopOrbRing, locked && styles.shopOrbRingLocked]}>
+            <Text style={[styles.shopOrbGlyph, locked && styles.shopOrbGlyphLocked]}>{item.emoji}</Text>
           </View>
-          <View
-            style={[styles.emojiBadge, isSelected && styles.emojiBadgeSelected, locked && styles.emojiBadgeLocked]}
-          >
-            {locked ? (
-              <View pointerEvents="none" style={styles.emojiLockOverlay}>
-                <Text style={styles.emojiLockGlyph}>🔒</Text>
-              </View>
-            ) : null}
-            <View style={[styles.emojiBadgeGlow, isSelected && styles.emojiBadgeGlowActive]} />
-            <View
-              style={[
-                styles.emojiBadgeCore,
-                isSelected && styles.emojiBadgeCoreSelected,
-                locked && styles.emojiBadgeCoreLocked,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.emojiGlyphLarge,
-                  isSelected && styles.emojiGlyphSelected,
-                  locked && styles.emojiGlyphLocked,
-                ]}
-              >
-                {item.emoji}
-              </Text>
+          {locked ? (
+            <View pointerEvents="none" style={styles.shopOrbLockBadge}>
+              <Text style={styles.shopOrbLockGlyph}>🔒</Text>
             </View>
-          </View>
-          <Text style={styles.emojiTileLabel} numberOfLines={2}>
-            {item.name}
-          </Text>
-          <View style={styles.emojiTileFooter}>
-            <View style={styles.emojiTileCostBadge}>
-              <Text style={styles.emojiTileCostText} numberOfLines={1}>
-                {formatClickValue(item.cost)} clicks
-              </Text>
-            </View>
-          </View>
+          ) : null}
         </Pressable>
       </View>
     );
@@ -1871,9 +1848,9 @@ export function GardenSection({
               renderItem={renderShopItem}
               keyExtractor={keyExtractor}
               numColumns={GRID_COLUMN_COUNT}
-              columnWrapperStyle={styles.sheetColumn}
+              columnWrapperStyle={styles.shopGridRow}
               showsVerticalScrollIndicator
-              contentContainerStyle={styles.sheetListContent}
+              contentContainerStyle={[styles.sheetListContent, styles.shopListContent]}
               ListEmptyComponent={
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyStateTitle}>No emoji match your search</Text>
@@ -2014,6 +1991,88 @@ export function GardenSection({
               <Text style={styles.sheetCloseButtonText}>Done</Text>
             </Pressable>
           </View>
+        </View>
+      </Modal>
+      <Modal
+        visible={Boolean(activeShopItem)}
+        transparent
+        animationType="fade"
+        onRequestClose={handleCloseShopDetail}
+      >
+        <View style={styles.shopDetailOverlay}>
+          <Pressable style={styles.shopDetailBackdrop} onPress={handleCloseShopDetail} />
+          {activeShopItem ? (
+            <View style={styles.shopDetailCard}>
+              <View pointerEvents="none" style={styles.shopDetailGlow} />
+              <View style={styles.shopDetailEmojiWrap}>
+                <View style={styles.shopDetailEmojiOrb}>
+                  <Text style={styles.shopDetailEmoji}>{activeShopItem.emoji}</Text>
+                </View>
+              </View>
+              <Text style={styles.shopDetailName}>{activeShopItem.name}</Text>
+              <Text style={styles.shopDetailCategory}>{CATEGORY_LABELS[activeShopItem.category]}</Text>
+              <Text
+                style={[styles.shopDetailStatus, activeShopItem.owned && styles.shopDetailStatusOwned]}
+              >
+                {activeShopItem.owned
+                  ? 'Unlocked — already in your inventory'
+                  : 'Locked — purchase to add to your inventory'}
+              </Text>
+              <View style={styles.shopDetailDivider} />
+              <Text style={styles.shopDetailUseLabel}>Use</Text>
+              <Text style={styles.shopDetailUseValue}>{describeEmojiUse(activeShopItem)}</Text>
+              <View style={styles.shopDetailPriceRow}>
+                <Text style={styles.shopDetailPriceLabel}>Price</Text>
+                <Text style={styles.shopDetailPriceValue}>
+                  {formatClickValue(activeShopItem.cost)} clicks
+                </Text>
+              </View>
+              {!activeShopItem.owned && !canAffordActiveShopItem ? (
+                <Text style={styles.shopDetailHint}>
+                  Gather {formatClickValue(Math.max(activeShopItem.cost - harvest, 0))} more clicks to unlock this
+                  emoji.
+                </Text>
+              ) : null}
+              <View style={styles.shopDetailActions}>
+                <Pressable
+                  style={styles.shopDetailSecondaryButton}
+                  onPress={handleCloseShopDetail}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.shopDetailSecondaryText}>Not now</Text>
+                </Pressable>
+                {activeShopItem.owned ? (
+                  <Pressable
+                    style={[styles.shopDetailPrimaryButton, styles.shopDetailPrimaryButtonOwned]}
+                    onPress={() => {
+                      setActiveSheet('inventory');
+                      setActiveShopItemId(null);
+                    }}
+                    accessibilityRole="button"
+                  >
+                    <Text style={[styles.shopDetailPrimaryText, styles.shopDetailPrimaryTextOwned]}>
+                      View in inventory
+                    </Text>
+                  </Pressable>
+                ) : (
+                  <Pressable
+                    style={[styles.shopDetailPrimaryButton, !canAffordActiveShopItem && styles.shopDetailPrimaryButtonDisabled]}
+                    onPress={() => {
+                      if (handlePurchase(activeShopItem.id)) {
+                        setActiveShopItemId(null);
+                      }
+                    }}
+                    accessibilityRole="button"
+                    disabled={!canAffordActiveShopItem}
+                  >
+                    <Text style={styles.shopDetailPrimaryText}>
+                      {canAffordActiveShopItem ? 'Unlock & collect' : 'Need more clicks'}
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
+            </View>
+          ) : null}
         </View>
       </Modal>
     </View>
@@ -2502,6 +2561,88 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
   },
+  shopOrbTileWrapper: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  shopOrbButton: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+    position: 'relative',
+    overflow: 'visible',
+  },
+  shopOrbButtonLocked: {
+    backgroundColor: '#fff7ed',
+    shadowColor: '#f97316',
+  },
+  shopOrbButtonUnaffordable: {
+    opacity: 0.75,
+  },
+  shopOrbButtonPressed: {
+    transform: [{ scale: 0.97 }],
+  },
+  shopOrbBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 44,
+    backgroundColor: 'rgba(148, 163, 184, 0.14)',
+  },
+  shopOrbBackdropLocked: {
+    backgroundColor: 'rgba(251, 191, 36, 0.2)',
+  },
+  shopOrbRing: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: 'rgba(15, 118, 110, 0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0f766e',
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  shopOrbRingLocked: {
+    backgroundColor: '#fed7aa',
+    borderColor: 'rgba(251, 146, 60, 0.65)',
+    shadowColor: '#f97316',
+  },
+  shopOrbGlyph: {
+    fontSize: 36,
+  },
+  shopOrbGlyphLocked: {
+    opacity: 0.8,
+  },
+  shopOrbLockBadge: {
+    position: 'absolute',
+    bottom: -6,
+    right: -6,
+    borderRadius: 14,
+    backgroundColor: '#f97316',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    shadowColor: '#b45309',
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  shopOrbLockGlyph: {
+    fontSize: 16,
+    color: '#fff7ed',
+  },
   emojiTile: {
     width: '100%',
     minHeight: 120,
@@ -2968,6 +3109,12 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 12,
   },
+  shopGridRow: {
+    gap: 18,
+    justifyContent: 'space-between',
+    paddingHorizontal: 6,
+    marginBottom: 16,
+  },
   sheetList: {
     maxHeight: GRID_VISIBLE_ROW_COUNT * GRID_ROW_HEIGHT,
     flexGrow: 0,
@@ -2975,6 +3122,9 @@ const styles = StyleSheet.create({
   sheetListContent: {
     paddingBottom: 24,
     paddingHorizontal: 4,
+  },
+  shopListContent: {
+    paddingTop: 6,
   },
   categoryFilterBlock: {
     marginTop: 4,
@@ -3024,6 +3174,175 @@ const styles = StyleSheet.create({
     color: '#f0fff4',
     fontWeight: '700',
     fontSize: 16,
+  },
+  shopDetailOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 31, 23, 0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  shopDetailBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  shopDetailCard: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 24,
+    paddingHorizontal: 24,
+    paddingVertical: 26,
+    backgroundColor: '#f8fffb',
+    alignItems: 'center',
+    gap: 12,
+    overflow: 'hidden',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.28,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 8,
+  },
+  shopDetailGlow: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.18,
+    borderRadius: 24,
+    backgroundColor: 'rgba(16, 185, 129, 0.4)',
+  },
+  shopDetailEmojiWrap: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: '#ecfdf3',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0f766e',
+    shadowOpacity: 0.2,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+  },
+  shopDetailEmojiOrb: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: 'rgba(15, 118, 110, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shopDetailEmoji: {
+    fontSize: 54,
+  },
+  shopDetailName: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0f5132',
+    textAlign: 'center',
+  },
+  shopDetailCategory: {
+    fontSize: 14,
+    color: '#047857',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  shopDetailStatus: {
+    fontSize: 12,
+    color: '#b45309',
+    textAlign: 'center',
+  },
+  shopDetailStatusOwned: {
+    color: '#047857',
+  },
+  shopDetailDivider: {
+    alignSelf: 'stretch',
+    height: 1,
+    backgroundColor: 'rgba(16, 185, 129, 0.22)',
+    marginTop: 6,
+  },
+  shopDetailUseLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0f766e',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    alignSelf: 'flex-start',
+  },
+  shopDetailUseValue: {
+    fontSize: 15,
+    color: '#1f2937',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  shopDetailPriceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    alignSelf: 'stretch',
+    marginTop: 8,
+  },
+  shopDetailPriceLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f766e',
+    letterSpacing: 0.4,
+  },
+  shopDetailPriceValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#14532d',
+  },
+  shopDetailHint: {
+    fontSize: 12,
+    color: '#b45309',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  shopDetailActions: {
+    flexDirection: 'row',
+    gap: 12,
+    alignSelf: 'stretch',
+    marginTop: 6,
+  },
+  shopDetailSecondaryButton: {
+    flex: 1,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  shopDetailSecondaryText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f766e',
+  },
+  shopDetailPrimaryButton: {
+    flex: 1,
+    borderRadius: 14,
+    backgroundColor: '#0f766e',
+    alignItems: 'center',
+    paddingVertical: 12,
+    shadowColor: '#0f5132',
+    shadowOpacity: 0.24,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 5,
+  },
+  shopDetailPrimaryButtonOwned: {
+    backgroundColor: '#14532d',
+  },
+  shopDetailPrimaryButtonDisabled: {
+    backgroundColor: '#94a3b8',
+    shadowOpacity: 0.08,
+  },
+  shopDetailPrimaryText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#f0fdf4',
+  },
+  shopDetailPrimaryTextOwned: {
+    color: '#ecfccb',
   },
   paletteOverlay: {
     flex: 1,

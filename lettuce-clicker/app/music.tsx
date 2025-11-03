@@ -35,9 +35,9 @@ const TIMER_MINUTE_OPTIONS = Array.from({ length: 36 }, (_, index) => (index + 1
 
 const ALARM_HOUR_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1);
 const ALARM_MINUTE_OPTIONS = Array.from({ length: 60 }, (_, index) => index);
-const ALARM_PERIOD_OPTIONS: AlarmPeriod[] = ['AM', 'PM'];
+const ALARM_PERIOD_OPTIONS: AlarmPeriod[] = ['AM', 'PM', 'AM', 'PM'];
 const WHEEL_ITEM_HEIGHT = 46;
-const WHEEL_VISIBLE_ROWS = 5;
+const WHEEL_VISIBLE_ROWS = 3;
 const WHEEL_CONTAINER_HEIGHT = WHEEL_ITEM_HEIGHT * WHEEL_VISIBLE_ROWS;
 const WHEEL_PADDING = (WHEEL_CONTAINER_HEIGHT - WHEEL_ITEM_HEIGHT) / 2;
 const ALARM_SOUND_URI = ALARM_CHIME_DATA_URI;
@@ -754,8 +754,8 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
     sleepContent: {
       paddingHorizontal: 20,
       paddingTop: 18,
-      paddingBottom: 24,
-      gap: 18,
+      paddingBottom: 20,
+      gap: 14,
     },
     sleepHeaderRow: {
       flexDirection: 'row',
@@ -800,12 +800,12 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
     sleepColumns: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: 18,
+      gap: 14,
     },
     sleepColumn: {
       flex: 1,
       minWidth: 200,
-      gap: 14,
+      gap: 12,
     },
     sleepColumnPrimary: {
       maxWidth: 280,
@@ -860,20 +860,22 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
       alignItems: 'flex-start',
       gap: 4,
     },
-    sleepStatusPanel: {
+    alarmInfoCard: {
       borderRadius: 14,
-      padding: 12,
+      padding: 14,
       backgroundColor: palette.sleepModeBackground,
       borderWidth: 1,
       borderColor: palette.sleepModeBorder,
-      gap: 4,
+      gap: 6,
     },
-    sleepStatusHeadline: {
+    alarmInfoTitle: {
       fontSize: 13,
       fontWeight: '700',
       color: palette.sleepModeLabel,
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
     },
-    sleepStatusCopy: {
+    alarmInfoCopy: {
       fontSize: 11,
       color: palette.sleepModeDescription,
       lineHeight: 15,
@@ -923,8 +925,8 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
     alarmPickerRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 12,
-      justifyContent: 'space-between',
+      justifyContent: 'center',
+      gap: 18,
     },
     alarmPickerSeparator: {
       fontSize: 24,
@@ -1001,7 +1003,7 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
     },
     wheelPickerContainer: {
       height: WHEEL_CONTAINER_HEIGHT,
-      width: 64,
+      width: 72,
       borderRadius: 18,
       backgroundColor: palette.wheelBackground,
       borderWidth: 1,
@@ -1872,9 +1874,14 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
                       </View>
                     </>
                   ) : (
-                    <View style={styles.sleepStatusPanel}>
-                      <Text style={styles.sleepStatusHeadline}>{sleepSummary.headline}</Text>
-                      <Text style={styles.sleepStatusCopy}>{sleepSummary.detail}</Text>
+                    <View style={styles.alarmInfoCard}>
+                      <Text style={styles.alarmInfoTitle}>Wake alarm tips</Text>
+                      <Text style={styles.alarmInfoCopy}>
+                        Choose an hour, minute, and AM or PM to schedule your gentle wake chime.
+                      </Text>
+                      <Text style={styles.alarmInfoCopy}>
+                        Dream Capsule eases in the soundscape without extra scrolling once your alarm is set.
+                      </Text>
                     </View>
                   )}
                 </View>

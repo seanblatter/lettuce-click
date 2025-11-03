@@ -19,7 +19,7 @@ import { OrbitingUpgradeEmojis } from '@/components/OrbitingUpgradeEmojis';
 import { MusicContent } from '@/app/music';
 import { ProfileContent } from '@/app/profile';
 import { useGame } from '@/context/GameContext';
-import { gardenEmojiCatalog } from '@/constants/emojiCatalog';
+import { gardenEmojiCatalog, emojiCategoryLabels } from '@/constants/emojiCatalog';
 import type { EmojiDefinition, HomeEmojiTheme } from '@/context/GameContext';
 import { useAmbientAudio } from '@/context/AmbientAudioContext';
 import { preloadRewardedAd, showRewardedAd } from '@/lib/rewardedAd';
@@ -29,6 +29,7 @@ const DAILY_BONUS_LAST_CLAIM_KEY = 'lettuce-click:daily-bonus-last-claim';
 const BONUS_REWARD_OPTIONS = [75, 125, 200, 325, 500, 650];
 const BONUS_ADDITIONAL_SPINS = 2;
 const DAILY_BONUS_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const TOTAL_GARDEN_EMOJI_COUNT = gardenEmojiCatalog.length;
 const LEDGER_THEMES = [
   {
     backgroundColor: 'rgba(255, 255, 255, 0.32)',
@@ -149,6 +150,34 @@ export default function HomeScreen() {
     () => gardenEmojiCatalog.filter((emoji) => !emojiInventory[emoji.id]),
     [emojiInventory]
   );
+  const totalUnlockedCount = useMemo(
+    () => Object.values(emojiInventory).filter(Boolean).length,
+    [emojiInventory]
+  );
+  const hasEveryEmoji = useMemo(
+    () => totalUnlockedCount >= TOTAL_GARDEN_EMOJI_COUNT,
+    [totalUnlockedCount]
+  );
+  const describeEmojiUse = useCallback((emoji: EmojiDefinition) => {
+    if (emoji.tags.length > 0) {
+      const formatted = emoji.tags
+        .slice(0, 4)
+        .map((tag) =>
+          tag
+            .split(/[\s-_]+/)
+            .filter(Boolean)
+            .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+            .join(' ')
+        )
+        .join(', ');
+
+      if (formatted.length > 0) {
+        return formatted;
+      }
+    }
+
+    return emojiCategoryLabels[emoji.category];
+  }, []);
   const [showGrowModal, setShowGrowModal] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPage, setMenuPage] = useState<'overview' | 'themes'>('overview');
@@ -636,13 +665,15 @@ export default function HomeScreen() {
       setLastBonusReward(reward);
       if (unlockedEmoji) {
         setLastUnlockedEmoji(unlockedEmoji);
+        const unlockedUse = describeEmojiUse(unlockedEmoji);
         setBonusMessage(
-          `You earned ${reward.toLocaleString()} clicks and unlocked ${unlockedEmoji.name}! ${unlockedEmoji.emoji}`
+          `You earned ${reward.toLocaleString()} clicks and unlocked ${unlockedEmoji.name}! ${unlockedEmoji.emoji}` +
+            (unlockedUse ? ` — ${unlockedUse}` : '')
         );
       } else {
         setLastUnlockedEmoji(null);
         setBonusMessage(
-          lockedEmojis.length === 0
+          lockedEmojis.length === 0 && hasEveryEmoji
             ? `You earned ${reward.toLocaleString()} clicks! Every Garden Shop emoji is already yours.`
             : `You earned ${reward.toLocaleString()} clicks!`
         );
@@ -652,7 +683,9 @@ export default function HomeScreen() {
   }, [
     addHarvestAmount,
     availableBonusSpins,
+    describeEmojiUse,
     flipAnimation,
+    hasEveryEmoji,
     isDailySpinAvailable,
     isSpinningBonus,
     lockedShopEmojis,
@@ -1260,7 +1293,15 @@ export default function HomeScreen() {
                   <View style={styles.bonusUnlockGlyphWrap}>
                     <Text style={styles.bonusUnlockGlyph}>{lastUnlockedEmoji.emoji}</Text>
                   </View>
-                  <Text style={styles.bonusUnlockName}>{lastUnlockedEmoji.name}</Text>
+                  <View style={styles.bonusUnlockDetails}>
+                    <Text style={styles.bonusUnlockName}>{lastUnlockedEmoji.name}</Text>
+                    <Text style={styles.bonusUnlockCategory}>
+                      {emojiCategoryLabels[lastUnlockedEmoji.category]}
+                    </Text>
+                    <Text style={styles.bonusUnlockUse}>
+                      {describeEmojiUse(lastUnlockedEmoji)}
+                    </Text>
+                  </View>
                 </View>
               </View>
             ) : null}
@@ -2056,10 +2097,26 @@ const styles = StyleSheet.create({
   bonusUnlockGlyph: {
     fontSize: 26,
   },
+  bonusUnlockDetails: {
+    flex: 1,
+    gap: 2,
+  },
   bonusUnlockName: {
     fontSize: 16,
     fontWeight: '700',
     color: '#0f3d2b',
+  },
+  bonusUnlockCategory: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#047857',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  bonusUnlockUse: {
+    fontSize: 12,
+    color: '#0f172a',
+    lineHeight: 16,
   },
   bonusPrimaryButton: {
     width: '100%',

@@ -39,16 +39,22 @@ const LEDGER_THEMES = [
     highlight: 'rgba(255, 255, 255, 0.7)',
     refraction: 'rgba(148, 163, 184, 0.28)',
     innerBorder: 'rgba(255, 255, 255, 0.4)',
+    grainColor: 'rgba(148, 163, 184, 0.18)',
+    grainOpacity: 0.18,
+    stitchColor: 'rgba(15, 23, 42, 0.2)',
   },
   {
-    backgroundColor: 'rgba(254, 243, 199, 0.38)',
-    borderColor: 'rgba(253, 224, 71, 0.5)',
-    shadowColor: 'rgba(161, 98, 7, 0.28)',
-    tint: '#78350f',
-    muted: 'rgba(146, 64, 14, 0.72)',
-    highlight: 'rgba(255, 248, 220, 0.65)',
-    refraction: 'rgba(253, 230, 138, 0.32)',
-    innerBorder: 'rgba(255, 250, 235, 0.48)',
+    backgroundColor: 'rgba(110, 64, 25, 0.92)',
+    borderColor: 'rgba(248, 189, 120, 0.66)',
+    shadowColor: 'rgba(87, 44, 14, 0.46)',
+    tint: '#fff7ed',
+    muted: 'rgba(255, 237, 213, 0.82)',
+    highlight: 'rgba(249, 250, 196, 0.45)',
+    refraction: 'rgba(68, 38, 11, 0.28)',
+    innerBorder: 'rgba(250, 204, 21, 0.55)',
+    grainColor: 'rgba(249, 224, 175, 0.12)',
+    grainOpacity: 0.35,
+    stitchColor: 'rgba(254, 243, 199, 0.7)',
   },
   {
     backgroundColor: 'rgba(226, 232, 240, 0.38)',
@@ -59,6 +65,9 @@ const LEDGER_THEMES = [
     highlight: 'rgba(241, 245, 249, 0.6)',
     refraction: 'rgba(203, 213, 225, 0.3)',
     innerBorder: 'rgba(241, 245, 249, 0.42)',
+    grainColor: 'rgba(148, 163, 184, 0.18)',
+    grainOpacity: 0.2,
+    stitchColor: 'rgba(148, 163, 184, 0.32)',
   },
   {
     backgroundColor: 'rgba(15, 23, 42, 0.58)',
@@ -69,6 +78,9 @@ const LEDGER_THEMES = [
     highlight: 'rgba(148, 163, 184, 0.45)',
     refraction: 'rgba(100, 116, 139, 0.28)',
     innerBorder: 'rgba(148, 163, 184, 0.38)',
+    grainColor: 'rgba(148, 163, 184, 0.12)',
+    grainOpacity: 0.22,
+    stitchColor: 'rgba(226, 232, 240, 0.45)',
   },
 ] as const;
 
@@ -843,6 +855,16 @@ export default function HomeScreen() {
           />
           <View
             pointerEvents="none"
+            style={[
+              styles.statsCardGrain,
+              {
+                backgroundColor: ledgerTheme.grainColor,
+                opacity: ledgerTheme.grainOpacity,
+              },
+            ]}
+          />
+          <View
+            pointerEvents="none"
             style={[styles.statsCardFrost, { backgroundColor: ledgerTheme.refraction }]}
           />
           <View
@@ -856,6 +878,10 @@ export default function HomeScreen() {
           <View
             pointerEvents="none"
             style={[styles.statsCardInnerBorder, { borderColor: ledgerTheme.innerBorder }]}
+          />
+          <View
+            pointerEvents="none"
+            style={[styles.statsCardStitch, { borderColor: ledgerTheme.stitchColor }]}
           />
           <Text style={[styles.statsTitle, { color: ledgerTheme.tint }]}>Harvest Ledger</Text>
           <View style={styles.statRow}>
@@ -1529,6 +1555,11 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     borderRadius: 28,
   },
+  statsCardGrain: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 28,
+    transform: [{ rotate: '2deg' }],
+  },
   statsCardFrost: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: 36,
@@ -1556,6 +1587,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     margin: 8,
     opacity: 0.55,
+  },
+  statsCardStitch: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    margin: 10,
+    opacity: 0.75,
   },
   statsTitle: {
     fontSize: 22,

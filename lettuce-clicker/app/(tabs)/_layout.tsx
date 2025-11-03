@@ -111,6 +111,16 @@ export default function TabLayout() {
       screenOptions={{
         tabBarActiveTintColor: baseAccent,
         tabBarInactiveTintColor: inactiveAccent,
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '700',
+          letterSpacing: 0.35,
+          textTransform: 'uppercase',
+          textShadowColor: 'rgba(15, 23, 42, 0.35)',
+          textShadowOffset: { width: 0, height: 1 },
+          textShadowRadius: 2,
+        },
+        tabBarAllowFontScaling: false,
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarStyle: {

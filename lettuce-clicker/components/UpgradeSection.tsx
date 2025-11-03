@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -75,6 +75,7 @@ export function UpgradeSection({
 
   const [activeWorkshop, setActiveWorkshop] = useState<'automation' | 'themes'>('automation');
   const [activeSheet, setActiveSheet] = useState<'automation' | 'themes' | null>(null);
+  const [collectionExpanded, setCollectionExpanded] = useState(false);
 
   const ownedThemeCount = useMemo(
     () => sortedThemes.filter((theme) => ownedThemes[theme.id]).length,
@@ -107,6 +108,7 @@ export function UpgradeSection({
 
   const emojiPreview = useMemo(() => unlockedEmojis.slice(0, 8), [unlockedEmojis]);
   const remainingEmojiCount = Math.max(unlockedEmojis.length - emojiPreview.length, 0);
+  const hasUnlockedEmojis = unlockedEmojis.length > 0;
 
   const heroStats = useMemo(
     () => [
@@ -133,6 +135,19 @@ export function UpgradeSection({
     setActiveSheet(null);
   }, []);
 
+  const handleToggleCollection = useCallback(() => {
+    if (!hasUnlockedEmojis) {
+      return;
+    }
+    setCollectionExpanded((prev) => !prev);
+  }, [hasUnlockedEmojis]);
+
+  useEffect(() => {
+    if (!hasUnlockedEmojis) {
+      setCollectionExpanded(false);
+    }
+  }, [hasUnlockedEmojis]);
+
   return (
     <View style={styles.section}>
       <View style={styles.heroCard}>
@@ -145,9 +160,6 @@ export function UpgradeSection({
           <Text style={styles.heroOverline}>Lettuce Park</Text>
           <Text style={styles.heroTitle}>{title}</Text>
           <Text style={styles.heroHarvest}>{harvest.toLocaleString()} harvest of clicks</Text>
-          <Text style={styles.heroHint}>
-            Invest your harvest to expand automation, and bring fresh ambience to your garden centerpiece.
-          </Text>
           <View style={styles.heroStatsRow}>
             {heroStats.map((stat, index) => (
               <View
@@ -165,15 +177,51 @@ export function UpgradeSection({
               </View>
             ))}
           </View>
-          <View style={styles.collectionBlock}>
+          <Pressable
+            disabled={!hasUnlockedEmojis}
+            accessibilityRole={hasUnlockedEmojis ? 'button' : undefined}
+            accessibilityState={hasUnlockedEmojis ? { expanded: collectionExpanded } : undefined}
+            accessibilityHint={
+              hasUnlockedEmojis
+                ? collectionExpanded
+                  ? 'Collapse emoji collection'
+                  : 'Expand to view every unlocked emoji'
+                : undefined
+            }
+            onPress={handleToggleCollection}
+            style={({ pressed }) => [
+              styles.collectionBlock,
+              hasUnlockedEmojis && styles.collectionBlockInteractive,
+              collectionExpanded && styles.collectionBlockExpanded,
+              pressed && hasUnlockedEmojis && styles.collectionBlockPressed,
+            ]}
+          >
             <View style={styles.collectionHeaderRow}>
               <Text style={styles.collectionLabel}>Emoji collection</Text>
-              <Text style={styles.collectionCount}>{unlockedEmojis.length.toLocaleString()} unlocked</Text>
+              <View style={styles.collectionMetaRow}>
+                <Text style={styles.collectionCount}>{unlockedEmojis.length.toLocaleString()} unlocked</Text>
+                {hasUnlockedEmojis ? (
+                  <Text style={styles.collectionToggleHint}>
+                    {collectionExpanded ? 'Tap to collapse' : 'Tap to view all'}
+                  </Text>
+                ) : null}
+              </View>
             </View>
-            {emojiPreview.length === 0 ? (
+            {!hasUnlockedEmojis ? (
               <Text style={styles.collectionEmpty}>
                 Unlock Garden Shop emojis to fill your conservatory showcase.
               </Text>
+            ) : collectionExpanded ? (
+              <View style={styles.collectionGrid}>
+                {unlockedEmojis.map((emoji, index) => (
+                  <View
+                    key={`${emoji}-${index}`}
+                    style={[styles.collectionBadge, styles.collectionBadgeLarge]}
+                  >
+                    <Text style={styles.collectionEmoji}>{emoji}</Text>
+                  </View>
+                ))}
+              </View>
             ) : (
               <View style={styles.collectionPreviewRow}>
                 {emojiPreview.map((emoji, index) => (
@@ -188,7 +236,7 @@ export function UpgradeSection({
                 ) : null}
               </View>
             )}
-          </View>
+          </Pressable>
         </View>
       </View>
 
@@ -456,11 +504,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#dcfce7',
   },
-  heroHint: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#e6fffa',
-  },
   heroStatsRow: {
     marginTop: 4,
     flexDirection: 'row',
@@ -476,12 +519,28 @@ const styles = StyleSheet.create({
   },
   collectionBlock: {
     marginTop: 16,
-    padding: 14,
-    borderRadius: 18,
-    backgroundColor: 'rgba(11, 101, 63, 0.35)',
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    borderRadius: 20,
+    backgroundColor: 'rgba(11, 101, 63, 0.32)',
     borderWidth: 1,
     borderColor: 'rgba(186, 230, 200, 0.45)',
-    gap: 10,
+    gap: 14,
+    overflow: 'hidden',
+  },
+  collectionBlockInteractive: {
+    shadowColor: '#0f766e',
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
+  },
+  collectionBlockPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.995 }],
+  },
+  collectionBlockExpanded: {
+    backgroundColor: 'rgba(15, 118, 110, 0.42)',
   },
   collectionHeaderRow: {
     flexDirection: 'row',
@@ -495,15 +554,34 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#bbf7d0',
   },
+  collectionMetaRow: {
+    alignItems: 'center',
+    gap: 8,
+  },
   collectionCount: {
     fontSize: 13,
     fontWeight: '600',
     color: '#dcfce7',
   },
+  collectionToggleHint: {
+    fontSize: 11,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    fontWeight: '700',
+    color: 'rgba(236, 253, 245, 0.76)',
+  },
   collectionPreviewRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
+    marginTop: 12,
+  },
+  collectionGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    columnGap: 10,
+    rowGap: 10,
+    marginTop: 12,
   },
   collectionBadge: {
     width: 36,
@@ -514,6 +592,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(236, 253, 245, 0.18)',
     borderWidth: 1,
     borderColor: 'rgba(209, 250, 229, 0.45)',
+  },
+  collectionBadgeLarge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
   collectionEmoji: {
     fontSize: 20,

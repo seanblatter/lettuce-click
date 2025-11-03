@@ -99,10 +99,11 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
     );
     const base = sorted.slice(0, 24);
     const mapleLeaf = sorted.find((entry) => entry.emoji === '🍁');
-    const prioritized = mapleLeaf ? [mapleLeaf, ...base] : base;
+    const cookie = sorted.find((entry) => entry.emoji === '🍪');
+    const prioritizedSeeds = [mapleLeaf, cookie, ...base];
     const deduped: typeof sorted = [];
-    prioritized.forEach((entry) => {
-      if (!deduped.some((item) => item.id === entry.id)) {
+    prioritizedSeeds.forEach((entry) => {
+      if (entry && !deduped.some((item) => item.id === entry.id)) {
         deduped.push(entry);
       }
     });

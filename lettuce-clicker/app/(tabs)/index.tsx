@@ -29,10 +29,46 @@ const BONUS_REWARD_OPTIONS = [75, 125, 200, 325, 500, 650];
 const BONUS_ADDITIONAL_SPINS = 2;
 const DAILY_BONUS_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const LEDGER_THEMES = [
-  { backgroundColor: '#ffffff', borderColor: 'rgba(226, 232, 240, 0.7)' },
-  { backgroundColor: '#f4ede1', borderColor: 'rgba(210, 188, 154, 0.65)' },
-  { backgroundColor: '#e2e8f0', borderColor: 'rgba(148, 163, 184, 0.6)' },
-  { backgroundColor: 'rgba(255, 255, 255, 0.28)', borderColor: 'rgba(226, 232, 240, 0.45)' },
+  {
+    backgroundColor: 'rgba(255, 255, 255, 0.32)',
+    borderColor: 'rgba(255, 255, 255, 0.55)',
+    shadowColor: 'rgba(15, 23, 42, 0.22)',
+    tint: '#0f172a',
+    muted: 'rgba(51, 65, 85, 0.78)',
+    highlight: 'rgba(255, 255, 255, 0.7)',
+    refraction: 'rgba(148, 163, 184, 0.28)',
+    innerBorder: 'rgba(255, 255, 255, 0.4)',
+  },
+  {
+    backgroundColor: 'rgba(254, 243, 199, 0.38)',
+    borderColor: 'rgba(253, 224, 71, 0.5)',
+    shadowColor: 'rgba(161, 98, 7, 0.28)',
+    tint: '#78350f',
+    muted: 'rgba(146, 64, 14, 0.72)',
+    highlight: 'rgba(255, 248, 220, 0.65)',
+    refraction: 'rgba(253, 230, 138, 0.32)',
+    innerBorder: 'rgba(255, 250, 235, 0.48)',
+  },
+  {
+    backgroundColor: 'rgba(226, 232, 240, 0.38)',
+    borderColor: 'rgba(148, 163, 184, 0.55)',
+    shadowColor: 'rgba(30, 41, 59, 0.24)',
+    tint: '#1e293b',
+    muted: 'rgba(51, 65, 85, 0.72)',
+    highlight: 'rgba(241, 245, 249, 0.6)',
+    refraction: 'rgba(203, 213, 225, 0.3)',
+    innerBorder: 'rgba(241, 245, 249, 0.42)',
+  },
+  {
+    backgroundColor: 'rgba(15, 23, 42, 0.58)',
+    borderColor: 'rgba(148, 163, 184, 0.45)',
+    shadowColor: 'rgba(15, 23, 42, 0.4)',
+    tint: '#f8fafc',
+    muted: 'rgba(226, 232, 240, 0.78)',
+    highlight: 'rgba(148, 163, 184, 0.45)',
+    refraction: 'rgba(100, 116, 139, 0.28)',
+    innerBorder: 'rgba(148, 163, 184, 0.38)',
+  },
 ] as const;
 
 const lightenColor = (hex: string, factor: number) => {
@@ -789,7 +825,7 @@ export default function HomeScreen() {
         <Pressable
           style={({ pressed }) => [
             styles.statsCard,
-            ledgerTheme,
+            { shadowColor: ledgerTheme.shadowColor },
             pressed && styles.statsCardPressed,
           ]}
           onPress={handleCycleLedgerColor}
@@ -797,22 +833,50 @@ export default function HomeScreen() {
           accessibilityLabel="Harvest Ledger"
           accessibilityHint="Tap to cycle the ledger background color"
         >
-          <Text style={styles.statsTitle}>Harvest Ledger</Text>
+          <View
+            pointerEvents="none"
+            style={[styles.statsCardBackdrop, { backgroundColor: ledgerTheme.backgroundColor }]}
+          />
+          <View
+            pointerEvents="none"
+            style={[styles.statsCardFrost, { backgroundColor: ledgerTheme.refraction }]}
+          />
+          <View
+            pointerEvents="none"
+            style={[styles.statsCardSheen, { backgroundColor: ledgerTheme.highlight }]}
+          />
+          <View
+            pointerEvents="none"
+            style={[styles.statsCardBorder, { borderColor: ledgerTheme.borderColor }]}
+          />
+          <View
+            pointerEvents="none"
+            style={[styles.statsCardInnerBorder, { borderColor: ledgerTheme.innerBorder }]}
+          />
+          <Text style={[styles.statsTitle, { color: ledgerTheme.tint }]}>Harvest Ledger</Text>
           <View style={styles.statRow}>
-            <Text style={styles.statLabel}>Available harvest</Text>
-            <Text style={styles.statValue}>{harvest.toLocaleString()}</Text>
+            <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Emojis collected</Text>
+            <Text style={[styles.statValue, { color: ledgerTheme.tint }]}>
+              {emojiCollectionCount.toLocaleString()}
+            </Text>
           </View>
           <View style={styles.statRow}>
-            <Text style={styles.statLabel}>Lifetime harvest</Text>
-            <Text style={styles.statValue}>{lifetimeHarvest.toLocaleString()}</Text>
+            <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Auto clicks /s</Text>
+            <Text style={[styles.statValue, { color: ledgerTheme.tint }]}>
+              {autoPerSecond.toLocaleString()}
+            </Text>
           </View>
           <View style={styles.statRow}>
-            <Text style={styles.statLabel}>Auto clicks /s</Text>
-            <Text style={styles.statValue}>{autoPerSecond.toLocaleString()}</Text>
+            <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Available harvest</Text>
+            <Text style={[styles.statValue, { color: ledgerTheme.tint }]}>
+              {harvest.toLocaleString()}
+            </Text>
           </View>
           <View style={styles.statRow}>
-            <Text style={styles.statLabel}>Emoji collection</Text>
-            <Text style={styles.statValue}>{emojiCollectionCount.toLocaleString()}</Text>
+            <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Lifetime harvest</Text>
+            <Text style={[styles.statValue, { color: ledgerTheme.tint }]}>
+              {lifetimeHarvest.toLocaleString()}
+            </Text>
           </View>
         </Pressable>
         </View>
@@ -1441,39 +1505,73 @@ const styles = StyleSheet.create({
     fontSize: 76,
   },
   statsCard: {
-    borderRadius: 26,
-    padding: 22,
-    gap: 14,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 12,
-    elevation: 4,
-    borderWidth: 1,
-    borderColor: 'transparent',
+    position: 'relative',
+    borderRadius: 28,
+    paddingVertical: 22,
+    paddingHorizontal: 24,
+    gap: 16,
     overflow: 'hidden',
+    shadowOpacity: 0.22,
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 20,
+    elevation: 6,
+    backgroundColor: 'transparent',
   },
   statsCardPressed: {
     opacity: 0.94,
+    transform: [{ scale: 0.995 }],
+  },
+  statsCardBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 28,
+  },
+  statsCardFrost: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 36,
+    opacity: 0.32,
+    transform: [{ scaleX: 1.25 }, { scaleY: 1.3 }, { rotate: '12deg' }],
+  },
+  statsCardSheen: {
+    position: 'absolute',
+    top: -64,
+    left: -42,
+    width: '160%',
+    height: '64%',
+    borderRadius: 220,
+    opacity: 0.6,
+    transform: [{ rotate: '-12deg' }],
+  },
+  statsCardBorder: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 28,
+    borderWidth: 1,
+  },
+  statsCardInnerBorder: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 22,
+    borderWidth: 1,
+    margin: 8,
+    opacity: 0.55,
   },
   statsTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#22543d',
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
   statRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingVertical: 4,
   },
   statLabel: {
-    fontSize: 16,
-    color: '#2d3748',
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
   statValue: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
-    color: '#22543d',
   },
   modalOverlay: {
     flex: 1,

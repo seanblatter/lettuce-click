@@ -722,57 +722,99 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
     sleepOverlay: {
       flex: 1,
       backgroundColor: palette.overlay,
-      justifyContent: 'flex-end',
-      paddingHorizontal: 0,
+      justifyContent: 'center',
+      paddingHorizontal: 18,
+      paddingVertical: 28,
     },
     sleepBackdrop: {
       ...StyleSheet.absoluteFillObject,
     },
     sleepCard: {
       backgroundColor: palette.modalBackground,
-      borderTopLeftRadius: 32,
-      borderTopRightRadius: 32,
+      borderRadius: 36,
       width: '100%',
-      maxWidth: 520,
+      maxWidth: 720,
       alignSelf: 'center',
       marginHorizontal: 12,
-      paddingTop: 16,
+      paddingTop: 0,
       paddingBottom: 0,
       maxHeight: sleepSheetMaxHeight,
       overflow: 'hidden',
     },
-    sleepHandle: {
-      alignSelf: 'center',
-      width: 52,
-      height: 5,
-      borderRadius: 999,
+    sleepCardGlow: {
+      ...StyleSheet.absoluteFillObject,
+      opacity: 0.45,
+      borderRadius: 36,
       backgroundColor: palette.modalHandle,
     },
     sleepCardScroll: {
       flexGrow: 0,
-      maxHeight: sleepSheetMaxHeight - 20,
+      maxHeight: sleepSheetMaxHeight - 40,
     },
     sleepContent: {
-      paddingHorizontal: 24,
-      paddingTop: 18,
-      paddingBottom: 32,
-      gap: 20,
+      paddingHorizontal: 28,
+      paddingTop: 24,
+      paddingBottom: 36,
+      gap: 24,
+    },
+    sleepHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 16,
+      paddingHorizontal: 28,
+      paddingTop: 28,
+      paddingBottom: 12,
+    },
+    sleepHeaderBadge: {
+      width: 58,
+      height: 58,
+      borderRadius: 29,
+      backgroundColor: palette.sleepModeBackgroundActive,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: palette.sleepModeBorderActive,
+      shadowOpacity: 0.3,
+      shadowRadius: 16,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 4,
+    },
+    sleepHeaderEmoji: {
+      fontSize: 30,
+    },
+    sleepHeaderText: {
+      flex: 1,
+      gap: 8,
     },
     sleepTitle: {
       fontSize: 22,
       fontWeight: '800',
       color: palette.modalTitle,
-      textAlign: 'center',
+      textAlign: 'left',
     },
     sleepDescription: {
       fontSize: 13,
       color: palette.modalDescription,
-      textAlign: 'center',
+      textAlign: 'left',
       lineHeight: 18,
     },
-    sleepModeRow: {
+    sleepColumns: {
       flexDirection: 'row',
       flexWrap: 'wrap',
+      gap: 24,
+    },
+    sleepColumn: {
+      flex: 1,
+      minWidth: 240,
+      gap: 16,
+    },
+    sleepColumnPrimary: {
+      maxWidth: 320,
+    },
+    sleepColumnSecondary: {
+      flexBasis: 0,
+    },
+    sleepModeList: {
+      flexDirection: 'column',
       gap: 12,
     },
     sleepModeButton: {
@@ -814,9 +856,27 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
       alignItems: 'center',
       justifyContent: 'center',
     },
-    sleepTimerReadout: {
-      alignItems: 'center',
+    sleepTimerReadoutCard: {
+      alignItems: 'flex-start',
       gap: 4,
+    },
+    sleepStatusPanel: {
+      borderRadius: 20,
+      padding: 16,
+      backgroundColor: palette.sleepModeBackground,
+      borderWidth: 1,
+      borderColor: palette.sleepModeBorder,
+      gap: 6,
+    },
+    sleepStatusHeadline: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: palette.sleepModeLabel,
+    },
+    sleepStatusCopy: {
+      fontSize: 12,
+      color: palette.sleepModeDescription,
+      lineHeight: 16,
     },
     sleepTimerReadoutValue: {
       fontSize: 26,
@@ -827,10 +887,9 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
       fontSize: 12,
       color: palette.sleepModeDescription,
     },
-    timerActionRow: {
-      marginTop: 18,
-      flexDirection: 'row',
-      flexWrap: 'wrap',
+    timerActionList: {
+      marginTop: 14,
+      flexDirection: 'column',
       gap: 12,
     },
     timerActionCard: {
@@ -872,9 +931,30 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
       fontWeight: '700',
       color: palette.alarmSeparator,
     },
+    alarmSummaryCard: {
+      borderRadius: 20,
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+      backgroundColor: palette.sleepModeBackground,
+      borderWidth: 1,
+      borderColor: palette.sleepModeBorder,
+      gap: 4,
+    },
+    alarmSummaryLabel: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: palette.sleepModeLabel,
+      letterSpacing: 0.6,
+      textTransform: 'uppercase',
+    },
+    alarmSummaryValue: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: palette.sleepTimerText,
+    },
     sleepActiveSummary: {
       gap: 4,
-      alignItems: 'center',
+      alignItems: 'flex-start',
     },
     sleepActiveHeadline: {
       fontSize: 14,
@@ -1725,108 +1805,139 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
         <View style={styles.sleepOverlay}>
           <Pressable style={styles.sleepBackdrop} onPress={() => setSleepModalOpen(false)} />
           <View style={styles.sleepCard}>
-            <View style={styles.sleepHandle} />
+            <View pointerEvents="none" style={styles.sleepCardGlow} />
+            <View style={styles.sleepHeaderRow}>
+              <View style={styles.sleepHeaderBadge}>
+                <Text style={styles.sleepHeaderEmoji}>🌙</Text>
+              </View>
+              <View style={styles.sleepHeaderText}>
+                <Text style={styles.sleepTitle}>Dream Capsule</Text>
+                <Text style={styles.sleepDescription}>
+                  Set a fade-out timer or schedule a wake alarm—your Dream Capsule feels at home in light or
+                  dark mode.
+                </Text>
+              </View>
+            </View>
             <ScrollView
               style={styles.sleepCardScroll}
-              contentContainerStyle={[
-                styles.sleepContent,
-                { paddingBottom: insets.bottom + 16 },
-              ]}
+              contentContainerStyle={[styles.sleepContent, { paddingBottom: insets.bottom + 16 }]}
               showsVerticalScrollIndicator={false}
               bounces={false}
             >
-              <Text style={styles.sleepTitle}>Dream Capsule</Text>
-              <Text style={styles.sleepDescription}>
-                Set a fade-out timer or schedule a wake alarm—your Dream Capsule feels at home in light or
-                dark mode.
-              </Text>
-              <View style={styles.sleepModeRow}>
-                {SLEEP_MODE_OPTIONS.map((option) => {
-                  const isActive = sleepMode === option.id;
-                  return (
-                    <Pressable
-                      key={option.id}
-                      style={[styles.sleepModeButton, isActive && styles.sleepModeButtonActive]}
-                      onPress={() => setSleepMode(option.id)}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: isActive }}
-                    >
-                      <Text style={[styles.sleepModeLabel, isActive && styles.sleepModeLabelActive]}>
-                        {option.label}
-                      </Text>
-                      <Text style={styles.sleepModeDescription}>{option.description}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-              <Text style={styles.sleepSectionLabel}>
-                {sleepMode === 'timer' ? 'Timer length' : 'Wake time'}
-              </Text>
-              {sleepMode === 'timer' ? (
-                <>
-                  <View style={styles.sleepTimerReadout}>
-                    <Text style={styles.sleepTimerReadoutValue}>
-                      {formatDurationLong(sleepTimerMinutes)}
-                    </Text>
-                    <Text style={styles.sleepTimerReadoutHint}>Timer duration</Text>
-                  </View>
-                  <View style={styles.sleepTimerWheelRow}>
-                    <WheelPicker
-                      data={TIMER_MINUTE_OPTIONS}
-                      value={clampTimerMinutes(sleepTimerMinutes)}
-                      onChange={setSleepTimerMinutes}
-                      formatter={(value) => `${value} min`}
-                      label="Timer length"
-                      styles={styles}
-                    />
-                  </View>
-                  <View style={styles.timerActionRow}>
-                    {TIMER_ACTION_OPTIONS.map((option) => {
-                      const isActive = sleepTimerAction === option.id;
+              <View style={styles.sleepColumns}>
+                <View style={[styles.sleepColumn, styles.sleepColumnPrimary]}>
+                  <Text style={styles.sleepSectionLabel}>Mode</Text>
+                  <View style={styles.sleepModeList}>
+                    {SLEEP_MODE_OPTIONS.map((option) => {
+                      const isActive = sleepMode === option.id;
                       return (
                         <Pressable
                           key={option.id}
-                          style={[styles.timerActionCard, isActive && styles.timerActionCardActive]}
-                          onPress={() => setSleepTimerAction(option.id)}
+                          style={[styles.sleepModeButton, isActive && styles.sleepModeButtonActive]}
+                          onPress={() => setSleepMode(option.id)}
                           accessibilityRole="button"
                           accessibilityState={{ selected: isActive }}
                         >
-                          <Text style={[styles.timerActionLabel, isActive && styles.timerActionLabelActive]}>
-                            {option.title}
+                          <Text style={[styles.sleepModeLabel, isActive && styles.sleepModeLabelActive]}>
+                            {option.label}
                           </Text>
-                          <Text style={styles.timerActionDescription}>{option.description}</Text>
+                          <Text style={styles.sleepModeDescription}>{option.description}</Text>
                         </Pressable>
                       );
                     })}
                   </View>
-                </>
-              ) : (
-                <View style={styles.alarmPickerRow}>
-                  <WheelPicker
-                    data={ALARM_HOUR_OPTIONS}
-                    value={alarmHour}
-                    onChange={setAlarmHour}
-                    label="Alarm hour"
-                    styles={styles}
-                  />
-                  <Text style={styles.alarmPickerSeparator}>:</Text>
-                  <WheelPicker
-                    data={ALARM_MINUTE_OPTIONS}
-                    value={alarmMinute}
-                    onChange={setAlarmMinute}
-                    formatter={(value) => value.toString().padStart(2, '0')}
-                    label="Alarm minute"
-                    styles={styles}
-                  />
-                  <WheelPicker
-                    data={ALARM_PERIOD_OPTIONS}
-                    value={alarmPeriod}
-                    onChange={setAlarmPeriod}
-                    label="AM or PM"
-                    styles={styles}
-                  />
+                  {sleepMode === 'timer' ? (
+                    <>
+                      <Text style={styles.sleepSectionLabel}>Timer actions</Text>
+                      <View style={styles.timerActionList}>
+                        {TIMER_ACTION_OPTIONS.map((option) => {
+                          const isActive = sleepTimerAction === option.id;
+                          return (
+                            <Pressable
+                              key={option.id}
+                              style={[styles.timerActionCard, isActive && styles.timerActionCardActive]}
+                              onPress={() => setSleepTimerAction(option.id)}
+                              accessibilityRole="button"
+                              accessibilityState={{ selected: isActive }}
+                            >
+                              <Text
+                                style={[styles.timerActionLabel, isActive && styles.timerActionLabelActive]}
+                              >
+                                {option.title}
+                              </Text>
+                              <Text style={styles.timerActionDescription}>{option.description}</Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </>
+                  ) : (
+                    <View style={styles.sleepStatusPanel}>
+                      <Text style={styles.sleepStatusHeadline}>{sleepSummary.headline}</Text>
+                      <Text style={styles.sleepStatusCopy}>{sleepSummary.detail}</Text>
+                    </View>
+                  )}
                 </View>
-              )}
+                <View style={[styles.sleepColumn, styles.sleepColumnSecondary]}>
+                  <Text style={styles.sleepSectionLabel}>
+                    {sleepMode === 'timer' ? 'Timer length' : 'Wake time'}
+                  </Text>
+                  {sleepMode === 'timer' ? (
+                    <>
+                      <View style={styles.sleepTimerReadoutCard}>
+                        <Text style={styles.sleepTimerReadoutValue}>
+                          {formatDurationLong(sleepTimerMinutes)}
+                        </Text>
+                        <Text style={styles.sleepTimerReadoutHint}>Timer duration</Text>
+                      </View>
+                      <View style={styles.sleepTimerWheelRow}>
+                        <WheelPicker
+                          data={TIMER_MINUTE_OPTIONS}
+                          value={clampTimerMinutes(sleepTimerMinutes)}
+                          onChange={setSleepTimerMinutes}
+                          formatter={(value) => `${value} min`}
+                          label="Timer length"
+                          styles={styles}
+                        />
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      <View style={styles.alarmSummaryCard}>
+                        <Text style={styles.alarmSummaryLabel}>Next wake chime</Text>
+                        <Text style={styles.alarmSummaryValue}>
+                          {formatAlarmDisplay(alarmHour, alarmMinute, alarmPeriod)}
+                        </Text>
+                      </View>
+                      <View style={styles.alarmPickerRow}>
+                        <WheelPicker
+                          data={ALARM_HOUR_OPTIONS}
+                          value={alarmHour}
+                          onChange={setAlarmHour}
+                          label="Alarm hour"
+                          styles={styles}
+                        />
+                        <Text style={styles.alarmPickerSeparator}>:</Text>
+                        <WheelPicker
+                          data={ALARM_MINUTE_OPTIONS}
+                          value={alarmMinute}
+                          onChange={setAlarmMinute}
+                          formatter={(value) => value.toString().padStart(2, '0')}
+                          label="Alarm minute"
+                          styles={styles}
+                        />
+                        <WheelPicker
+                          data={ALARM_PERIOD_OPTIONS}
+                          value={alarmPeriod}
+                          onChange={setAlarmPeriod}
+                          label="AM or PM"
+                          styles={styles}
+                        />
+                      </View>
+                    </>
+                  )}
+                </View>
+              </View>
               <View style={styles.sleepActiveSummary}>
                 <Text style={styles.sleepActiveHeadline}>{sleepSummary.headline}</Text>
                 <Text style={styles.sleepActiveDetail}>{sleepSummary.detail}</Text>

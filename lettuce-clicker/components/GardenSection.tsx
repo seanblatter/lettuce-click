@@ -1121,6 +1121,7 @@ export function GardenSection({
     const owned = item.owned;
     const isSelected = selectedEmoji === item.id;
     const canAfford = harvest >= item.cost;
+    const locked = !owned;
 
     const handleTilePress = () => {
       if (owned) {
@@ -1146,10 +1147,12 @@ export function GardenSection({
     return (
       <View style={styles.sheetTileWrapper}>
         <Pressable
-          style={[
+          style={({ pressed }) => [
             styles.emojiTile,
             isSelected && styles.emojiTileSelected,
-            !canAfford && !owned && styles.emojiTileDisabled,
+            locked && styles.emojiTileLocked,
+            !canAfford && locked && styles.emojiTileDisabled,
+            pressed && styles.emojiTilePressed,
           ]}
           onPress={handleTilePress}
           accessibilityLabel={`${item.name} emoji`}
@@ -1160,15 +1163,31 @@ export function GardenSection({
                 ? 'Unlock and ready this decoration.'
                 : 'Not enough clicks to unlock.'
           }>
-          {!owned ? (
+          {locked ? (
             <View style={styles.tileStatusBadge}>
               <Text style={styles.tileStatusBadgeText}>Locked</Text>
             </View>
           ) : null}
-          <View style={[styles.emojiBadge, isSelected && styles.emojiBadgeSelected]}>
+          <View
+            style={[styles.emojiBadge, isSelected && styles.emojiBadgeSelected, locked && styles.emojiBadgeLocked]}
+          >
             <View style={[styles.emojiBadgeGlow, isSelected && styles.emojiBadgeGlowActive]} />
-            <View style={[styles.emojiBadgeCore, isSelected && styles.emojiBadgeCoreSelected]}>
-              <Text style={[styles.emojiGlyphLarge, isSelected && styles.emojiGlyphSelected]}>{item.emoji}</Text>
+            <View
+              style={[
+                styles.emojiBadgeCore,
+                isSelected && styles.emojiBadgeCoreSelected,
+                locked && styles.emojiBadgeCoreLocked,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.emojiGlyphLarge,
+                  isSelected && styles.emojiGlyphSelected,
+                  locked && styles.emojiGlyphLocked,
+                ]}
+              >
+                {item.emoji}
+              </Text>
             </View>
           </View>
           <Text style={styles.emojiTileLabel} numberOfLines={2}>
@@ -1178,17 +1197,20 @@ export function GardenSection({
             <Text style={[styles.emojiTileMeta, styles.emojiTileCostText]} numberOfLines={1}>
               {formatClickValue(item.cost)} clicks
             </Text>
-          </View>
-        </Pressable>
-        <View style={styles.tileFooterRow}>
-          {!owned ? (
-            <>
-              <View style={[styles.tileStatusPill, styles.tileStatusPillLocked]}>
-                <Text style={[styles.tileStatusText, styles.tileStatusTextLocked]}>Locked</Text>
-              </View>
+            {locked ? (
               <Pressable
-                style={[styles.tileUnlockButton, !canAfford && styles.tileUnlockButtonDisabled]}
-                onPress={() => handlePurchase(item.id)}
+                style={({ pressed }) => [
+                  styles.tileUnlockChip,
+                  !canAfford && styles.tileUnlockChipDisabled,
+                  pressed && canAfford && styles.tileUnlockChipPressed,
+                ]}
+                onPress={(event: GestureResponderEvent) => {
+                  event.stopPropagation();
+                  if (!canAfford) {
+                    return;
+                  }
+                  handlePurchase(item.id);
+                }}
                 disabled={!canAfford}
                 accessibilityLabel={`Unlock ${item.name}`}
                 accessibilityHint={
@@ -1197,13 +1219,15 @@ export function GardenSection({
                     : 'Gather more clicks to unlock this decoration.'
                 }
               >
-                <Text style={styles.tileUnlockButtonText}>Unlock</Text>
+                <Text style={styles.tileUnlockChipText}>
+                  {canAfford ? 'Unlock' : 'Need more harvest'}
+                </Text>
               </Pressable>
-            </>
-          ) : (
-            <View style={styles.tileFooterSpacer} />
-          )}
-        </View>
+            ) : (
+              <Text style={styles.tileReadyText}>Ready to place</Text>
+            )}
+          </View>
+        </Pressable>
       </View>
     );
   };
@@ -2491,15 +2515,15 @@ const styles = StyleSheet.create({
   },
   emojiTile: {
     width: '100%',
-    minHeight: 120,
+    minHeight: 112,
     backgroundColor: '#ffffff',
     borderRadius: 16,
-    paddingVertical: 14,
+    paddingVertical: 12,
     paddingHorizontal: 8,
     borderWidth: 2,
     borderColor: '#d1fae5',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
     shadowColor: '#0f766e',
     shadowOpacity: 0.12,
     shadowRadius: 12,
@@ -2515,6 +2539,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     elevation: 4,
   },
+  emojiTilePressed: {
+    transform: [{ scale: 0.99 }],
+  },
   emojiTileDragging: {
     transform: [{ scale: 1.05 }],
     shadowOpacity: 0.28,
@@ -2522,8 +2549,13 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     elevation: 6,
   },
+  emojiTileLocked: {
+    backgroundColor: 'rgba(254, 243, 199, 0.72)',
+    borderColor: '#fcd34d',
+    shadowColor: '#f59e0b',
+  },
   emojiTileDisabled: {
-    opacity: 0.55,
+    opacity: 0.65,
   },
   emojiBadge: {
     width: 72,
@@ -2533,6 +2565,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 4,
     position: 'relative',
+  },
+  emojiBadgeLocked: {
+    opacity: 0.9,
   },
   emojiBadgeGlow: {
     ...StyleSheet.absoluteFillObject,
@@ -2561,6 +2596,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#ecfdf3',
     borderColor: 'rgba(21, 128, 61, 0.45)',
   },
+  emojiBadgeCoreLocked: {
+    backgroundColor: 'rgba(255, 251, 235, 0.9)',
+    borderColor: 'rgba(234, 179, 8, 0.5)',
+    shadowColor: '#fbbf24',
+  },
   emojiBadgeSelected: {
     shadowColor: '#0f172a',
   },
@@ -2569,6 +2609,9 @@ const styles = StyleSheet.create({
   },
   emojiGlyphSelected: {
     transform: [{ scale: 1.05 }],
+  },
+  emojiGlyphLocked: {
+    opacity: 0.55,
   },
   emojiTileLabel: {
     fontSize: 12,
@@ -2586,7 +2629,7 @@ const styles = StyleSheet.create({
     width: '100%',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
   },
   emojiTileMeta: {
     fontSize: 10,
@@ -2984,58 +3027,46 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    backgroundColor: 'rgba(254, 215, 170, 0.92)',
+    backgroundColor: 'rgba(250, 204, 21, 0.28)',
     borderWidth: 1,
-    borderColor: 'rgba(251, 191, 36, 0.7)',
+    borderColor: 'rgba(234, 179, 8, 0.55)',
   },
   tileStatusBadgeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#92400e',
+    color: '#78350f',
   },
-  tileFooterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 12,
-    gap: 12,
-    width: '100%',
-  },
-  tileStatusPill: {
+  tileUnlockChip: {
+    marginTop: 2,
     borderRadius: 999,
-    paddingHorizontal: 12,
     paddingVertical: 6,
-    borderWidth: 1,
-  },
-  tileStatusPillLocked: {
-    backgroundColor: '#fef3c7',
-    borderColor: '#fcd34d',
-  },
-  tileStatusText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  tileStatusTextLocked: {
-    color: '#92400e',
-  },
-  tileUnlockButton: {
-    borderRadius: 14,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
+    backgroundColor: '#fbbf24',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#22543d',
+    shadowColor: '#f59e0b',
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
-  tileUnlockButtonDisabled: {
-    opacity: 0.6,
+  tileUnlockChipDisabled: {
+    backgroundColor: 'rgba(100, 116, 139, 0.35)',
+    shadowOpacity: 0,
   },
-  tileUnlockButtonText: {
-    color: '#f0fff4',
+  tileUnlockChipPressed: {
+    transform: [{ scale: 0.97 }],
+  },
+  tileUnlockChipText: {
+    fontSize: 12,
     fontWeight: '700',
+    color: '#422006',
   },
-  tileFooterSpacer: {
-    flex: 1,
-    height: 32,
+  tileReadyText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#134e32',
+    marginTop: 6,
   },
   sheetCloseButton: {
     marginTop: 12,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type {
@@ -41,6 +41,10 @@ export function UpgradeSection({
   title = 'Conservatory Upgrades',
 }: Props) {
   const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
+
+  const styles = useMemo(() => createResponsiveStyles(isLandscape), [isLandscape]);
 
   const ownedUpgradeCount = useMemo(
     () =>
@@ -426,9 +430,9 @@ export function UpgradeSection({
   );
 }
 
-const styles = StyleSheet.create({
+const createResponsiveStyles = (isLandscape: boolean) => StyleSheet.create({
   section: {
-    gap: 24,
+    gap: isLandscape ? 20 : 24,
   },
   heroCard: {
     position: 'relative',
@@ -767,6 +771,8 @@ const styles = StyleSheet.create({
   },
   workshopList: {
     gap: 16,
+    flexDirection: isLandscape ? 'row' : 'column',
+    flexWrap: isLandscape ? 'wrap' : 'nowrap',
   },
   upgradeCard: {
     backgroundColor: '#ffffff',
@@ -780,6 +786,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
     gap: 10,
+    width: isLandscape ? '48%' : '100%',
   },
   upgradeHeader: {
     flexDirection: 'row',

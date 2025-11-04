@@ -12,6 +12,7 @@ import {
   View,
   GestureResponderEvent,
   Image,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -138,8 +139,6 @@ export default function HomeScreen() {
     customClickEmoji,
     premiumAccentColor,
     gardenBackgroundColor,
-    profilePhotoWidgetEnabled,
-    profileImageUri,
     addHarvestAmount,
     spendHarvestAmount,
     grantEmojiUnlock,
@@ -171,17 +170,18 @@ export default function HomeScreen() {
   const [isWatchingResumeOffer, setIsWatchingResumeOffer] = useState(false);
   const [ledgerToneIndex, setLedgerToneIndex] = useState(0);
   const insets = useSafeAreaInsets();
+  const dimensions = useWindowDimensions();
   const flipAnimation = useRef(new Animated.Value(0)).current;
   const { isPlaying: isAmbientPlaying } = useAmbientAudio();
   const audioPulsePrimary = useRef(new Animated.Value(0)).current;
   const audioPulseSecondary = useRef(new Animated.Value(0)).current;
   const quickActionWiggles = useRef({
-    profile: new Animated.Value(0),
     music: new Animated.Value(0),
     bonus: new Animated.Value(0),
     themes: new Animated.Value(0),
   }).current;
-  const headerPaddingTop = useMemo(() => Math.max(insets.top - 6, 0) + 2, [insets.top]);
+  const isLandscape = useMemo(() => dimensions.width > dimensions.height, [dimensions]);
+  const headerPaddingTop = useMemo(() => Math.max(insets.top - 6, 0) + (isLandscape ? 4 : 8), [insets.top, isLandscape]);
   const contentPaddingBottom = useMemo(() => insets.bottom + 32, [insets.bottom]);
   const friendlyName = useMemo(() => {
     const trimmed = profileName.trim();
@@ -224,7 +224,6 @@ export default function HomeScreen() {
   );
   const quickActionRotations = useMemo(
     () => ({
-      profile: quickActionWiggles.profile.interpolate({ inputRange: [-1, 1], outputRange: ['-10deg', '10deg'] }),
       music: quickActionWiggles.music.interpolate({ inputRange: [-1, 1], outputRange: ['-10deg', '10deg'] }),
       bonus: quickActionWiggles.bonus.interpolate({ inputRange: [-1, 1], outputRange: ['-10deg', '10deg'] }),
       themes: quickActionWiggles.themes.interpolate({ inputRange: [-1, 1], outputRange: ['-10deg', '10deg'] }),
@@ -425,10 +424,7 @@ export default function HomeScreen() {
     }
   }, []);
 
-  const handleNavigateProfile = useCallback(() => {
-    setMenuOpen(false);
-    setShowProfileQuickAction(true);
-  }, []);
+
 
   const handleCloseProfileQuickAction = useCallback(() => {
     setShowProfileQuickAction(false);
@@ -736,9 +732,13 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: gardenSurfaceColor }]}>
       <View style={[styles.container, { backgroundColor: gardenSurfaceColor }]}>
-        <View style={[styles.headerWrapper, { paddingTop: headerPaddingTop }]}>
+        <View style={[
+          styles.headerWrapper, 
+          { paddingTop: headerPaddingTop },
+          isLandscape && styles.headerWrapperLandscape
+        ]}>
           <View style={styles.headerShelf}>
-            <Text style={styles.headerText}>Lettuce Park Gardens</Text>
+            <Text style={[styles.headerText, isLandscape && styles.headerTextLandscape]}>Lettuce World</Text>
             <Pressable
               accessibilityLabel={menuOpen ? 'Close garden menu' : 'Open garden menu'}
               accessibilityHint={menuOpen ? undefined : 'Opens actions and emoji theme options'}
@@ -757,9 +757,18 @@ export default function HomeScreen() {
         </View>
 
         <View
-          style={[styles.content, styles.contentStatic, { paddingTop: 12, paddingBottom: contentPaddingBottom }]}
+          style={[
+            styles.content, 
+            styles.contentStatic, 
+            { 
+              paddingTop: isLandscape ? 16 : 32, 
+              paddingBottom: contentPaddingBottom,
+              flexDirection: isLandscape ? 'row' : 'column',
+              alignItems: isLandscape ? 'center' : 'stretch',
+            }
+          ]}
         >
-          <View style={styles.lettuceWrapper}>
+          <View style={[styles.lettuceWrapper, isLandscape && styles.lettuceWrapperLandscape]}>
             {isAmbientPlaying ? (
               <View style={styles.audioPulseContainer} pointerEvents="none">
                 <Animated.View
@@ -836,17 +845,19 @@ export default function HomeScreen() {
             </Pressable>
           </View>
 
-        <Pressable
-          style={({ pressed }) => [
-            styles.statsCard,
-            { shadowColor: ledgerTheme.shadowColor },
-            pressed && styles.statsCardPressed,
-          ]}
-          onPress={handleCycleLedgerColor}
-          accessibilityRole="button"
-          accessibilityLabel="Harvest Ledger"
-          accessibilityHint="Tap to cycle the ledger background color"
-        >
+        <View style={[styles.statsSection, isLandscape && styles.statsSectionLandscape]}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.statsCard,
+              { shadowColor: ledgerTheme.shadowColor },
+              pressed && styles.statsCardPressed,
+              isLandscape && styles.statsCardLandscape,
+            ]}
+            onPress={handleCycleLedgerColor}
+            accessibilityRole="button"
+            accessibilityLabel="Harvest Ledger"
+            accessibilityHint="Tap to cycle the ledger background color"
+          >
           <View
             pointerEvents="none"
             style={[styles.statsCardBackdrop, { backgroundColor: ledgerTheme.backgroundColor }]}
@@ -908,6 +919,7 @@ export default function HomeScreen() {
           </View>
         </Pressable>
         </View>
+        </View>
 
         <Modal
           visible={menuOpen}
@@ -919,7 +931,26 @@ export default function HomeScreen() {
             <Pressable style={styles.menuSheetBackdrop} onPress={() => setMenuOpen(false)} />
             <View style={styles.menuSheetCard}>
               <View style={styles.menuSheetHandle} />
-              <View style={[styles.menuHero, { backgroundColor: accentSurface, shadowColor: accentColor }]}>
+              <Pressable
+                style={styles.menuProfileButton}
+                onPress={() => {
+                  setMenuOpen(false);
+                  setShowProfileQuickAction(true);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Open profile"
+              >
+                <Text style={styles.menuProfileEmoji}>👤</Text>
+              </Pressable>
+              <Pressable 
+                style={[styles.menuHero, { backgroundColor: accentSurface, shadowColor: accentColor }]}
+                onPress={() => {
+                  setMenuOpen(false);
+                  setShowProfileQuickAction(true);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Open profile"
+              >
                 <View style={[styles.menuHeroBadge, { backgroundColor: accentColor }]}>
                   <Text style={styles.menuHeroEmoji}>{customClickEmoji}</Text>
                 </View>
@@ -929,50 +960,11 @@ export default function HomeScreen() {
                     Welcome back, {friendlyName}! Tend your profile, grab bonuses, and refresh your theme.
                   </Text>
                 </View>
-              </View>
+              </Pressable>
               <View style={styles.menuSheetContent}>
                 {menuPage === 'overview' ? (
                   <>
                     <Text style={styles.menuSectionTitle}>Quick actions</Text>
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.menuItemCard,
-                        styles.quickActionCard,
-                        pressed && styles.menuItemCardPressed,
-                      ]}
-                      onPress={handleNavigateProfile}
-                    >
-                      <Pressable
-                        style={styles.quickActionIconPressable}
-                        onPress={handleQuickActionEmojiPress('profile')}
-                        accessibilityRole="button"
-                        accessibilityLabel="Playful profile emoji"
-                        hitSlop={8}
-                      >
-                        <Animated.View
-                          style={[
-                            styles.menuItemIconWrap,
-                            styles.quickActionIconWrap,
-                            { transform: [{ rotate: quickActionRotations.profile }] },
-                          ]}
-                        >
-                          {profilePhotoWidgetEnabled && profileImageUri ? (
-                            <Image source={{ uri: profileImageUri }} style={styles.quickActionWidgetImage} />
-                          ) : (
-                            <Text style={[styles.menuItemIcon, styles.quickActionIcon]}>🌿</Text>
-                          )}
-                        </Animated.View>
-                      </Pressable>
-                      <View style={styles.menuItemBody}>
-                        <Text style={[styles.menuItemTitle, styles.quickActionTitle]}>Profile</Text>
-                        <Text style={[styles.menuItemSubtitle, styles.quickActionSubtitle]}>
-                          Touch up your Lettuce
-                        </Text>
-                      </View>
-                      <View style={[styles.menuItemMeta, styles.quickActionMeta]} pointerEvents="none">
-                        <Text style={[styles.menuItemChevron, styles.quickActionChevron]}>›</Text>
-                      </View>
-                    </Pressable>
                     <Pressable
                       style={({ pressed }) => [
                         styles.menuItemCard,
@@ -1304,6 +1296,7 @@ export default function HomeScreen() {
           </View>
         </SafeAreaView>
       </Modal>
+
       <Modal
         visible={showProfileQuickAction}
         animationType="slide"
@@ -1335,9 +1328,12 @@ const styles = StyleSheet.create({
   },
   headerWrapper: {
     paddingHorizontal: 24,
-    paddingBottom: 6,
+    paddingBottom: 20,
     zIndex: 10,
     elevation: 10,
+  },
+  headerWrapperLandscape: {
+    paddingBottom: 12,
   },
   headerShelf: {
     flexDirection: 'row',
@@ -1346,10 +1342,22 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   headerText: {
-    fontSize: 26,
-    fontWeight: '800',
+    fontSize: 28,
+    fontWeight: '900',
     color: '#14532d',
-    letterSpacing: 0.2,
+    letterSpacing: 0.4,
+    textShadowColor: 'rgba(20, 83, 45, 0.1)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  headerTextLandscape: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#14532d',
+    letterSpacing: 0.4,
+    textShadowColor: 'rgba(20, 83, 45, 0.1)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   menuButton: {
     paddingHorizontal: 6,
@@ -1389,6 +1397,11 @@ const styles = StyleSheet.create({
     height: 240,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  lettuceWrapperLandscape: {
+    width: 180,
+    height: 180,
+    marginRight: 40,
   },
   lettuceBackdrop: {
     position: 'absolute',
@@ -1549,6 +1562,18 @@ const styles = StyleSheet.create({
     opacity: 0.94,
     transform: [{ scale: 0.995 }],
   },
+  statsSection: {
+    flex: 1,
+  },
+  statsSectionLandscape: {
+    flex: 0.6,
+    marginLeft: 20,
+  },
+  statsCardLandscape: {
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    gap: 12,
+  },
   statsCardBackdrop: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: 28,
@@ -1682,6 +1707,17 @@ const styles = StyleSheet.create({
     height: 5,
     borderRadius: 999,
     backgroundColor: '#bbf7d0',
+  },
+  menuProfileButton: {
+    position: 'absolute',
+    top: 16,
+    right: 20,
+    zIndex: 10,
+    padding: 8,
+  },
+  menuProfileEmoji: {
+    fontSize: 28,
+    textAlign: 'center',
   },
   menuSheetContent: {
     gap: 18,

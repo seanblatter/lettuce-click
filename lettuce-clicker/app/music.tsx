@@ -342,7 +342,7 @@ const LIGHT_PALETTE: Palette = {
   sleepGlyphColor: '#1f7a53',
 };
 
-const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: number) =>
+const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: number, isLandscape: boolean) =>
   StyleSheet.create({
     safeArea: {
       flex: 1,
@@ -353,9 +353,9 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
       backgroundColor: palette.background,
     },
     content: {
-      paddingHorizontal: 24,
+      paddingHorizontal: isLandscape ? 48 : 24,
       paddingBottom: 48,
-      gap: 28,
+      gap: isLandscape ? 20 : 28,
     },
     headerRow: {
       flexDirection: 'row',
@@ -614,6 +614,8 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
     },
     optionList: {
       gap: 12,
+      flexDirection: isLandscape ? 'row' : 'column',
+      flexWrap: isLandscape ? 'wrap' : 'nowrap',
     },
     optionRow: {
       flexDirection: 'row',
@@ -630,6 +632,7 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
       shadowRadius: isDark ? 12 : 8,
       shadowOffset: { width: 0, height: isDark ? 8 : 5 },
       elevation: isDark ? 3 : 1,
+      width: isLandscape ? '48%' : '100%',
     },
     optionRowActive: {
       borderColor: palette.optionRowActiveBorder,
@@ -1153,14 +1156,15 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
         : { ...LIGHT_PALETTE, background: gardenSurface, modalBackground: gardenSurface },
     [gardenSurface, isDark]
   );
-  const { height: windowHeight } = useWindowDimensions();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
+  const isLandscape = windowWidth > windowHeight;
   const sleepSheetMaxHeight = useMemo(
     () => Math.max(windowHeight - insets.top - 48, 420),
     [insets.top, windowHeight]
   );
   const styles = useMemo(
-    () => createStyles(palette, isDark, sleepSheetMaxHeight),
-    [palette, isDark, sleepSheetMaxHeight]
+    () => createStyles(palette, isDark, sleepSheetMaxHeight, isLandscape),
+    [palette, isDark, sleepSheetMaxHeight, isLandscape]
   );
   const themeToggleHint =
     musicColorScheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
@@ -1462,10 +1466,6 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
   );
 
   const handleSelectPrevious = useCallback(() => {
-    if (MUSIC_OPTIONS.length === 0) {
-      return;
-    }
-
     const currentIndex = MUSIC_OPTIONS.findIndex((option) => option.id === selectedTrackId);
     const safeIndex = currentIndex >= 0 ? currentIndex : 0;
     const previousIndex = (safeIndex - 1 + MUSIC_OPTIONS.length) % MUSIC_OPTIONS.length;
@@ -1477,10 +1477,6 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
   }, [isAmbientPlaying, selectTrack, selectedTrackId]);
 
   const handleSelectNext = useCallback(() => {
-    if (MUSIC_OPTIONS.length === 0) {
-      return;
-    }
-
     const currentIndex = MUSIC_OPTIONS.findIndex((option) => option.id === selectedTrackId);
     const safeIndex = currentIndex >= 0 ? currentIndex : 0;
     const nextIndex = (safeIndex + 1) % MUSIC_OPTIONS.length;

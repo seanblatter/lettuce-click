@@ -10,6 +10,7 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -65,6 +66,8 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
     registerCustomEmoji,
   } = useGame();
   const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
   const [name, setName] = useState(profileName);
   const [username, setUsername] = useState(profileUsername);
   const [isSaving, setIsSaving] = useState(false);
@@ -272,15 +275,17 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
     handleClose();
   }, [handleClose, persistProfile]);
 
+  const styles = useMemo(() => createResponsiveStyles(isLandscape), [isLandscape]);
+  
   const isModal = mode === 'modal';
   const closeAccessibilityLabel = isModal ? 'Close profile editor' : 'Go back';
   const closeLabel = isModal ? 'Back' : '← Back';
   const closeButtonStyle = isModal ? styles.modalBackButton : styles.backButton;
   const closeTextStyle = isModal ? styles.modalBackLabel : styles.backLabel;
-  const containerStyle = useMemo(() => [styles.safeArea, { paddingTop: insets.top + 12 }], [insets.top]);
+  const containerStyle = useMemo(() => [styles.safeArea, { paddingTop: insets.top + 12 }], [insets.top, styles.safeArea]);
   const contentStyle = useMemo(
     () => [styles.content, { paddingBottom: 40 + insets.bottom }],
-    [insets.bottom]
+    [insets.bottom, styles.content]
   );
   const widgetDisabled = !profileImageUri;
   const widgetValue = widgetDisabled ? false : profilePhotoWidgetEnabled;
@@ -309,55 +314,6 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
           >
             <Text style={closeTextStyle}>{closeLabel}</Text>
           </Pressable>
-        </View>
-
-        <View style={styles.headerCard}>
-          <Pressable style={styles.avatarButton} onPress={handlePickImage} accessibilityLabel="Choose profile image">
-            {profileImageUri ? (
-              <Image source={{ uri: profileImageUri }} style={styles.avatarImage} />
-            ) : (
-              <Text style={styles.avatarPlaceholder}>📸</Text>
-            )}
-          </Pressable>
-          <Text style={styles.headerTitle}>Welcome, {displayName}!</Text>
-          <Text style={styles.headerSubtitle}>Personalize your profile and celebrate your harvest.</Text>
-          {profileImageUri && (
-            <Pressable onPress={handleRemoveImage} style={styles.removePhotoButton} accessibilityLabel="Remove profile image">
-              <Text style={styles.removePhotoText}>Remove photo</Text>
-            </Pressable>
-          )}
-          <View style={styles.widgetCard}>
-            <View style={styles.widgetHeader}>
-              <View style={styles.widgetHeaderText}>
-                <Text style={styles.widgetTitle}>Quick actions photo</Text>
-                <Text style={styles.widgetCopy}>{widgetDescription}</Text>
-              </View>
-              <Switch
-                value={widgetValue}
-                onValueChange={setProfilePhotoWidgetEnabled}
-                disabled={widgetDisabled}
-                trackColor={{ false: '#cbd5f5', true: '#34d399' }}
-                ios_backgroundColor="#cbd5f5"
-                thumbColor={widgetThumbColor}
-              />
-            </View>
-            <View style={[styles.widgetPreviewFrame, widgetDisabled && styles.widgetPreviewEmpty]}>
-              {profileImageUri ? (
-                <Image source={{ uri: profileImageUri }} style={styles.widgetPreviewImage} />
-              ) : (
-                <Text style={styles.widgetPreviewPlaceholder}>Add a photo to preview your quick action</Text>
-              )}
-            </View>
-            {profileImageUri ? (
-              <Pressable
-                style={styles.widgetChangeButton}
-                onPress={handlePickImage}
-                accessibilityLabel="Update quick action photo"
-              >
-                <Text style={styles.widgetChangeButtonText}>Update photo</Text>
-              </Pressable>
-            ) : null}
-          </View>
         </View>
 
         <View style={styles.formSection}>
@@ -523,15 +479,15 @@ export default function ProfileScreen() {
   return <ProfileContent mode="screen" onRequestClose={() => router.back()} />;
 }
 
-const styles = StyleSheet.create({
+const createResponsiveStyles = (isLandscape: boolean) => StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#f2f9f2',
   },
   content: {
-    paddingHorizontal: 24,
+    paddingHorizontal: isLandscape ? 48 : 24,
     paddingBottom: 40,
-    gap: 24,
+    gap: isLandscape ? 20 : 24,
   },
   topBar: {
     marginBottom: 8,

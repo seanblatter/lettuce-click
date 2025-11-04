@@ -2,6 +2,7 @@
 import type { ReactNode } from 'react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
+import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
 
 import { MUSIC_AUDIO_MAP, MUSIC_OPTIONS, type MusicOption } from '@/constants/music';
 
@@ -114,12 +115,62 @@ export function AmbientAudioProvider({ children }: ProviderProps) {
     }
   }, [player]);
 
-  // Apply volume whenever the player changes
+  // Configure audio session for hardware volume button support
+  useEffect(() => {
+    const configureAudioSession = async () => {
+      try {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          staysActiveInBackground: false,
+          interruptionModeIOS: InterruptionModeIOS.MixWithOthers,
+          playsInSilentModeIOS: true,
+          shouldDuckAndroid: true,
+          interruptionModeAndroid: InterruptionModeAndroid.DuckOthers,
+          playThroughEarpieceAndroid: false,
+        });
+      } catch (error) {
+        console.warn('Failed to configure audio session for hardware volume buttons:', error);
+      }
+    };
+
+    configureAudioSession();
+  }, []);
+
+
+
+  // Apply volume to player and monitor for changes
   useEffect(() => {
     if (player && 'volume' in player) {
       (player as any).volume = volume;
     }
   }, [player, volume]);
+
+  // Direct volume synchronization - poll more frequently when audio is playing
+  useEffect(() => {
+    if (!isPlaying) return;
+    
+    const syncVolume = () => {
+      try {
+        if (player && 'volume' in player) {
+          const currentPlayerVolume = (player as any).volume;
+          if (currentPlayerVolume !== undefined && currentPlayerVolume !== volume) {
+            const volumeDiff = Math.abs(currentPlayerVolume - volume);
+            if (volumeDiff > 0.01) { // Only update if there's a meaningful difference
+              console.log(`Volume sync: ${volume} → ${currentPlayerVolume}`);
+              setVolumeState(currentPlayerVolume);
+            }
+          }
+        }
+      } catch (error) {
+        // Ignore sync errors
+      }
+    };
+
+    // Check immediately and then every 100ms
+    syncVolume();
+    const interval = setInterval(syncVolume, 100);
+    return () => clearInterval(interval);
+  }, [player, isPlaying, volume]);
 
   const togglePlayback = useCallback(() => {
     if (isPlaying) {

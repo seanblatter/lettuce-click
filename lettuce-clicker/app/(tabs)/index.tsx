@@ -14,6 +14,8 @@ import {
   Image,
   useWindowDimensions,
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Reanimated, { useSharedValue, useAnimatedStyle, runOnJS } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { OrbitingUpgradeEmojis } from '@/components/OrbitingUpgradeEmojis';
@@ -122,6 +124,15 @@ const formatDuration = (milliseconds: number) => {
 };
 
 export default function HomeScreen() {
+  // Dynamic font size based on number length for harvest display
+  const getDynamicFontSize = (value: number, baseFontSize: number = 20) => {
+    const stringLength = value.toLocaleString().length;
+    if (stringLength > 15) return baseFontSize * 0.7;
+    if (stringLength > 12) return baseFontSize * 0.8;
+    if (stringLength > 9) return baseFontSize * 0.9;
+    return baseFontSize;
+  };
+
   const {
     harvest,
     lifetimeHarvest,
@@ -172,7 +183,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const dimensions = useWindowDimensions();
   const flipAnimation = useRef(new Animated.Value(0)).current;
-  const { isPlaying: isAmbientPlaying } = useAmbientAudio();
+  const { isPlaying: isAmbientPlaying, volume, setVolume } = useAmbientAudio();
   const audioPulsePrimary = useRef(new Animated.Value(0)).current;
   const audioPulseSecondary = useRef(new Animated.Value(0)).current;
   const quickActionWiggles = useRef({
@@ -180,6 +191,63 @@ export default function HomeScreen() {
     bonus: new Animated.Value(0),
     themes: new Animated.Value(0),
   }).current;
+  
+  // DJ wheel rotation state for audio interaction
+  const djRotation = useSharedValue(0);
+  const djStartRotation = useSharedValue(0);
+  const djVelocity = useSharedValue(0);
+  const volumeSharedValue = useSharedValue(volume);
+
+  // Update shared value when volume changes
+  useEffect(() => {
+    volumeSharedValue.value = volume;
+  }, [volume, volumeSharedValue]);
+  
+  // DJ wheel gesture for controlling volume when audio is playing
+  const djGesture = Gesture.Pan()
+    .enabled(isAmbientPlaying)
+    .onStart(() => {
+      djStartRotation.value = djRotation.value;
+    })
+    .onUpdate((event) => {
+      // Horizontal pan controls volume (right = increase, left = decrease)
+      const volumeSensitivity = 0.005; // Volume change per pixel (increased for easier control)
+      const deltaVolume = event.translationX * volumeSensitivity;
+      const newVolume = Math.max(0, Math.min(1, volume + deltaVolume));
+      
+      // Only update if volume actually changed significantly
+      if (Math.abs(newVolume - volume) > 0.01) {
+        runOnJS(setVolume)(newVolume);
+        volumeSharedValue.value = newVolume;
+      }
+      
+      // Visual rotation for feedback (matches volume change direction)
+      const rotationSensitivity = 2; // Degrees per pixel 
+      const deltaRotation = event.translationX * rotationSensitivity;
+      djRotation.value = djStartRotation.value + deltaRotation;
+    })
+    .onEnd((event) => {
+      // Add subtle momentum to rotation for visual feedback
+      const momentumFactor = 0.05;
+      const finalVelocity = event.velocityX * momentumFactor;
+      
+      if (Math.abs(finalVelocity) > 0.1) {
+        djVelocity.value = finalVelocity;
+      }
+    });
+
+  // Animated style for DJ wheel with volume-based scaling and rotation
+  const djWheelStyle = useAnimatedStyle(() => {
+    const isRotating = Math.abs(djVelocity.value) > 0.1;
+    const volumeScale = 0.9 + (volumeSharedValue.value * 0.2); // Scale from 0.9 to 1.1 based on volume
+    return {
+      transform: [
+        { rotate: `${djRotation.value}deg` },
+        { scale: isRotating ? volumeScale * 1.05 : volumeScale }
+      ],
+    };
+  });
+  
   const isLandscape = useMemo(() => dimensions.width > dimensions.height, [dimensions]);
   const headerPaddingTop = useMemo(() => Math.max(insets.top - 6, 0) + (isLandscape ? 4 : 8), [insets.top, isLandscape]);
   const contentPaddingBottom = useMemo(() => insets.bottom + 32, [insets.bottom]);
@@ -734,7 +802,11 @@ export default function HomeScreen() {
       <View style={[styles.container, { backgroundColor: gardenSurfaceColor }]}>
         <View style={[
           styles.headerWrapper, 
-          { paddingTop: headerPaddingTop },
+          { 
+            paddingTop: headerPaddingTop,
+            paddingLeft: isLandscape ? Math.max(insets.left + 16, 24) : 24, // Add safe area padding in landscape
+            paddingRight: isLandscape ? Math.max(insets.right + 16, 24) : 24, // Add safe area padding in landscape
+          },
           isLandscape && styles.headerWrapperLandscape
         ]}>
           <View style={styles.headerShelf}>
@@ -763,8 +835,11 @@ export default function HomeScreen() {
             { 
               paddingTop: isLandscape ? 16 : 32, 
               paddingBottom: contentPaddingBottom,
+              paddingLeft: isLandscape ? Math.max(insets.left + 16, 24) : 24, // Add safe area padding in landscape
+              paddingRight: isLandscape ? Math.max(insets.right + 16, 24) : 24, // Add safe area padding in landscape
               flexDirection: isLandscape ? 'row' : 'column',
-              alignItems: isLandscape ? 'center' : 'stretch',
+              alignItems: isLandscape ? 'flex-start' : 'stretch', // Changed from center to flex-start for better alignment
+              justifyContent: isLandscape ? 'space-between' : 'space-between', // Ensure even distribution
             }
           ]}
         >
@@ -815,34 +890,61 @@ export default function HomeScreen() {
             {!isAmbientPlaying ? (
               <OrbitingUpgradeEmojis emojis={orbitingUpgradeEmojis} theme={homeEmojiTheme} />
             ) : null}
-            <Pressable
-              accessibilityLabel="Harvest lettuce"
-              onPress={addHarvest}
-              style={({ pressed }) => [
-                styles.lettuceButton,
-                pressed && styles.lettucePressed,
-              ]}
-            >
-              <View style={[styles.lettuceButtonBase, { backgroundColor: accentColor }]} />
-              <View
-                style={[
-                  styles.lettuceButtonFace,
-                  {
-                    backgroundColor: accentSurface,
-                    borderColor: accentColor,
-                    shadowColor: accentColor,
-                  },
+            <GestureDetector gesture={djGesture}>
+              <Pressable
+                accessibilityLabel="Harvest lettuce"
+                onPress={addHarvest}
+                style={({ pressed }) => [
+                  styles.lettuceButton,
+                  pressed && styles.lettucePressed,
                 ]}
               >
+                <View style={[styles.lettuceButtonBase, { backgroundColor: accentColor }]} />
                 <View
                   style={[
-                    styles.lettuceButtonHighlight,
-                    { backgroundColor: accentHighlight },
+                    styles.lettuceButtonFace,
+                    {
+                      backgroundColor: accentSurface,
+                      borderColor: accentColor,
+                      shadowColor: accentColor,
+                    },
                   ]}
-                />
-                <Text style={styles.lettuceEmoji}>{customClickEmoji}</Text>
+                >
+                  <View
+                    style={[
+                      styles.lettuceButtonHighlight,
+                      { backgroundColor: accentHighlight },
+                    ]}
+                  />
+                  <Reanimated.Text 
+                    style={[
+                      styles.lettuceEmoji, 
+                      isAmbientPlaying && djWheelStyle
+                    ]}
+                  >
+                    {customClickEmoji}
+                  </Reanimated.Text>
+                </View>
+              </Pressable>
+            </GestureDetector>
+            {isAmbientPlaying && (
+              <View style={styles.volumeIndicator}>
+                <View style={styles.volumeTrack}>
+                  <View 
+                    style={[
+                      styles.volumeFill, 
+                      { 
+                        width: `${volume * 100}%`,
+                        backgroundColor: accentColor,
+                      }
+                    ]} 
+                  />
+                </View>
+                <Text style={[styles.volumeLabel, { color: accentColor }]}>
+                  {Math.round(volume * 100)}%
+                </Text>
               </View>
-            </Pressable>
+            )}
           </View>
 
         <View style={[styles.statsSection, isLandscape && styles.statsSectionLandscape]}>
@@ -907,13 +1009,25 @@ export default function HomeScreen() {
           </View>
           <View style={styles.statRow}>
             <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Available harvest</Text>
-            <Text style={[styles.statValue, { color: ledgerTheme.tint }]}>
+            <Text style={[
+              styles.statValue, 
+              { 
+                color: ledgerTheme.tint,
+                fontSize: getDynamicFontSize(harvest)
+              }
+            ]}>
               {harvest.toLocaleString()}
             </Text>
           </View>
           <View style={styles.statRow}>
             <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Lifetime harvest</Text>
-            <Text style={[styles.statValue, { color: ledgerTheme.tint }]}>
+            <Text style={[
+              styles.statValue, 
+              { 
+                color: ledgerTheme.tint,
+                fontSize: getDynamicFontSize(lifetimeHarvest)
+              }
+            ]}>
               {lifetimeHarvest.toLocaleString()}
             </Text>
           </View>
@@ -1327,7 +1441,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#f2f9f2',
   },
   headerWrapper: {
-    paddingHorizontal: 24,
     paddingBottom: 20,
     zIndex: 10,
     elevation: 10,
@@ -1384,7 +1497,6 @@ const styles = StyleSheet.create({
     color: '#0f5132',
   },
   content: {
-    paddingHorizontal: 24,
     gap: 28,
   },
   contentStatic: {
@@ -1397,11 +1509,14 @@ const styles = StyleSheet.create({
     height: 240,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: 15, // Move slightly to the right in portrait mode too
   },
   lettuceWrapperLandscape: {
-    width: 180,
-    height: 180,
-    marginRight: 40,
+    width: 200,
+    height: 200,
+    marginRight: 45, // Reduced from 60 to move slightly right
+    marginLeft: 35,  // Increased from 20 to move slightly right
+    alignSelf: 'flex-start',
   },
   lettuceBackdrop: {
     position: 'absolute',
@@ -1549,7 +1664,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     borderRadius: 28,
     paddingVertical: 22,
-    paddingHorizontal: 24,
+    paddingHorizontal: 28, // Increased from 24 to make it slightly wider
     gap: 16,
     overflow: 'hidden',
     shadowOpacity: 0.22,
@@ -1557,6 +1672,7 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 6,
     backgroundColor: 'transparent',
+    minWidth: 280, // Added minimum width to accommodate larger numbers
   },
   statsCardPressed: {
     opacity: 0.94,
@@ -1564,15 +1680,20 @@ const styles = StyleSheet.create({
   },
   statsSection: {
     flex: 1,
+    marginTop: 20, // Move the harvest ledger down to give dropdown emoji more room
   },
   statsSectionLandscape: {
-    flex: 0.6,
-    marginLeft: 20,
+    flex: 0.65, // Slightly more space for the harvest ledger
+    marginLeft: 10, // Reduced from 20 to move it more inward
+    marginTop: 15, // Move down in landscape mode too
+    marginRight: 10, // Add right margin to ensure it doesn't get cut off
   },
   statsCardLandscape: {
-    paddingVertical: 16,
-    paddingHorizontal: 18,
+    paddingVertical: 18, // Slightly increased for better spacing
+    paddingHorizontal: 20, // Slightly reduced to fit better
     gap: 12,
+    minWidth: 300, // Reduced from 320 to ensure it fits within safe bounds
+    maxWidth: 320, // Add max width to prevent it from getting too wide
   },
   statsCardBackdrop: {
     ...StyleSheet.absoluteFillObject,
@@ -2211,5 +2332,30 @@ const styles = StyleSheet.create({
     color: '#f0fff4',
     fontWeight: '700',
     fontSize: 16,
+  },
+  volumeIndicator: {
+    position: 'absolute',
+    bottom: -40,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    gap: 6,
+  },
+  volumeTrack: {
+    width: 80,
+    height: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  volumeFill: {
+    height: '100%',
+    borderRadius: 3,
+    minWidth: 2,
+  },
+  volumeLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    opacity: 0.8,
   },
 });

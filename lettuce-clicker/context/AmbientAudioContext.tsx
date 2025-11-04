@@ -9,10 +9,12 @@ type AmbientAudioContextValue = {
   selectedTrackId: MusicOption['id'];
   isPlaying: boolean;
   error: Error | null;
+  volume: number;
   selectTrack: (trackId: MusicOption['id'], options?: { autoPlay?: boolean }) => void;
   togglePlayback: () => void;
   play: () => void;
   pause: () => void;
+  setVolume: (volume: number) => void;
 };
 
 const AmbientAudioContext = createContext<AmbientAudioContextValue | undefined>(undefined);
@@ -24,6 +26,7 @@ type ProviderProps = {
 export function AmbientAudioProvider({ children }: ProviderProps) {
   const [selectedTrackId, setSelectedTrackId] = useState<MusicOption['id']>(MUSIC_OPTIONS[0].id);
   const [error, setError] = useState<Error | null>(null);
+  const [volume, setVolumeState] = useState<number>(0.7); // Default volume 70%
 
   const player = useAudioPlayer(MUSIC_AUDIO_MAP[selectedTrackId]);
   const status = useAudioPlayerStatus(player);
@@ -97,6 +100,27 @@ export function AmbientAudioProvider({ children }: ProviderProps) {
     }
   }, [player]);
 
+  const setVolume = useCallback((newVolume: number) => {
+    try {
+      const clampedVolume = Math.max(0, Math.min(1, newVolume)); // Clamp between 0 and 1
+      setVolumeState(clampedVolume);
+      if (player && 'volume' in player) {
+        (player as any).volume = clampedVolume; // Set volume on the player if supported
+      }
+      setError(null);
+    } catch (caught) {
+      console.warn('Failed to set volume', caught);
+      setError(caught instanceof Error ? caught : new Error('Failed to set volume'));
+    }
+  }, [player]);
+
+  // Apply volume whenever the player changes
+  useEffect(() => {
+    if (player && 'volume' in player) {
+      (player as any).volume = volume;
+    }
+  }, [player, volume]);
+
   const togglePlayback = useCallback(() => {
     if (isPlaying) {
       pause();
@@ -110,12 +134,14 @@ export function AmbientAudioProvider({ children }: ProviderProps) {
       selectedTrackId,
       isPlaying,
       error,
+      volume,
       selectTrack,
       togglePlayback,
       play,
       pause,
+      setVolume,
     }),
-    [error, isPlaying, pause, play, selectTrack, selectedTrackId, togglePlayback]
+    [error, isPlaying, pause, play, selectTrack, selectedTrackId, togglePlayback, volume, setVolume]
   );
 
   return <AmbientAudioContext.Provider value={value}>{children}</AmbientAudioContext.Provider>;

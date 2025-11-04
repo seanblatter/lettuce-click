@@ -307,6 +307,8 @@ export function GardenSection({
   const [selectedTextStyle, setSelectedTextStyle] = useState<TextStyleId>('sprout');
   const [textScale, setTextScale] = useState(1);
   const [textSliderWidth, setTextSliderWidth] = useState(0);
+  const isDraggingSlider = useRef(false);
+  const pendingSliderUpdate = useRef<number | null>(null);
   const [shopEmoji, setShopEmoji] = useState('🏡');
   const [inventoryEmoji, setInventoryEmoji] = useState('🧰');
   const [activeEmojiPicker, setActiveEmojiPicker] = useState<'shop' | 'inventory' | null>(null);
@@ -319,6 +321,21 @@ export function GardenSection({
   useEffect(() => {
     console.log('🔍 shopPreview state changed:', shopPreview ? shopPreview.name : 'null');
   }, [shopPreview]);
+
+  // Reset text slider width on orientation change to ensure proper recalculation
+  useEffect(() => {
+    setTextSliderWidth(0);
+  }, [isLandscape]);
+
+  // Cleanup animation frame on unmount
+  useEffect(() => {
+    return () => {
+      if (pendingSliderUpdate.current !== null) {
+        cancelAnimationFrame(pendingSliderUpdate.current);
+      }
+    };
+  }, []);
+
   const [activeDrag, setActiveDrag] = useState<{ id: string; point: { x: number; y: number } } | null>(null);
   const [penButtonLayout, setPenButtonLayout] = useState<LayoutRectangle | null>(null);
   const canvasRef = useRef<View | null>(null);
@@ -905,14 +922,29 @@ export function GardenSection({
   }, [addTextPlacement, getCanvasCenter, penColor, selectedTextStyle, setShowPalette, textDraft, textScale]);
 
   const handleTextSliderChange = useCallback(
-    (locationX: number) => {
+    (locationX: number, isImmediate: boolean = false) => {
       if (textSliderWidth <= 0) {
         return;
       }
 
       const ratio = clamp(locationX / textSliderWidth, 0, 1);
       const nextScale = TEXT_SCALE_MIN + ratio * (TEXT_SCALE_MAX - TEXT_SCALE_MIN);
-      setTextScale(Number(nextScale.toFixed(2)));
+      const roundedScale = Number(nextScale.toFixed(2));
+
+      if (isImmediate || !isDraggingSlider.current) {
+        // Immediate update for taps or when not dragging
+        setTextScale(roundedScale);
+      } else {
+        // Throttled update for dragging to prevent glitches
+        if (pendingSliderUpdate.current !== null) {
+          cancelAnimationFrame(pendingSliderUpdate.current);
+        }
+        
+        pendingSliderUpdate.current = requestAnimationFrame(() => {
+          setTextScale(roundedScale);
+          pendingSliderUpdate.current = null;
+        });
+      }
     },
     [textSliderWidth]
   );
@@ -923,10 +955,30 @@ export function GardenSection({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
         onPanResponderGrant: (event) => {
-          handleTextSliderChange(event.nativeEvent.locationX);
+          isDraggingSlider.current = false; // Start with tap behavior
+          handleTextSliderChange(event.nativeEvent.locationX, true); // Immediate update for initial tap
         },
-        onPanResponderMove: (event) => {
-          handleTextSliderChange(event.nativeEvent.locationX);
+        onPanResponderMove: (event, gestureState) => {
+          // Only consider it dragging if there's actual movement
+          if (Math.abs(gestureState.dx) > 3 || Math.abs(gestureState.dy) > 3) {
+            isDraggingSlider.current = true;
+          }
+          handleTextSliderChange(event.nativeEvent.locationX, false); // Throttled updates during drag
+        },
+        onPanResponderRelease: () => {
+          isDraggingSlider.current = false;
+          // Cancel any pending updates
+          if (pendingSliderUpdate.current !== null) {
+            cancelAnimationFrame(pendingSliderUpdate.current);
+            pendingSliderUpdate.current = null;
+          }
+        },
+        onPanResponderTerminate: () => {
+          isDraggingSlider.current = false;
+          if (pendingSliderUpdate.current !== null) {
+            cancelAnimationFrame(pendingSliderUpdate.current);
+            pendingSliderUpdate.current = null;
+          }
         },
         onPanResponderTerminationRequest: () => false,
       }),
@@ -1535,23 +1587,40 @@ export function GardenSection({
       </ScrollView>
       <Modal
         visible={showPalette}
-        animationType="slide"
+        animationType={isLandscape ? "fade" : "slide"}
         transparent
+        supportedOrientations={['portrait', 'landscape']}
         onRequestClose={() => setShowPalette(false)}
       >
-        <View style={styles.paletteOverlay}>
+        <View style={[styles.paletteOverlay, isLandscape && styles.paletteOverlayLandscape]}>
           <Pressable style={styles.paletteBackdrop} onPress={() => setShowPalette(false)} />
           <View
             style={[
               styles.paletteCard,
               { maxHeight: paletteMaxHeight, paddingBottom: palettePaddingBottom },
+              isLandscape && styles.paletteCardLandscape,
+              isLandscape && { paddingLeft: insets.left, paddingRight: insets.right },
             ]}
           >
             <View style={styles.paletteHandle} />
-            <Text style={styles.paletteTitle}>Garden Studio</Text>
-            <Text style={styles.paletteSubtitle}>
-              Tune your pen, lettering, and photo charms without leaving the garden.
-            </Text>
+            <View style={styles.sheetHeaderRow}>
+              <View>
+                <Text style={styles.paletteTitle}>Garden Studio</Text>
+                <Text style={styles.paletteSubtitle}>
+                  Tune your pen, lettering, and photo charms without leaving the garden.
+                </Text>
+              </View>
+              {isLandscape && (
+                <Pressable
+                  style={styles.sheetCloseXButton}
+                  onPress={() => setShowPalette(false)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close garden studio"
+                >
+                  <Text style={styles.sheetCloseXText}>❌</Text>
+                </Pressable>
+              )}
+            </View>
             <ScrollView
               style={styles.paletteScroll}
               contentContainerStyle={styles.paletteScrollContent}
@@ -1723,19 +1792,20 @@ export function GardenSection({
                     </View>
                   ) : null}
                   <Text style={styles.paletteLabel}>Text size</Text>
-                  <View style={styles.textSizeControls}>
+                  <View style={[styles.textSizeControls, isLandscape && styles.textSizeControlsLandscape]}>
                     <Text style={styles.textSizeGlyphSmall}>A</Text>
                     <View
-                      style={styles.textSizeSlider}
+                      key={`text-slider-${isLandscape ? 'landscape' : 'portrait'}`}
+                      style={[styles.textSizeSlider, isLandscape && styles.textSizeSliderLandscape]}
                       onLayout={({ nativeEvent }) => setTextSliderWidth(Math.max(nativeEvent.layout.width, 0))}
                       {...textScalePanResponder.panHandlers}
                       accessibilityRole="adjustable"
                       accessibilityLabel="Adjust text size"
                       accessibilityValue={{ text: `${Math.round(clampedTextScale * 100)} percent` }}
                     >
-                      <View style={styles.textSizeSliderTrack} />
-                      <View style={[styles.textSizeSliderFill, { width: sliderFillWidth }]} />
-                      <View style={[styles.textSizeSliderThumb, { left: sliderThumbLeft }]} />
+                      <View style={[styles.textSizeSliderTrack, isLandscape && styles.textSizeSliderTrackLandscape]} />
+                      <View style={[styles.textSizeSliderFill, { width: sliderFillWidth }, isLandscape && styles.textSizeSliderFillLandscape]} />
+                      <View style={[styles.textSizeSliderThumb, { left: sliderThumbLeft }, isLandscape && styles.textSizeSliderThumbLandscape]} />
                     </View>
                     <Text style={styles.textSizeGlyphLarge}>A</Text>
                     <View style={styles.textSizeValuePill}>
@@ -1790,27 +1860,46 @@ export function GardenSection({
       
       <Modal
         visible={activeSheet === 'shop'}
-        animationType="slide"
+        animationType={isLandscape ? "fade" : "slide"}
         transparent
+        supportedOrientations={['portrait', 'landscape']}
         onRequestClose={handleCloseSheet}
       >
-        <View style={styles.sheetOverlay}>
+        <View style={[styles.sheetOverlay, isLandscape && styles.sheetOverlayLandscape]}>
           <Pressable style={styles.sheetBackdrop} onPress={handleCloseSheet} />
-          <View style={styles.sheetCard}>
-            <View style={styles.sheetHandle} />
-            <View style={styles.sheetHeaderRow}>
-              <Text style={styles.sheetTitle}>Garden shop</Text>
-              <Pressable
-                style={styles.sheetEmojiButton}
-                onPress={() =>
-                  setActiveEmojiPicker((prev) => (prev === 'shop' ? null : 'shop'))
-                }
-                accessibilityRole="button"
-                accessibilityLabel="Change Garden shop icon"
-              >
-                <Text style={styles.sheetHeaderEmoji}>{shopEmoji}</Text>
-              </Pressable>
-            </View>
+          <View style={[styles.sheetCard, isLandscape && styles.sheetCardLandscape]}>
+            <ScrollView 
+              style={{ flex: 1 }}
+              contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 28, gap: 16 }}
+              showsVerticalScrollIndicator={true}
+              bounces={true}
+              nestedScrollEnabled={true}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={styles.sheetHandle} />
+              <View style={styles.sheetHeaderRow}>
+                <Text style={styles.sheetTitle}>Garden shop</Text>
+                <View style={styles.sheetHeaderButtons}>
+                  <Pressable
+                    style={styles.sheetEmojiButton}
+                    onPress={() =>
+                      setActiveEmojiPicker((prev) => (prev === 'shop' ? null : 'shop'))
+                    }
+                    accessibilityRole="button"
+                    accessibilityLabel="Change Garden shop icon"
+                  >
+                    <Text style={styles.sheetHeaderEmoji}>{shopEmoji}</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.sheetCloseXButton}
+                    onPress={handleCloseSheet}
+                    accessibilityRole="button"
+                    accessibilityLabel="Close garden shop"
+                  >
+                    <Text style={styles.sheetCloseXText}>❌</Text>
+                  </Pressable>
+                </View>
+              </View>
             {activeEmojiPicker === 'shop' ? (
               <View style={styles.sheetEmojiChooser}>
                 {SHOP_EMOJI_CHOICES.map((emoji) => {
@@ -1995,53 +2084,76 @@ export function GardenSection({
               </View>
             )}
             
-            <FlatList
-              style={styles.sheetList}
-              data={filteredShopInventory}
-              renderItem={renderShopItem}
-              keyExtractor={keyExtractor}
-              numColumns={responsiveGridColumns}
-              columnWrapperStyle={styles.sheetColumn}
-              showsVerticalScrollIndicator
-              contentContainerStyle={styles.sheetListContent}
-              ListEmptyComponent={
+            <View style={[styles.sheetList, isLandscape && styles.sheetListLandscape, styles.sheetListContent, isLandscape && styles.sheetListContentLandscape]}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {filteredShopInventory.map((item, index) => (
+                  <View key={item.id} style={{ width: `${100 / responsiveGridColumns - 2}%` }}>
+                    {renderShopItem({ item, index, separators: { highlight: () => {}, unhighlight: () => {}, updateProps: () => {} } })}
+                  </View>
+                ))}
+              </View>
+              {/* Test content to force scrolling */}
+              <View style={{ height: 200, backgroundColor: '#e2e8f0', margin: 10, borderRadius: 8, justifyContent: 'center', alignItems: 'center' }}>
+                <Text>📜 SCROLL TEST - If you can see this, scrolling works! 📜</Text>
+              </View>
+            </View>
+              {filteredShopInventory.length === 0 && (
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyStateTitle}>No emoji match your search</Text>
                   <Text style={styles.emptyStateCopy}>
                     Clear the search or try a different emoji keyword to keep shopping.
                   </Text>
                 </View>
-              }
-            />
-            <Pressable style={styles.sheetCloseButton} onPress={handleCloseSheet} accessibilityLabel="Close Garden shop">
-              <Text style={styles.sheetCloseButtonText}>Done</Text>
-            </Pressable>
+              )}
+              <Pressable style={styles.sheetCloseButton} onPress={handleCloseSheet} accessibilityLabel="Close Garden shop">
+                <Text style={styles.sheetCloseButtonText}>Done</Text>
+              </Pressable>
+            </ScrollView>
           </View>
         </View>
       </Modal>
       <Modal
         visible={activeSheet === 'inventory'}
-        animationType="slide"
+        animationType={isLandscape ? "fade" : "slide"}
         transparent
+        supportedOrientations={['portrait', 'landscape']}
         onRequestClose={handleCloseSheet}
       >
-        <View style={styles.sheetOverlay}>
+        <View style={[styles.sheetOverlay, isLandscape && styles.sheetOverlayLandscape]}>
           <Pressable style={styles.sheetBackdrop} onPress={handleCloseSheet} />
-          <View style={styles.sheetCard}>
-            <View style={styles.sheetHandle} />
-            <View style={styles.sheetHeaderRow}>
-              <Text style={styles.sheetTitle}>Inventory</Text>
-              <Pressable
-                style={styles.sheetEmojiButton}
-                onPress={() =>
-                  setActiveEmojiPicker((prev) => (prev === 'inventory' ? null : 'inventory'))
-                }
-                accessibilityRole="button"
-                accessibilityLabel="Change inventory icon"
-              >
-                <Text style={styles.sheetHeaderEmoji}>{inventoryEmoji}</Text>
-              </Pressable>
-            </View>
+          <View style={[styles.sheetCard, isLandscape && styles.sheetCardLandscape]}>
+            <ScrollView 
+              style={{ flex: 1 }}
+              contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 28, gap: 16 }}
+              showsVerticalScrollIndicator={true}
+              bounces={true}
+              nestedScrollEnabled={true}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={styles.sheetHandle} />
+              <View style={styles.sheetHeaderRow}>
+                <Text style={styles.sheetTitle}>Inventory</Text>
+                <View style={styles.sheetHeaderButtons}>
+                  <Pressable
+                    style={styles.sheetEmojiButton}
+                    onPress={() =>
+                      setActiveEmojiPicker((prev) => (prev === 'inventory' ? null : 'inventory'))
+                    }
+                    accessibilityRole="button"
+                    accessibilityLabel="Change inventory icon"
+                  >
+                    <Text style={styles.sheetHeaderEmoji}>{inventoryEmoji}</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.sheetCloseXButton}
+                    onPress={handleCloseSheet}
+                    accessibilityRole="button"
+                    accessibilityLabel="Close inventory"
+                  >
+                    <Text style={styles.sheetCloseXText}>❌</Text>
+                  </Pressable>
+                </View>
+              </View>
             {activeEmojiPicker === 'inventory' ? (
               <View style={styles.sheetEmojiChooser}>
                 {INVENTORY_EMOJI_CHOICES.map((emoji) => {
@@ -2151,28 +2263,27 @@ export function GardenSection({
                 })}
               </ScrollView>
             </View>
-            <FlatList
-              style={styles.sheetList}
-              data={filteredOwnedInventory}
-              renderItem={renderInventoryItem}
-              keyExtractor={keyExtractor}
-              numColumns={responsiveGridColumns}
-              columnWrapperStyle={styles.sheetColumn}
-              showsVerticalScrollIndicator
-              contentContainerStyle={styles.sheetListContent}
-              scrollEnabled={!draggingInventoryId}
-              ListEmptyComponent={
+            <View style={[styles.sheetList, isLandscape && styles.sheetListLandscape, styles.sheetListContent, isLandscape && styles.sheetListContentLandscape]}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {filteredOwnedInventory.map((item, index) => (
+                  <View key={item.id} style={{ width: `${100 / responsiveGridColumns - 2}%` }}>
+                    {renderInventoryItem({ item, index, separators: { highlight: () => {}, unhighlight: () => {}, updateProps: () => {} } })}
+                  </View>
+                ))}
+              </View>
+              {filteredOwnedInventory.length === 0 && (
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyStateTitle}>Inventory is empty</Text>
                   <Text style={styles.emptyStateCopy}>
                     Purchase decorations in the shop, then come back to place them.
                   </Text>
                 </View>
-              }
-            />
-            <Pressable style={styles.sheetCloseButton} onPress={handleCloseSheet} accessibilityLabel="Close inventory">
-              <Text style={styles.sheetCloseButtonText}>Done</Text>
-            </Pressable>
+              )}
+            </View>
+              <Pressable style={styles.sheetCloseButton} onPress={handleCloseSheet} accessibilityLabel="Close inventory">
+                <Text style={styles.sheetCloseButtonText}>Done</Text>
+              </Pressable>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -3104,15 +3215,12 @@ const styles = StyleSheet.create({
   },
   sheetBackdrop: {
     ...StyleSheet.absoluteFillObject,
+    zIndex: -1, // Put backdrop behind content
   },
   sheetCard: {
     backgroundColor: '#f2f9f2',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 28,
-    gap: 16,
     maxHeight: '88%',
     minHeight: '70%',
     width: '100%',
@@ -3174,6 +3282,38 @@ const styles = StyleSheet.create({
   sheetEmojiOptionTextActive: {
     color: '#f0fff4',
   },
+  sheetEmojiCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#fee2e2',
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 4,
+  },
+  sheetEmojiCloseText: {
+    fontSize: 16,
+  },
+  sheetHeaderButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sheetCloseXButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#fee2e2',
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetCloseXText: {
+    fontSize: 16,
+  },
   sheetSearchBlock: {
     gap: 8,
   },
@@ -3215,12 +3355,19 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sheetList: {
-    maxHeight: GRID_VISIBLE_ROW_COUNT * GRID_ROW_HEIGHT,
-    flexGrow: 0,
+    flex: 1, // Allow to grow
+  },
+  sheetListLandscape: {
+    flex: 1, // Take all available space
   },
   sheetListContent: {
     paddingBottom: 24,
     paddingHorizontal: 4,
+  },
+  sheetListContentLandscape: {
+    paddingBottom: 100, // Reasonable padding
+    paddingHorizontal: 8,
+    flexGrow: 1, // Allow content to grow
   },
   categoryFilterBlock: {
     marginTop: 4,
@@ -4115,5 +4262,45 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 1 },
     elevation: 2,
+  },
+  // Landscape-specific styles for modals
+  sheetOverlayLandscape: {
+    // Layout properties moved to contentContainerStyle
+  },
+  sheetCardLandscape: {
+    height: '100%', // Full screen height
+    maxWidth: '100%', // Full screen width
+    width: '100%',
+    borderRadius: 0, // No rounded corners for full screen
+    maxHeight: '100%',
+    minHeight: '100%',
+  },
+  paletteCardLandscape: {
+    maxWidth: '100%',
+    width: '100%',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+  },
+  paletteOverlayLandscape: {
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  textSizeControlsLandscape: {
+    gap: 12, // Slightly more spacing in landscape for better touch targets
+  },
+  textSizeSliderLandscape: {
+    height: 40, // Larger touch target in landscape
+    minHeight: 40,
+  },
+  textSizeSliderTrackLandscape: {
+    top: 18, // Adjusted for 40px height (center: 20px - 2px track height/2)
+  },
+  textSizeSliderFillLandscape: {
+    top: 18, // Matched with track position
+  },
+  textSizeSliderThumbLandscape: {
+    top: 8, // Adjusted for 40px height (center: 20px - 12px thumb height/2)
   },
 });

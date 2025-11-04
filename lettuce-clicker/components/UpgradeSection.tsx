@@ -284,13 +284,14 @@ export function UpgradeSection({
 
       <Modal
         visible={activeSheet !== null}
-        animationType="slide"
+        animationType={isLandscape ? "fade" : "slide"}
         transparent
+        supportedOrientations={['portrait', 'landscape']}
         onRequestClose={handleCloseSheet}
       >
-        <View style={styles.sheetOverlay}>
+        <View style={[styles.sheetOverlay, isLandscape && styles.sheetOverlayLandscape]}>
           <Pressable style={styles.sheetBackdrop} onPress={handleCloseSheet} />
-          <View style={[styles.sheetCard, { paddingBottom: insets.bottom + 16 }]}>
+          <View style={[styles.sheetCard, isLandscape && styles.sheetCardLandscape, { paddingBottom: insets.bottom + 16 }]}>
             <View style={styles.sheetHandle} />
             <ScrollView
               style={styles.sheetScroll}
@@ -300,8 +301,18 @@ export function UpgradeSection({
               {activeSheet === 'automation' ? (
                 <View style={styles.workshopPanel}>
                   <View style={styles.panelHeaderRow}>
-                    <Text style={styles.panelHeaderEmoji}>🤖</Text>
-                    <Text style={styles.panelTitle}>Automation Workshop</Text>
+                    <View style={styles.panelHeaderLeft}>
+                      <Text style={styles.panelHeaderEmoji}>🤖</Text>
+                      <Text style={styles.panelTitle}>Automation Workshop</Text>
+                    </View>
+                    <Pressable
+                      style={styles.modalCloseButton}
+                      onPress={handleCloseSheet}
+                      accessibilityRole="button"
+                      accessibilityLabel="Close automation workshop"
+                    >
+                      <Text style={styles.modalCloseText}>❌</Text>
+                    </Pressable>
                   </View>
                   <View style={styles.workshopList}>
                     {upgrades.map((upgrade) => {
@@ -337,13 +348,23 @@ export function UpgradeSection({
               ) : activeSheet === 'themes' ? (
                 <View style={styles.workshopPanel}>
                   <View style={styles.panelHeaderRow}>
-                    <Text style={styles.panelHeaderEmoji}>🎨</Text>
-                    <Text style={styles.panelTitle}>Themes Workshop</Text>
-                    {lockedThemes.length ? (
-                      <View style={styles.panelHeaderBadge}>
-                        <Text style={styles.panelHeaderBadgeText}>{lockedThemes.length} to unlock</Text>
-                      </View>
-                    ) : null}
+                    <View style={styles.panelHeaderLeft}>
+                      <Text style={styles.panelHeaderEmoji}>🎨</Text>
+                      <Text style={styles.panelTitle}>Themes Workshop</Text>
+                      {lockedThemes.length ? (
+                        <View style={styles.panelHeaderBadge}>
+                          <Text style={styles.panelHeaderBadgeText}>{lockedThemes.length} to unlock</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <Pressable
+                      style={styles.modalCloseButton}
+                      onPress={handleCloseSheet}
+                      accessibilityRole="button"
+                      accessibilityLabel="Close themes workshop"
+                    >
+                      <Text style={styles.modalCloseText}>❌</Text>
+                    </Pressable>
                   </View>
                   {activeTheme ? (
                     <View style={styles.themeSummaryCard}>
@@ -708,9 +729,9 @@ const createResponsiveStyles = (isLandscape: boolean) => StyleSheet.create({
     gap: 18,
   },
   panelHeaderRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
+    justifyContent: 'space-between',
     marginBottom: 8,
   },
   panelTitle: {
@@ -990,5 +1011,35 @@ const createResponsiveStyles = (isLandscape: boolean) => StyleSheet.create({
   },
   themeApplyTextDisabled: {
     color: '#1d4ed8',
+  },
+  sheetOverlayLandscape: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sheetCardLandscape: {
+    height: '100%',
+    maxHeight: '100%',
+    maxWidth: '100%',
+    width: '100%',
+    borderRadius: 0,
+  },
+  panelHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#fee2e2',
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCloseText: {
+    fontSize: 16,
   },
 });

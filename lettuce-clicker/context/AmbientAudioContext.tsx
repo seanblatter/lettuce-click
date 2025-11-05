@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
+import { useHardwareVolumeSync } from './VolumeSync';
 
 import { MUSIC_AUDIO_MAP, MUSIC_OPTIONS, type MusicOption } from '@/constants/music';
 
@@ -122,12 +123,13 @@ export function AmbientAudioProvider({ children }: ProviderProps) {
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: false,
           staysActiveInBackground: false,
-          interruptionModeIOS: InterruptionModeIOS.MixWithOthers,
+          interruptionModeIOS: InterruptionModeIOS.DuckOthers, // Allow mixing but duck others
           playsInSilentModeIOS: true,
           shouldDuckAndroid: true,
-          interruptionModeAndroid: InterruptionModeAndroid.DuckOthers,
+          interruptionModeAndroid: InterruptionModeAndroid.DuckOthers, // Allow mixing but duck others
           playThroughEarpieceAndroid: false,
         });
+        console.log('🎵 Audio session configured for hardware volume control');
       } catch (error) {
         console.warn('Failed to configure audio session for hardware volume buttons:', error);
       }
@@ -145,30 +147,55 @@ export function AmbientAudioProvider({ children }: ProviderProps) {
     }
   }, [player, volume]);
 
-  // Direct volume synchronization - poll more frequently when audio is playing
+  // SYSTEM VOLUME MONITORING - Monitor actual device system volume
   useEffect(() => {
     if (!isPlaying) return;
     
-    const syncVolume = () => {
+    let lastDetectedVolume = volume;
+    let monitorCount = 0;
+    
+    const monitorSystemVolume = async () => {
       try {
-        if (player && 'volume' in player) {
-          const currentPlayerVolume = (player as any).volume;
-          if (currentPlayerVolume !== undefined && currentPlayerVolume !== volume) {
-            const volumeDiff = Math.abs(currentPlayerVolume - volume);
-            if (volumeDiff > 0.01) { // Only update if there's a meaningful difference
-              console.log(`Volume sync: ${volume} → ${currentPlayerVolume}`);
-              setVolumeState(currentPlayerVolume);
+        monitorCount++;
+        
+        // Check for volume changes by monitoring the player directly
+        let systemVolume = null;
+        
+        // Method 1: Direct player volume (this changes with hardware buttons)
+        if ('volume' in player) {
+          systemVolume = (player as any).volume;
+        }
+        
+        if (typeof systemVolume === 'number' && systemVolume !== lastDetectedVolume) {
+          const diff = Math.abs(systemVolume - lastDetectedVolume);
+          
+          if (diff > 0.01) { // Only update for meaningful changes
+            console.log(`🔊 HARDWARE VOLUME BUTTON: ${lastDetectedVolume.toFixed(3)} → ${systemVolume.toFixed(3)}`);
+            
+            // Update our app's volume state to match system volume
+            setVolumeState(systemVolume);
+            
+            // Also update the player volume to match
+            if (player && 'volume' in player) {
+              (player as any).volume = systemVolume;
             }
+            
+            lastDetectedVolume = systemVolume;
           }
         }
+        
+
+        
       } catch (error) {
-        // Ignore sync errors
+        if (monitorCount % 100 === 0) {
+          console.log('System volume monitor error:', error);
+        }
       }
     };
-
-    // Check immediately and then every 100ms
-    syncVolume();
-    const interval = setInterval(syncVolume, 100);
+    
+    // Check every 100ms when playing
+    const interval = setInterval(monitorSystemVolume, 100);
+    
     return () => clearInterval(interval);
   }, [player, isPlaying, volume]);
 

@@ -17,6 +17,7 @@ import {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { useSharedValue, useAnimatedStyle, useAnimatedProps, runOnJS } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 
 import { OrbitingUpgradeEmojis } from '@/components/OrbitingUpgradeEmojis';
 import { MusicContent } from '@/app/music';
@@ -192,16 +193,19 @@ export default function HomeScreen() {
     themes: new Animated.Value(0),
   }).current;
   
+  // Hardware volume button synchronization
+  const [displayVolume, setDisplayVolume] = useState(volume);
+
   // DJ wheel rotation state for audio interaction
   const djRotation = useSharedValue(0);
   const djStartRotation = useSharedValue(0);
   const djVelocity = useSharedValue(0);
-  const volumeSharedValue = useSharedValue(volume);
+  const volumeSharedValue = useSharedValue(displayVolume);
 
-  // Update volume shared value when volume changes
+  // Update volume shared value when display volume changes
   useEffect(() => {
-    volumeSharedValue.value = volume;
-  }, [volume, volumeSharedValue]);
+    volumeSharedValue.value = displayVolume;
+  }, [displayVolume, volumeSharedValue]);
 
 
 
@@ -229,6 +233,7 @@ export default function HomeScreen() {
       // Only update if volume actually changed significantly
       if (Math.abs(newVolume - volume) > 0.01) {
         runOnJS(setVolume)(newVolume);
+        runOnJS(setDisplayVolume)(newVolume); // Also update display volume
         volumeSharedValue.value = newVolume;
       }
       
@@ -301,34 +306,18 @@ export default function HomeScreen() {
     };
   });
 
-  // Force volume display updates - check more frequently
-  const [volumeDisplayKey, setVolumeDisplayKey] = useState(0);
-  const lastVolumeRef = useRef(volume);
-  
+  // Sync displayVolume with actual volume changes (including hardware volume changes from AmbientAudioContext)
   useEffect(() => {
-    // Force re-render whenever volume changes
-    if (volume !== lastVolumeRef.current) {
-      lastVolumeRef.current = volume;
-      setVolumeDisplayKey(prev => prev + 1);
+    // Update display volume when the actual volume changes (from hardware buttons or DJ wheel)
+    if (Math.abs(volume - displayVolume) > 0.01) {
+      setDisplayVolume(volume);
     }
-  }, [volume]);
-
-  // Additional polling to catch hardware volume changes that might be missed
-  useEffect(() => {
-    if (!isAmbientPlaying) return;
-    
-    const pollVolume = () => {
-      // Just increment the display key to force refresh
-      setVolumeDisplayKey(prev => prev + 1);
-    };
-    
-    const interval = setInterval(pollVolume, 500); // Update display every 500ms when playing
-    return () => clearInterval(interval);
-  }, [isAmbientPlaying]);
+  }, [volume, displayVolume]);
 
   // Volume text that updates with device volume buttons
   const VolumeText = ({ style, color }: { style: any; color: string }) => {
-    const volumePercentage = Math.round(volume * 100);
+    const volumePercentage = Math.round(displayVolume * 100);
+    
     return (
       <Text style={[style, { color }]}>
         {volumePercentage}%
@@ -596,11 +585,25 @@ export default function HomeScreen() {
 
   const handleOpenMusic = useCallback(() => {
     setMenuOpen(false);
-    setShowMusicQuickAction(true);
-  }, []);
+    const isLandscape = dimensions.width > dimensions.height;
+    
+    if (isLandscape) {
+      // Navigate to full-screen music page in landscape mode for better layout
+      router.push('/music');
+    } else {
+      // Use modal in portrait mode
+      setShowMusicQuickAction(true);
+    }
+  }, [dimensions]);
 
   const handleCloseMusicQuickAction = useCallback(() => {
     setShowMusicQuickAction(false);
+  }, []);
+
+  const handleOpenDreamCapsule = useCallback(() => {
+    setMenuOpen(false);
+    // Navigate to music page and automatically open the Dream Capsule modal
+    router.push('/music?openDreamCapsule=true');
   }, []);
 
   const handleSelectTheme = useCallback(
@@ -910,20 +913,35 @@ export default function HomeScreen() {
         ]}>
           <View style={styles.headerShelf}>
             <Text style={[styles.headerText, isLandscape && styles.headerTextLandscape]}>Lettuce World</Text>
-            <Pressable
-              accessibilityLabel={menuOpen ? 'Close garden menu' : 'Open garden menu'}
-              accessibilityHint={menuOpen ? undefined : 'Opens actions and emoji theme options'}
-              style={({ pressed }) => [
-                styles.menuButton,
-                menuOpen && styles.menuButtonActive,
-                pressed && styles.menuButtonPressed,
-              ]}
-              onPress={() => setMenuOpen((prev) => !prev)}
-              hitSlop={8}>
-              <Text style={[styles.menuIcon, menuOpen && styles.menuIconActive]}>
-                {menuOpen ? '✕' : customClickEmoji}
-              </Text>
-            </Pressable>
+            <View style={styles.headerActions}>
+              {isLandscape && (isAmbientPlaying || showMusicContainer) && (
+                <Pressable
+                  accessibilityLabel="Open Dream Capsule"
+                  accessibilityHint="Opens the Dream Capsule timer and alarm controls"
+                  style={({ pressed }) => [
+                    styles.alarmButton,
+                    pressed && styles.alarmButtonPressed,
+                  ]}
+                  onPress={handleOpenDreamCapsule}
+                  hitSlop={8}>
+                  <Text style={styles.alarmIcon}>⏰</Text>
+                </Pressable>
+              )}
+              <Pressable
+                accessibilityLabel={menuOpen ? 'Close garden menu' : 'Open garden menu'}
+                accessibilityHint={menuOpen ? undefined : 'Opens actions and emoji theme options'}
+                style={({ pressed }) => [
+                  styles.menuButton,
+                  menuOpen && styles.menuButtonActive,
+                  pressed && styles.menuButtonPressed,
+                ]}
+                onPress={() => setMenuOpen((prev) => !prev)}
+                hitSlop={8}>
+                <Text style={[styles.menuIcon, menuOpen && styles.menuIconActive]}>
+                  {menuOpen ? '✕' : customClickEmoji}
+                </Text>
+              </Pressable>
+            </View>
           </View>
         </View>
 
@@ -1028,7 +1046,7 @@ export default function HomeScreen() {
             </GestureDetector>
             {isAmbientPlaying && (
               <Reanimated.View 
-                key={`volume-indicator-${volumeDisplayKey}`}
+                key={`volume-indicator-${displayVolume.toFixed(3)}`}
                 style={[
                   styles.volumeIndicator,
                   isLandscape && styles.volumeIndicatorLandscape
@@ -1049,7 +1067,7 @@ export default function HomeScreen() {
                   />
                 </View>
                 <VolumeText 
-                  key={`volume-text-${volumeDisplayKey}`}
+                  key={`volume-text-${displayVolume.toFixed(3)}`}
                   style={[
                     styles.volumeLabel, 
                     isLandscape && styles.volumeLabelLandscape
@@ -1200,31 +1218,13 @@ export default function HomeScreen() {
                   />
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Text style={[styles.statsTitle, { color: ledgerTheme.tint }]}>🎵 Dream Capsule</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Pressable
-                        onPress={() => setIsExpandedView(!isExpandedView)}
-                        style={({ pressed }) => [
-                          {
-                            padding: 8,
-                            borderRadius: 12,
-                            backgroundColor: pressed ? 'rgba(255,255,255,0.1)' : 'transparent',
-                          }
-                        ]}
-                        accessibilityRole="button"
-                        accessibilityLabel={isExpandedView ? "Exit expanded view" : "Enter expanded view"}
-                      >
-                        <Text style={{ fontSize: 18, color: ledgerTheme.tint }}>
-                          {isExpandedView ? '🔽' : '🔼'}
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={[styles.statLabel, { color: ledgerTheme.muted, fontSize: 12, opacity: 0.6 }]}>Swipe right →</Text>
+                      {isAmbientPlaying && (
+                        <Text style={[styles.statLabel, { color: ledgerTheme.muted, fontSize: 10, opacity: 0.5 }]}>
+                          Use device volume buttons
                         </Text>
-                      </Pressable>
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={[styles.statLabel, { color: ledgerTheme.muted, fontSize: 12, opacity: 0.6 }]}>Swipe right →</Text>
-                        {isAmbientPlaying && (
-                          <Text style={[styles.statLabel, { color: ledgerTheme.muted, fontSize: 10, opacity: 0.5 }]}>
-                            Use device volume buttons
-                          </Text>
-                        )}
-                      </View>
+                      )}
                     </View>
                   </View>
                   <View style={styles.statRow}>
@@ -1260,49 +1260,54 @@ export default function HomeScreen() {
           </GestureDetector>
         </View>
 
-
-
         <Modal
           visible={menuOpen}
           animationType="slide"
           transparent
+          supportedOrientations={['portrait', 'landscape']}
           onRequestClose={() => setMenuOpen(false)}
         >
           <View style={styles.menuSheetOverlay}>
             <Pressable style={styles.menuSheetBackdrop} onPress={() => setMenuOpen(false)} />
-            <View style={styles.menuSheetCard}>
+            <View style={[styles.menuSheetCard, { paddingBottom: insets.bottom + 16 }]}>
               <View style={styles.menuSheetHandle} />
-              <Pressable
-                style={styles.menuProfileButton}
-                onPress={() => {
-                  setMenuOpen(false);
-                  setShowProfileQuickAction(true);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel="Open profile"
+              <ScrollView
+                style={styles.menuScrollView}
+                contentContainerStyle={styles.menuScrollContent}
+                showsVerticalScrollIndicator={false}
+                bounces={true}
               >
-                <Text style={styles.menuProfileEmoji}>👤</Text>
-              </Pressable>
-              <Pressable 
-                style={[styles.menuHero, { backgroundColor: accentSurface, shadowColor: accentColor }]}
-                onPress={() => {
-                  setMenuOpen(false);
-                  setShowProfileQuickAction(true);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel="Open profile"
-              >
-                <View style={[styles.menuHeroBadge, { backgroundColor: accentColor }]}>
-                  <Text style={styles.menuHeroEmoji}>{customClickEmoji}</Text>
-                </View>
-                <View style={styles.menuHeroTextBlock}>
-                  <Text style={styles.menuHeroTitle}>Garden menu</Text>
-                  <Text style={styles.menuHeroCopy}>
-                    Welcome back, {friendlyName}! Tend your profile, grab bonuses, and refresh your theme.
-                  </Text>
-                </View>
-              </Pressable>
-              <View style={styles.menuSheetContent}>
+                <Pressable
+                  style={styles.menuProfileButton}
+                  onPress={() => {
+                    setMenuOpen(false);
+                    setShowProfileQuickAction(true);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open profile"
+                >
+                  <Text style={styles.menuProfileEmoji}>👤</Text>
+                </Pressable>
+                <Pressable 
+                  style={[styles.menuHero, { backgroundColor: accentSurface, shadowColor: accentColor }]}
+                  onPress={() => {
+                    setMenuOpen(false);
+                    setShowProfileQuickAction(true);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open profile"
+                >
+                  <View style={[styles.menuHeroBadge, { backgroundColor: accentColor }]}>
+                    <Text style={styles.menuHeroEmoji}>{customClickEmoji}</Text>
+                  </View>
+                  <View style={styles.menuHeroTextBlock}>
+                    <Text style={styles.menuHeroTitle}>Garden menu</Text>
+                    <Text style={styles.menuHeroCopy}>
+                      Welcome back, {friendlyName}! Tend your profile, grab bonuses, and refresh your theme.
+                    </Text>
+                  </View>
+                </Pressable>
+                <View style={styles.menuSheetContent}>
                 {menuPage === 'overview' ? (
                   <>
                     <Text style={styles.menuSectionTitle}>Quick actions</Text>
@@ -1474,6 +1479,7 @@ export default function HomeScreen() {
                   </>
                 )}
               </View>
+              </ScrollView>
               <Pressable
                 style={styles.menuSheetCloseButton}
                 onPress={() => setMenuOpen(false)}
@@ -1483,7 +1489,6 @@ export default function HomeScreen() {
             </View>
           </View>
         </Modal>
-      </View>
 
       <Modal
         visible={showGrowModal}
@@ -1641,6 +1646,8 @@ export default function HomeScreen() {
       <Modal
         visible={showProfileQuickAction}
         animationType="slide"
+        transparent
+        supportedOrientations={['portrait', 'landscape']}
         onRequestClose={handleCloseProfileQuickAction}
       >
         <ProfileContent mode="modal" onRequestClose={handleCloseProfileQuickAction} />
@@ -1764,6 +1771,7 @@ export default function HomeScreen() {
       </Modal>
 
       </View>
+    </View>
     </SafeAreaView>
   );
 }
@@ -1832,6 +1840,28 @@ const styles = StyleSheet.create({
   },
   menuIconActive: {
     color: '#0f5132',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  alarmButton: {
+    paddingHorizontal: 6,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    backgroundColor: 'transparent',
+  },
+  alarmButtonPressed: {
+    backgroundColor: 'rgba(21, 101, 52, 0.14)',
+    borderColor: 'rgba(21, 101, 52, 0.22)',
+  },
+  alarmIcon: {
+    fontSize: 28,
+    color: '#166534',
+    fontWeight: '700',
   },
   content: {
     gap: 28,
@@ -2155,12 +2185,20 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 28,
     paddingHorizontal: 24,
     paddingTop: 16,
-    paddingBottom: 28,
-    gap: 20,
     shadowColor: '#0f2e20',
     shadowOpacity: 0.18,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: -2 },
+    height: '85%',
+    alignSelf: 'center',
+    width: '100%',
+  },
+  menuScrollView: {
+    flex: 1,
+  },
+  menuScrollContent: {
+    gap: 20,
+    paddingBottom: 16,
   },
   menuSheetHandle: {
     alignSelf: 'center',

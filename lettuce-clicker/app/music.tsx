@@ -15,7 +15,7 @@ import {
   Vibration,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useAudioPlayer } from 'expo-audio';
 import { ALARM_CHIME_DATA_URI } from '@/assets/audio/alarmChime';
@@ -736,7 +736,7 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
       backgroundColor: palette.modalBackground,
       borderRadius: 24,
       width: '100%',
-      maxWidth: 560,
+      maxWidth: isLandscape ? 720 : 560,
       alignSelf: 'center',
       marginHorizontal: 0,
       paddingTop: 0,
@@ -755,7 +755,7 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
       maxHeight: sleepSheetMaxHeight - 72,
     },
     sleepContent: {
-      paddingHorizontal: 20,
+      paddingHorizontal: isLandscape ? 28 : 20,
       paddingTop: 18,
       paddingBottom: 24,
       gap: 18,
@@ -802,19 +802,21 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
     },
     sleepColumns: {
       flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 18,
+      flexWrap: isLandscape ? 'nowrap' : 'wrap',
+      gap: isLandscape ? 24 : 18,
     },
     sleepColumn: {
       flex: 1,
-      minWidth: 200,
+      minWidth: isLandscape ? 250 : 200,
       gap: 14,
     },
     sleepColumnPrimary: {
-      maxWidth: 280,
+      maxWidth: isLandscape ? 320 : 280,
+      flex: isLandscape ? 1.2 : 1,
     },
     sleepColumnSecondary: {
-      flexBasis: 0,
+      flexBasis: isLandscape ? '40%' : 0,
+      flex: isLandscape ? 0.8 : 1,
     },
     sleepModeList: {
       flexDirection: 'column',
@@ -1041,6 +1043,27 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
     wheelPickerTextActive: {
       color: palette.wheelTextActive,
     },
+    // Landscape layout styles
+    landscapeContainer: {
+      flexDirection: 'row',
+      flex: 1,
+      gap: 16,
+    },
+    nowPlayingColumn: {
+      flex: 1,
+      minWidth: 300,
+    },
+    soundLibraryColumn: {
+      flex: 2,
+      minWidth: 400,
+    },
+    soundLibraryScroll: {
+      flex: 1,
+    },
+    soundLibraryContent: {
+      gap: 16,
+      paddingBottom: 20,
+    },
   });
 
 
@@ -1137,6 +1160,7 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
   const insets = useSafeAreaInsets();
   const { colorScheme: appColorScheme } = useAppTheme();
   const { gardenBackgroundColor } = useGame();
+  const searchParams = useLocalSearchParams();
   const [musicColorScheme, setMusicColorScheme] = useState<ColorScheme>(appColorScheme);
   useEffect(() => {
     setMusicColorScheme(appColorScheme);
@@ -1179,6 +1203,14 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
     pause: pauseAmbient,
   } = useAmbientAudio();
   const [sleepModalOpen, setSleepModalOpen] = useState(false);
+  
+  // Auto-open Dream Capsule modal when openDreamCapsule parameter is present
+  useEffect(() => {
+    if (searchParams.openDreamCapsule === 'true') {
+      setSleepModalOpen(true);
+    }
+  }, [searchParams.openDreamCapsule]);
+  
   const [sleepMode, setSleepMode] = useState<SleepMode>('timer');
   const [sleepTimerMinutes, setSleepTimerMinutes] = useState<number>(30);
   const [sleepTimerAction, setSleepTimerAction] = useState<TimerAction>('stop');
@@ -1550,132 +1582,368 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
           </View>
         </View>
 
-        <View style={styles.nowPlayingCard}>
-          <View style={styles.nowPlayingHeader}>
-            <Text style={styles.nowPlayingLabel}>Now playing</Text>
-            <Text style={styles.nowPlayingMeta}>{sleepSummary.headline}</Text>
-          </View>
-          <View style={styles.nowPlayingRow}>
-            <View style={styles.nowPlayingEmojiWrap}>
-              {isAmbientPlaying ? (
-                <AudioOrb emoji={nowPlayingDetails.emoji} palette={palette} styles={styles} />
-              ) : (
-                <View style={styles.nowPlayingEmojiStatic}>
-                  <Text style={styles.nowPlayingEmoji}>{nowPlayingDetails.emoji}</Text>
+        {isLandscape ? (
+          <View style={styles.landscapeContainer}>
+            {/* Left Column - Now Playing */}
+            <View style={styles.nowPlayingColumn}>
+              <View style={styles.nowPlayingCard}>
+                <View style={styles.nowPlayingHeader}>
+                  <Text style={styles.nowPlayingLabel}>Now playing</Text>
+                  <Text style={styles.nowPlayingMeta}>{sleepSummary.headline}</Text>
                 </View>
-              )}
-            </View>
-            <View style={styles.nowPlayingBody}>
-              <Text style={styles.nowPlayingTitle}>{nowPlayingDetails.title}</Text>
-              <Text style={styles.nowPlayingSubtitle}>{nowPlayingDetails.subtitle}</Text>
-            </View>
-          </View>
-          <View style={styles.sleepStatusBlock}>
-            <Text style={styles.sleepStatusLabel}>Dream Capsule</Text>
-            <Text style={styles.sleepStatusBlockHeadline}>{sleepSummary.detail}</Text>
-            {ambientError ? (
-              <Text style={styles.sleepStatusWarning}>
-                Ambient mix playback is unavailable. Try another sound or reconnect audio.
-              </Text>
-            ) : null}
-          </View>
-          <View style={styles.nowPlayingControls}>
-            <Pressable
-              onPress={handleSelectPrevious}
-              style={({ pressed }) => [
-                styles.nowPlayingControlButton,
-                pressed && styles.nowPlayingControlButtonActive,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Play previous ambience"
-              accessibilityHint="Loads the previous ambience in the list"
-              hitSlop={10}
-            >
-              {({ pressed }) => (
-                <Feather
-                  name="skip-back"
-                  size={24}
-                  color={pressed ? palette.nowPlayingControlIconActive : palette.nowPlayingControlIcon}
-                />
-              )}
-            </Pressable>
-            <Pressable
-              onPress={handleToggleAmbientPlayback}
-              style={({ pressed }) => [
-                styles.nowPlayingControlButton,
-                styles.nowPlayingControlButtonPrimary,
-                (isAmbientPlaying || pressed) && styles.nowPlayingControlButtonActive,
-                (isAmbientPlaying || pressed) && styles.nowPlayingControlButtonPrimaryActive,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel={isAmbientPlaying ? 'Pause ambience' : 'Play ambience'}
-              accessibilityHint={
-                isAmbientPlaying
-                  ? 'Pauses the currently playing ambience'
-                  : 'Starts the selected ambience mix'
-              }
-              hitSlop={12}
-            >
-              {({ pressed }) => (
-                <View style={styles.nowPlayingPrimaryIconWrap}>
-                  <Feather
-                    name={isAmbientPlaying ? 'pause' : 'play'}
-                    size={isAmbientPlaying ? 30 : 32}
-                    style={!isAmbientPlaying ? styles.nowPlayingPlayIcon : undefined}
-                    color={
-                      isAmbientPlaying || pressed
-                        ? palette.nowPlayingControlIconActive
-                        : palette.nowPlayingControlIcon
+                <View style={styles.nowPlayingRow}>
+                  <View style={styles.nowPlayingEmojiWrap}>
+                    {isAmbientPlaying ? (
+                      <AudioOrb emoji={nowPlayingDetails.emoji} palette={palette} styles={styles} />
+                    ) : (
+                      <View style={styles.nowPlayingEmojiStatic}>
+                        <Text style={styles.nowPlayingEmoji}>{nowPlayingDetails.emoji}</Text>
+                      </View>
+                    )}
+                  </View>
+                  <View style={styles.nowPlayingBody}>
+                    <Text style={styles.nowPlayingTitle}>{nowPlayingDetails.title}</Text>
+                    <Text style={styles.nowPlayingSubtitle}>{nowPlayingDetails.subtitle}</Text>
+                  </View>
+                </View>
+                <View style={styles.sleepStatusBlock}>
+                  <Text style={styles.sleepStatusLabel}>Dream Capsule</Text>
+                  <Text style={styles.sleepStatusBlockHeadline}>{sleepSummary.detail}</Text>
+                  {ambientError ? (
+                    <Text style={styles.sleepStatusWarning}>
+                      Ambient mix playback is unavailable. Try another sound or reconnect audio.
+                    </Text>
+                  ) : null}
+                </View>
+                <View style={styles.nowPlayingControls}>
+                  <Pressable
+                    onPress={handleSelectPrevious}
+                    style={({ pressed }) => [
+                      styles.nowPlayingControlButton,
+                      pressed && styles.nowPlayingControlButtonActive,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Play previous ambience"
+                    accessibilityHint="Loads the previous ambience in the list"
+                    hitSlop={10}
+                  >
+                    {({ pressed }) => (
+                      <Feather
+                        name="skip-back"
+                        size={24}
+                        color={pressed ? palette.nowPlayingControlIconActive : palette.nowPlayingControlIcon}
+                      />
+                    )}
+                  </Pressable>
+                  <Pressable
+                    onPress={handleToggleAmbientPlayback}
+                    style={({ pressed }) => [
+                      styles.nowPlayingControlButton,
+                      styles.nowPlayingControlButtonPrimary,
+                      (isAmbientPlaying || pressed) && styles.nowPlayingControlButtonActive,
+                      (isAmbientPlaying || pressed) && styles.nowPlayingControlButtonPrimaryActive,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel={isAmbientPlaying ? 'Pause ambience' : 'Play ambience'}
+                    accessibilityHint={
+                      isAmbientPlaying
+                        ? 'Pauses the currently playing ambience'
+                        : 'Starts the selected ambience mix'
                     }
-                  />
+                    hitSlop={12}
+                  >
+                    {({ pressed }) => (
+                      <View style={styles.nowPlayingPrimaryIconWrap}>
+                        <Feather
+                          name={isAmbientPlaying ? 'pause' : 'play'}
+                          size={isAmbientPlaying ? 30 : 32}
+                          style={!isAmbientPlaying ? styles.nowPlayingPlayIcon : undefined}
+                          color={
+                            isAmbientPlaying || pressed
+                              ? palette.nowPlayingControlIconActive
+                              : palette.nowPlayingControlIcon
+                          }
+                        />
+                      </View>
+                    )}
+                  </Pressable>
+                  <Pressable
+                    onPress={handleSelectNext}
+                    style={({ pressed }) => [
+                      styles.nowPlayingControlButton,
+                      pressed && styles.nowPlayingControlButtonActive,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Play next ambience"
+                    accessibilityHint="Loads the next ambience in the list"
+                    hitSlop={10}
+                  >
+                    {({ pressed }) => (
+                      <Feather
+                        name="skip-forward"
+                        size={24}
+                        color={pressed ? palette.nowPlayingControlIconActive : palette.nowPlayingControlIcon}
+                      />
+                    )}
+                  </Pressable>
                 </View>
-              )}
-            </Pressable>
-            <Pressable
-              onPress={handleSelectNext}
-              style={({ pressed }) => [
-                styles.nowPlayingControlButton,
-                pressed && styles.nowPlayingControlButtonActive,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Play next ambience"
-              accessibilityHint="Loads the next ambience in the list"
-              hitSlop={10}
-            >
-              {({ pressed }) => (
-                <Feather
-                  name="skip-forward"
-                  size={24}
-                  color={pressed ? palette.nowPlayingControlIconActive : palette.nowPlayingControlIcon}
-                />
-              )}
-            </Pressable>
-          </View>
-          {sleepProgress !== null ? (
-            <View
-              style={styles.sleepProgressWrapper}
-              accessible
-              accessibilityRole="progressbar"
-              accessibilityLabel="Dream Capsule timer progress"
-              accessibilityValue={{
-                min: 0,
-                max: 100,
-                now: Math.round(sleepProgress * 100),
-              }}
-            >
-              <View style={styles.sleepProgressTrack}>
-                <View
-                  style={[
-                    styles.sleepProgressFill,
-                    { width: `${Math.min(Math.max(sleepProgress, 0), 1) * 100}%` },
-                  ]}
-                />
+                {sleepProgress !== null ? (
+                  <View
+                    style={styles.sleepProgressWrapper}
+                    accessible
+                    accessibilityRole="progressbar"
+                    accessibilityLabel="Dream Capsule timer progress"
+                    accessibilityValue={{
+                      min: 0,
+                      max: 100,
+                      now: Math.round(sleepProgress * 100),
+                    }}
+                  >
+                    <View style={styles.sleepProgressTrack}>
+                      <View
+                        style={[
+                          styles.sleepProgressFill,
+                          { width: `${Math.min(Math.max(sleepProgress, 0), 1) * 100}%` },
+                        ]}
+                      />
+                    </View>
+                  </View>
+                ) : null}
               </View>
             </View>
-          ) : null}
-        </View>
 
-        {primaryGroups.map((group) => (
+            {/* Right Column - Scrollable Sound Library */}
+            <View style={styles.soundLibraryColumn}>
+              <ScrollView 
+                style={styles.soundLibraryScroll}
+                contentContainerStyle={styles.soundLibraryContent}
+                showsVerticalScrollIndicator={false}
+              >
+                {primaryGroups.map((group) => (
+                  <View key={group.id} style={styles.groupSection}>
+                    <Text style={styles.groupTitle}>{group.label}</Text>
+                    <Text style={styles.groupDescription}>{group.intro}</Text>
+                    <View style={styles.optionList}>
+                      {group.options.map((option) => {
+                        const isSelected = option.id === selectedTrackId;
+                        const isPlayingOption = isSelected && isAmbientPlaying;
+                        return (
+                          <Pressable
+                            key={option.id}
+                            style={[styles.optionRow, isSelected && styles.optionRowActive]}
+                            onPress={() => handleSelectTrack(option.id)}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: isSelected }}
+                          >
+                            <View style={styles.optionAvatar}>
+                              {isPlayingOption ? (
+                                <AudioOrb emoji={option.emoji} palette={palette} styles={styles} />
+                              ) : (
+                                <View
+                                  style={[
+                                    styles.optionEmojiWrap,
+                                    isSelected && styles.optionEmojiWrapActive,
+                                  ]}
+                                >
+                                  <Text style={[styles.optionEmoji, isSelected && styles.optionEmojiActive]}>
+                                    {option.emoji}
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
+                            <View style={styles.optionBody}>
+                              <Text style={[styles.optionName, isSelected && styles.optionNameActive]}>
+                                {option.name}
+                              </Text>
+                              <Text style={styles.optionDescription}>
+                                {option.description}
+                              </Text>
+                            </View>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+                ))}
+                {showAllGroups
+                  ? secondaryGroups.map((group) => (
+                      <View key={group.id} style={styles.groupSection}>
+                        <Text style={styles.groupTitle}>{group.label}</Text>
+                        <Text style={styles.groupDescription}>{group.intro}</Text>
+                        <View style={styles.optionList}>
+                          {group.options.map((option) => {
+                            const isSelected = option.id === selectedTrackId;
+                            const isPlayingOption = isSelected && isAmbientPlaying;
+                            return (
+                              <Pressable
+                                key={option.id}
+                                style={[styles.optionRow, isSelected && styles.optionRowActive]}
+                                onPress={() => handleSelectTrack(option.id)}
+                                accessibilityRole="button"
+                                accessibilityState={{ selected: isSelected }}
+                              >
+                                <View style={styles.optionAvatar}>
+                                  {isPlayingOption ? (
+                                    <AudioOrb emoji={option.emoji} palette={palette} styles={styles} />
+                                  ) : (
+                                    <View
+                                      style={[
+                                        styles.optionEmojiWrap,
+                                        isSelected && styles.optionEmojiWrapActive,
+                                      ]}
+                                    >
+                                      <Text style={[styles.optionEmoji, isSelected && styles.optionEmojiActive]}>
+                                        {option.emoji}
+                                      </Text>
+                                    </View>
+                                  )}
+                                </View>
+                                <View style={styles.optionBody}>
+                                  <Text style={[styles.optionName, isSelected && styles.optionNameActive]}>
+                                    {option.name}
+                                  </Text>
+                                  <Text style={styles.optionDescription}>
+                                    {option.description}
+                                  </Text>
+                                </View>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    ))
+                  : null}
+              </ScrollView>
+            </View>
+          </View>
+        ) : (
+          <>
+            <View style={styles.nowPlayingCard}>
+              <View style={styles.nowPlayingHeader}>
+                <Text style={styles.nowPlayingLabel}>Now playing</Text>
+                <Text style={styles.nowPlayingMeta}>{sleepSummary.headline}</Text>
+              </View>
+              <View style={styles.nowPlayingRow}>
+                <View style={styles.nowPlayingEmojiWrap}>
+                  {isAmbientPlaying ? (
+                    <AudioOrb emoji={nowPlayingDetails.emoji} palette={palette} styles={styles} />
+                  ) : (
+                    <View style={styles.nowPlayingEmojiStatic}>
+                      <Text style={styles.nowPlayingEmoji}>{nowPlayingDetails.emoji}</Text>
+                    </View>
+                  )}
+                </View>
+                <View style={styles.nowPlayingBody}>
+                  <Text style={styles.nowPlayingTitle}>{nowPlayingDetails.title}</Text>
+                  <Text style={styles.nowPlayingSubtitle}>{nowPlayingDetails.subtitle}</Text>
+                </View>
+              </View>
+              <View style={styles.sleepStatusBlock}>
+                <Text style={styles.sleepStatusLabel}>Dream Capsule</Text>
+                <Text style={styles.sleepStatusBlockHeadline}>{sleepSummary.detail}</Text>
+                {ambientError ? (
+                  <Text style={styles.sleepStatusWarning}>
+                    Ambient mix playback is unavailable. Try another sound or reconnect audio.
+                  </Text>
+                ) : null}
+              </View>
+              <View style={styles.nowPlayingControls}>
+                <Pressable
+                  onPress={handleSelectPrevious}
+                  style={({ pressed }) => [
+                    styles.nowPlayingControlButton,
+                    pressed && styles.nowPlayingControlButtonActive,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Play previous ambience"
+                  accessibilityHint="Loads the previous ambience in the list"
+                  hitSlop={10}
+                >
+                  {({ pressed }) => (
+                    <Feather
+                      name="skip-back"
+                      size={24}
+                      color={pressed ? palette.nowPlayingControlIconActive : palette.nowPlayingControlIcon}
+                    />
+                  )}
+                </Pressable>
+                <Pressable
+                  onPress={handleToggleAmbientPlayback}
+                  style={({ pressed }) => [
+                    styles.nowPlayingControlButton,
+                    styles.nowPlayingControlButtonPrimary,
+                    (isAmbientPlaying || pressed) && styles.nowPlayingControlButtonActive,
+                    (isAmbientPlaying || pressed) && styles.nowPlayingControlButtonPrimaryActive,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel={isAmbientPlaying ? 'Pause ambience' : 'Play ambience'}
+                  accessibilityHint={
+                    isAmbientPlaying
+                      ? 'Pauses the currently playing ambience'
+                      : 'Starts the selected ambience mix'
+                  }
+                  hitSlop={12}
+                >
+                  {({ pressed }) => (
+                    <View style={styles.nowPlayingPrimaryIconWrap}>
+                      <Feather
+                        name={isAmbientPlaying ? 'pause' : 'play'}
+                        size={isAmbientPlaying ? 30 : 32}
+                        style={!isAmbientPlaying ? styles.nowPlayingPlayIcon : undefined}
+                        color={
+                          isAmbientPlaying || pressed
+                            ? palette.nowPlayingControlIconActive
+                            : palette.nowPlayingControlIcon
+                        }
+                      />
+                    </View>
+                  )}
+                </Pressable>
+                <Pressable
+                  onPress={handleSelectNext}
+                  style={({ pressed }) => [
+                    styles.nowPlayingControlButton,
+                    pressed && styles.nowPlayingControlButtonActive,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Play next ambience"
+                  accessibilityHint="Loads the next ambience in the list"
+                  hitSlop={10}
+                >
+                  {({ pressed }) => (
+                    <Feather
+                      name="skip-forward"
+                      size={24}
+                      color={pressed ? palette.nowPlayingControlIconActive : palette.nowPlayingControlIcon}
+                    />
+                  )}
+                </Pressable>
+              </View>
+              {sleepProgress !== null ? (
+                <View
+                  style={styles.sleepProgressWrapper}
+                  accessible
+                  accessibilityRole="progressbar"
+                  accessibilityLabel="Dream Capsule timer progress"
+                  accessibilityValue={{
+                    min: 0,
+                    max: 100,
+                    now: Math.round(sleepProgress * 100),
+                  }}
+                >
+                  <View style={styles.sleepProgressTrack}>
+                    <View
+                      style={[
+                        styles.sleepProgressFill,
+                        { width: `${Math.min(Math.max(sleepProgress, 0), 1) * 100}%` },
+                      ]}
+                    />
+                  </View>
+                </View>
+              ) : null}
+            </View>
+
+            {primaryGroups.map((group) => (
           <View key={group.id} style={styles.groupSection}>
             <Text style={styles.groupTitle}>{group.label}</Text>
             <Text style={styles.groupDescription}>{group.intro}</Text>
@@ -1790,6 +2058,8 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
               : null}
           </View>
         ) : null}
+          </>
+        )}
       </ScrollView>
 
       <Modal

@@ -217,6 +217,13 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
     setGardenBackgroundColor('#f2f9f2');
   }, [setGardenBackgroundColor]);
 
+  const handleTogglePhotoWidget = useCallback(
+    (value: boolean) => {
+      setProfilePhotoWidgetEnabled(value);
+    },
+    [setProfilePhotoWidgetEnabled]
+  );
+
   const applyEmojiSelection = useCallback(
     (value: string) => {
       if (!hasPremiumUpgrade) {
@@ -284,8 +291,15 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
   const closeTextStyle = isModal ? styles.modalBackLabel : styles.backLabel;
   const containerStyle = useMemo(() => [styles.safeArea, { paddingTop: insets.top + 12 }], [insets.top, styles.safeArea]);
   const contentStyle = useMemo(
-    () => [styles.content, { paddingBottom: 40 + insets.bottom }],
-    [insets.bottom, styles.content]
+    () => [
+      styles.content, 
+      { 
+        paddingBottom: 40 + insets.bottom,
+        paddingLeft: isLandscape ? Math.max(insets.left + 16, 24) : 24,
+        paddingRight: isLandscape ? Math.max(insets.right + 16, 24) : 24,
+      }
+    ],
+    [insets.bottom, insets.left, insets.right, isLandscape, styles.content]
   );
   const widgetDisabled = !profileImageUri;
   const widgetValue = widgetDisabled ? false : profilePhotoWidgetEnabled;
@@ -299,8 +313,168 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
         : '#e2e8f0'
       : undefined;
 
+  if (isModal) {
+    return (
+      <View style={styles.modalOverlay}>
+        <Pressable style={styles.modalBackdrop} onPress={handleClose} />
+        <View style={styles.modalCard}>
+          <View style={styles.modalHandle} />
+          <ScrollView
+            style={styles.modalScrollView}
+            contentContainerStyle={styles.modalScrollContent}
+            showsVerticalScrollIndicator={false}
+            bounces={true}
+          >
+            <View style={styles.topBar}>
+              <Pressable
+                onPress={handleClose}
+                style={closeButtonStyle}
+                accessibilityLabel={closeAccessibilityLabel}
+              >
+                <Text style={closeTextStyle}>{closeLabel}</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.formSection}>
+              <Text style={styles.sectionLabel}>Display name</Text>
+              <TextInput
+                value={name}
+                onChangeText={setName}
+                placeholder="Your name"
+                style={styles.input}
+                returnKeyType="done"
+              />
+            </View>
+
+            <View style={styles.formSection}>
+              <Text style={styles.sectionLabel}>Username</Text>
+              <TextInput
+                value={username}
+                onChangeText={setUsername}
+                placeholder="@username"
+                style={styles.input}
+                returnKeyType="done"
+                autoCapitalize="none"
+              />
+            </View>
+
+            <View style={styles.upgradeCard}>
+              <Text style={styles.upgradeTitle}>Garden Plus customization</Text>
+              {hasPremiumUpgrade ? (
+                <>
+                  <Text style={styles.upgradeCopy}>Choose an accent color for your click target.</Text>
+                  <View style={styles.accentRow}>
+                    {PREMIUM_ACCENT_OPTIONS.map((color) => {
+                      const isActive = accentSelection === color;
+                      return (
+                        <Pressable
+                          key={color}
+                          style={[styles.accentSwatch, { backgroundColor: color }, isActive && styles.accentSwatchActive]}
+                          onPress={() => handleSelectAccent(color)}
+                          accessibilityLabel={`Select accent color ${color}`}
+                          accessibilityState={{ selected: isActive }}
+                        >
+                          {isActive ? <Text style={styles.accentSwatchCheck}>✓</Text> : null}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                  <View style={styles.backgroundSection}>
+                    <Text style={styles.backgroundTitle}>Garden background</Text>
+                    <Text style={styles.backgroundCopy}>Set the color that surrounds your garden canvas.</Text>
+                    <View style={styles.backgroundWheelContainer}>
+                      <View style={styles.backgroundWheel}>
+                        {backgroundWheelPositions.map(({ color, left, top }) => {
+                          const isActive = gardenBackgroundColor === color;
+                          return (
+                            <Pressable
+                              key={color}
+                              style={[
+                                styles.backgroundWheelSwatch,
+                                { backgroundColor: color, left, top },
+                                isActive && styles.backgroundWheelSwatchActive,
+                              ]}
+                              onPress={() => handleSelectBackgroundColor(color)}
+                              accessibilityLabel={`Set garden background to ${color}`}
+                              accessibilityState={{ selected: isActive }}
+                            />
+                          );
+                        })}
+                        <View style={[styles.backgroundWheelCenter, { backgroundColor: gardenBackgroundColor }]} />
+                      </View>
+                    </View>
+                    <Pressable
+                      style={styles.backgroundResetButton}
+                      onPress={handleResetBackground}
+                      accessibilityLabel="Reset background color"
+                    >
+                      <Text style={styles.backgroundResetButtonText}>Reset</Text>
+                    </Pressable>
+                  </View>
+                  <Text style={styles.upgradeCopy}>Pick the emoji that appears on the home canvas and menu.</Text>
+                  {emojiOptions.length > 0 ? (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.emojiRow}>
+                      {emojiOptions.map((option) => {
+                        const isSelected = option.emoji === customClickEmoji;
+                        return (
+                          <Pressable
+                            key={option.id}
+                            style={[styles.emojiChoice, isSelected && styles.emojiChoiceActive]}
+                            onPress={() => handleChooseEmoji(option.emoji)}
+                            accessibilityLabel={`Use ${option.name} as your click emoji`}
+                            accessibilityState={{ selected: isSelected }}
+                          >
+                            <View style={[styles.emojiChoiceHalo, isSelected && styles.emojiChoiceHaloActive]} />
+                            <View style={[styles.emojiChoiceInner, isSelected && styles.emojiChoiceInnerActive]}>
+                              <Text style={[styles.emojiChoiceGlyph, isSelected && styles.emojiChoiceGlyphActive]}>
+                                {option.emoji}
+                              </Text>
+                            </View>
+                          </Pressable>
+                        );
+                      })}
+                    </ScrollView>
+                  ) : (
+                    <Text style={styles.upgradeCopy}>Loading emoji options...</Text>
+                  )}
+                </>
+              ) : (
+                <Text style={styles.upgradeCopy}>Unlock Garden Plus to customize your theme and click emoji.</Text>
+              )}
+            </View>
+
+            <View style={styles.widgetToggleContainer}>
+              <View style={styles.widgetToggleTextContainer}>
+                <Text style={styles.widgetToggleLabel}>Sync garden photo</Text>
+                <Text style={styles.widgetToggleCopy}>{widgetDescription}</Text>
+              </View>
+              <Switch
+                value={widgetValue}
+                onValueChange={handleTogglePhotoWidget}
+                disabled={widgetDisabled}
+                thumbColor={widgetThumbColor}
+                trackColor={{
+                  false: '#cbd5e0',
+                  true: '#86efac',
+                }}
+              />
+            </View>
+            
+            <Pressable
+              style={styles.saveButton}
+              onPress={handleSaveProfile}
+              accessibilityLabel="Save profile changes"
+            >
+              <Text style={styles.saveButtonText}>Save Changes</Text>
+            </Pressable>
+          </ScrollView>
+        </View>
+      </View>
+    );
+  }
+
   return (
-    <SafeAreaView style={containerStyle} edges={['left', 'right']}>
+    <SafeAreaView style={containerStyle}>
       <ScrollView
         contentContainerStyle={contentStyle}
         showsVerticalScrollIndicator
@@ -485,7 +659,7 @@ const createResponsiveStyles = (isLandscape: boolean) => StyleSheet.create({
     backgroundColor: '#f2f9f2',
   },
   content: {
-    paddingHorizontal: isLandscape ? 48 : 24,
+    paddingHorizontal: 24,
     paddingBottom: 40,
     gap: isLandscape ? 20 : 24,
   },
@@ -893,5 +1067,71 @@ const createResponsiveStyles = (isLandscape: boolean) => StyleSheet.create({
     color: '#f0fff4',
     fontSize: 16,
     fontWeight: '700',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  modalCard: {
+    backgroundColor: '#f0fff4',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    shadowColor: '#0f2e20',
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: -2 },
+    height: '90%',
+    alignSelf: 'center',
+    width: '100%',
+  },
+  modalHandle: {
+    alignSelf: 'center',
+    width: 48,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: '#bbf7d0',
+    marginBottom: 16,
+  },
+  modalScrollView: {
+    flex: 1,
+  },
+  modalScrollContent: {
+    gap: 20,
+    paddingBottom: 40,
+  },
+  widgetToggleContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 16,
+    backgroundColor: '#f7fafc',
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  widgetToggleTextContainer: {
+    flex: 1,
+    gap: 4,
+  },
+  widgetToggleLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#22543d',
+  },
+  widgetToggleCopy: {
+    fontSize: 14,
+    color: '#2d3748',
+    lineHeight: 20,
+  },
+  backgroundResetButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#22543d',
   },
 });

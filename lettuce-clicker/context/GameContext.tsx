@@ -137,6 +137,8 @@ type GameContextValue = {
   weatherData: { temperature: number; condition: string; emoji: string; location: string } | null;
   weatherError: string | null;
   weatherLastUpdated: number;
+  temperatureUnit: 'celsius' | 'fahrenheit';
+  hasManuallySetTemperatureUnit: boolean;
   registerCustomEmoji: (emoji: string) => EmojiDefinition | null;
   setProfileLifetimeTotal: (value: number) => void;
   addHarvest: () => void;
@@ -171,6 +173,8 @@ type GameContextValue = {
   setBedsideWidgetsEnabled: (value: boolean) => void;
   updateWeatherData: () => Promise<void>;
   clearWeatherData: () => void;
+  setTemperatureUnit: (unit: 'celsius' | 'fahrenheit') => void;
+  setHasManuallySetTemperatureUnit: (value: boolean) => void;
   clearResumeNotice: () => void;
 };
 
@@ -556,6 +560,9 @@ type StoredGameState = {
   premiumAccentColor?: string;
   customClickEmoji?: string;
   ownedThemes?: Record<HomeEmojiTheme, boolean>;
+  temperatureUnit?: 'celsius' | 'fahrenheit';
+  bedsideWidgetsEnabled?: boolean;
+  hasManuallySetTemperatureUnit?: boolean;
 };
 
 const GameContext = createContext<GameContextValue | undefined>(undefined);
@@ -589,6 +596,8 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [weatherData, setWeatherData] = useState<{ temperature: number; condition: string; emoji: string; location: string } | null>(null);
   const [weatherError, setWeatherError] = useState<string | null>(null);
   const [weatherLastUpdated, setWeatherLastUpdated] = useState(0);
+  const [temperatureUnit, setTemperatureUnit] = useState<'celsius' | 'fahrenheit'>('celsius');
+  const [hasManuallySetTemperatureUnit, setHasManuallySetTemperatureUnit] = useState(false);
   const initialisedRef = useRef(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const backgroundInfoRef = useRef<
@@ -1176,6 +1185,8 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     weatherData,
     weatherError,
     weatherLastUpdated,
+    temperatureUnit,
+    hasManuallySetTemperatureUnit,
     registerCustomEmoji,
     setProfileLifetimeTotal,
     addHarvest,
@@ -1227,6 +1238,8 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       setWeatherLastUpdated(0);
       weatherService.clearCache();
     },
+    setTemperatureUnit,
+    setHasManuallySetTemperatureUnit,
   }), [
     harvest,
     lifetimeHarvest,
@@ -1253,6 +1266,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     weatherData,
     weatherError,
     weatherLastUpdated,
+    temperatureUnit,
     combinedEmojiCatalog,
     registerCustomEmoji,
     addHarvest,
@@ -1405,6 +1419,15 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
               const trimmed = parsed.customClickEmoji.trim();
               setCustomClickEmojiState(trimmed.length > 0 ? Array.from(trimmed)[0] : '🥬');
             }
+            if (typeof parsed.temperatureUnit === 'string' && (parsed.temperatureUnit === 'celsius' || parsed.temperatureUnit === 'fahrenheit')) {
+              setTemperatureUnit(parsed.temperatureUnit);
+            }
+            if (typeof parsed.bedsideWidgetsEnabled === 'boolean') {
+              setBedsideWidgetsEnabled(parsed.bedsideWidgetsEnabled);
+            }
+            if (typeof parsed.hasManuallySetTemperatureUnit === 'boolean') {
+              setHasManuallySetTemperatureUnit(parsed.hasManuallySetTemperatureUnit);
+            }
           } catch {
             // ignore malformed stored data
           }
@@ -1488,23 +1511,29 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       premiumAccentColor,
       customClickEmoji,
       ownedThemes,
+      temperatureUnit,
+      bedsideWidgetsEnabled,
+      hasManuallySetTemperatureUnit,
     };
 
     AsyncStorage.setItem(GAME_STORAGE_KEY, JSON.stringify(payload)).catch(() => {
       // persistence best effort only
     });
   }, [
+    bedsideWidgetsEnabled,
     customClickEmoji,
     customEmojiCatalog,
     emojiInventory,
     harvest,
     hasPremiumUpgrade,
+    hasManuallySetTemperatureUnit,
     lifetimeHarvest,
     orbitingUpgradeEmojis,
     placements,
     premiumAccentColor,
     purchasedUpgrades,
     ownedThemes,
+    temperatureUnit,
   ]);
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;

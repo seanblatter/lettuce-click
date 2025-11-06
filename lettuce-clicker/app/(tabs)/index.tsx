@@ -13,6 +13,7 @@ import {
   GestureResponderEvent,
   Image,
   useWindowDimensions,
+  useColorScheme,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { useSharedValue, useAnimatedStyle, useAnimatedProps, runOnJS, FadeInDown, FadeOutUp } from 'react-native-reanimated';
@@ -27,6 +28,8 @@ import { gardenEmojiCatalog } from '@/constants/emojiCatalog';
 import type { EmojiDefinition, HomeEmojiTheme } from '@/context/GameContext';
 import { useAmbientAudio } from '@/context/AmbientAudioContext';
 import { preloadRewardedAd, showRewardedAd } from '@/lib/rewardedAd';
+import { formatTemperature, getDisplayTemperature, detectTemperatureUnitFromLocation } from '@/lib/weatherUtils';
+import { TemperatureUnitModal } from '@/components/TemperatureUnitModal';
 
 const MODAL_STORAGE_KEY = 'lettuce-click:grow-your-park-dismissed';
 const DAILY_BONUS_LAST_CLAIM_KEY = 'lettuce-click:daily-bonus-last-claim';
@@ -161,8 +164,12 @@ export default function HomeScreen() {
     weatherData,
     weatherError,
     weatherLastUpdated,
+    temperatureUnit,
+    hasManuallySetTemperatureUnit,
     updateWeatherData,
     clearWeatherData,
+    setTemperatureUnit,
+    setHasManuallySetTemperatureUnit,
   } = useGame();
 
   const lockedShopEmojis = useMemo(
@@ -221,6 +228,11 @@ export default function HomeScreen() {
   // Harvest ledger swipe state
   const [showMusicContainer, setShowMusicContainer] = useState(false);
   const [isGestureActive, setIsGestureActive] = useState(false);
+  const [showTemperatureUnitModal, setShowTemperatureUnitModal] = useState(false);
+  const [showTemperatureSettings, setShowTemperatureSettings] = useState(false);
+  
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
 
   
 
@@ -376,6 +388,10 @@ export default function HomeScreen() {
     () => Object.values(emojiInventory).filter(Boolean).length,
     [emojiInventory]
   );
+  const displayTemperature = useMemo(() => {
+    if (!weatherData) return null;
+    return getDisplayTemperature(weatherData.temperature, temperatureUnit);
+  }, [weatherData, temperatureUnit]);
   const quickActionRotations = useMemo(
     () => ({
       music: quickActionWiggles.music.interpolate({ inputRange: [-1, 1], outputRange: ['-10deg', '10deg'] }),
@@ -630,21 +646,13 @@ export default function HomeScreen() {
 
   const handleWeatherPress = useCallback(async () => {
     if (weatherData) {
-      // Show current weather details
-      const lastUpdateTime = weatherLastUpdated ? new Date(weatherLastUpdated).toLocaleTimeString() : 'Never';
-      Alert.alert(
-        `Weather in ${weatherData.location}`,
-        `Temperature: ${weatherData.temperature}°C\nCondition: ${weatherData.condition}\nLast updated: ${lastUpdateTime}`,
-        [
-          { text: 'Refresh', onPress: updateWeatherData },
-          { text: 'Close', style: 'cancel' }
-        ]
-      );
+      // Toggle temperature settings container
+      setShowTemperatureSettings(!showTemperatureSettings);
     } else {
       // First time or error - try to fetch weather
       await updateWeatherData();
     }
-  }, [weatherData, weatherLastUpdated, updateWeatherData]);
+  }, [weatherData, showTemperatureSettings, updateWeatherData]);
 
   // Auto-fetch weather when bedside widgets are first enabled
   useEffect(() => {
@@ -656,6 +664,23 @@ export default function HomeScreen() {
       return () => clearTimeout(timer);
     }
   }, [bedsideWidgetsEnabled, weatherData, weatherError, updateWeatherData]);
+
+  // Auto-detect temperature unit based on location (only if user hasn't manually set it)
+  useEffect(() => {
+    if (weatherData && weatherData.location && !hasManuallySetTemperatureUnit) {
+      const detectedUnit = detectTemperatureUnitFromLocation(weatherData.location);
+      if (detectedUnit !== temperatureUnit) {
+        setTemperatureUnit(detectedUnit);
+      }
+    }
+  }, [weatherData, temperatureUnit, setTemperatureUnit, hasManuallySetTemperatureUnit]);
+
+  // Close temperature settings when expanded view closes
+  useEffect(() => {
+    if (!isExpandedView) {
+      setShowTemperatureSettings(false);
+    }
+  }, [isExpandedView]);
 
   const handleSelectTheme = useCallback(
     (theme: HomeEmojiTheme) => {
@@ -991,26 +1016,26 @@ export default function HomeScreen() {
                   <Pressable
                     style={styles.bedsideWidgetTopRight}
                     onPress={handleWeatherPress}
-                    accessibilityLabel={weatherData ? `Weather: ${weatherData.temperature}°C, ${weatherData.condition}` : 'Get weather'}
+                    accessibilityLabel={weatherData ? `Weather: ${displayTemperature}°${temperatureUnit === 'fahrenheit' ? 'F' : 'C'}, ${weatherData.condition}` : 'Get weather'}
                   >
                     {weatherData ? (
-                      <View style={{ alignItems: 'center' }}>
+                      <View style={{ alignItems: 'center' }} key={`${temperatureUnit}-${displayTemperature}`}>
                         <Text style={styles.bedsideWidgetIcon}>{weatherData.emoji}</Text>
-                        <Text style={[styles.bedsideWidgetBatteryText, { fontSize: 8, marginTop: 2 }]}>
-                          {weatherData.temperature}°
+                        <Text style={styles.bedsideWidgetBatteryText}>
+                          Now: {displayTemperature}°{temperatureUnit === 'fahrenheit' ? 'F' : 'C'}
                         </Text>
                       </View>
                     ) : weatherError ? (
                       <View style={{ alignItems: 'center' }}>
                         <Text style={styles.bedsideWidgetIcon}>❌</Text>
-                        <Text style={[styles.bedsideWidgetBatteryText, { fontSize: 6, marginTop: 2 }]}>
-                          Tap
+                        <Text style={styles.bedsideWidgetBatteryText}>
+                          Error
                         </Text>
                       </View>
                     ) : (
                       <View style={{ alignItems: 'center' }}>
                         <Text style={styles.bedsideWidgetIcon}>🌤️</Text>
-                        <Text style={[styles.bedsideWidgetBatteryText, { fontSize: 6, marginTop: 2 }]}>
+                        <Text style={styles.bedsideWidgetBatteryText}>
                           Tap
                         </Text>
                       </View>
@@ -1030,10 +1055,64 @@ export default function HomeScreen() {
 
                   {/* Bottom Right - Battery */}
                   <View style={styles.bedsideWidgetBottomRight}>
-                    <Text style={styles.bedsideWidgetBatteryText}>🔋 85%</Text>
+                    <Text style={styles.bedsideWidgetBatteryText}>Battery: 85%</Text>
                   </View>
                 </>
               )}
+
+              {/* Temperature Settings Container - Center of Expanded View */}
+              {bedsideWidgetsEnabled && showTemperatureSettings && (
+                <View style={styles.temperatureSettingsContainer}>
+                  <View style={styles.temperatureSettingsHeader}>
+                    <Text style={styles.temperatureSettingsTitle}>Temperature</Text>
+                    <Pressable 
+                      style={styles.temperatureSettingsClose}
+                      onPress={() => setShowTemperatureSettings(false)}
+                    >
+                      <Text style={styles.temperatureSettingsCloseText}>✕</Text>
+                    </Pressable>
+                  </View>
+                  <View style={styles.temperatureUnitButtons}>
+                    <Pressable
+                      style={[
+                        styles.temperatureUnitButton,
+                        temperatureUnit === 'celsius' && styles.temperatureUnitButtonActive
+                      ]}
+                      onPress={() => {
+                        setTemperatureUnit('celsius');
+                        setHasManuallySetTemperatureUnit(true);
+                        setShowTemperatureSettings(false); // Close settings
+                      }}
+                    >
+                      <Text style={[
+                        styles.temperatureUnitButtonText,
+                        temperatureUnit === 'celsius' && styles.temperatureUnitButtonTextActive
+                      ]}>
+                        °C
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={[
+                        styles.temperatureUnitButton,
+                        temperatureUnit === 'fahrenheit' && styles.temperatureUnitButtonActive
+                      ]}
+                      onPress={() => {
+                        setTemperatureUnit('fahrenheit');
+                        setHasManuallySetTemperatureUnit(true);
+                        setShowTemperatureSettings(false); // Close settings
+                      }}
+                    >
+                      <Text style={[
+                        styles.temperatureUnitButtonText,
+                        temperatureUnit === 'fahrenheit' && styles.temperatureUnitButtonTextActive
+                      ]}>
+                        °F
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+              )}
+
               <View style={[
                 styles.lettuceWrapper, 
                 isLandscape && styles.lettuceWrapperLandscape,
@@ -2171,6 +2250,14 @@ export default function HomeScreen() {
       >
         <MusicContent mode="modal" onRequestClose={handleCloseMusicQuickAction} />
       </Modal>
+
+      <TemperatureUnitModal
+        visible={showTemperatureUnitModal}
+        onClose={() => setShowTemperatureUnitModal(false)}
+        currentUnit={temperatureUnit}
+        onSelectUnit={setTemperatureUnit}
+        sampleTemperature={weatherData?.temperature || 22}
+      />
 
       </View>
       </SafeAreaView>
@@ -3336,6 +3423,106 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     backgroundColor: '#fff',
+  },
+
+  // Transparent bedside widgets (no white containers)
+  bedsideWidgetTopLeftTransparent: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    zIndex: 1001,
+  },
+  bedsideWidgetTopRightTransparent: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    zIndex: 1001,
+  },
+  bedsideWidgetBottomLeftTransparent: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    zIndex: 1001,
+  },
+  bedsideWidgetBottomRightTransparent: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    zIndex: 1001,
+  },
+  bedsideWidgetText: {
+    fontSize: 16,  // Increased from 12 to make bigger
+    fontWeight: '700',
+    textShadowColor: 'rgba(128, 128, 128, 0.8)',
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 3,
+  },
+
+  // Temperature settings container
+  temperatureSettingsContainer: {
+    position: 'absolute',
+    top: '25%', // Moved higher to avoid collision with harvest ledger
+    left: '50%',
+    transform: [{ translateX: -60 }, { translateY: -40 }],
+    backgroundColor: 'rgba(255, 255, 255, 0.95)', // Slightly more opaque
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 5,
+    zIndex: 1000,
+  },
+  temperatureSettingsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    width: '100%',
+  },
+  temperatureSettingsTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  temperatureSettingsClose: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#F0F0F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  temperatureSettingsCloseText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+  },
+  temperatureUnitButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  temperatureUnitButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#F0F0F0',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  temperatureUnitButtonActive: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  temperatureUnitButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+  },
+  temperatureUnitButtonTextActive: {
+    color: '#FFFFFF',
   },
 
 });

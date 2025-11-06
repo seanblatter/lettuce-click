@@ -65,7 +65,7 @@ const lightenColor = (hex: string, factor: number) => {
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
-  const { homeEmojiTheme, premiumAccentColor, gardenBackgroundColor } = useGame();
+  const { homeEmojiTheme, premiumAccentColor, gardenBackgroundColor, isExpandedView } = useGame();
 
   const baseAccent = useMemo(() => {
     if (premiumAccentColor) {
@@ -123,7 +123,7 @@ export default function TabLayout() {
         tabBarAllowFontScaling: false,
         headerShown: false,
         tabBarButton: HapticTab,
-        tabBarStyle: {
+        tabBarStyle: isExpandedView ? { display: 'none' } : {
           backgroundColor: tabBackground,
           borderTopColor: tabBorder,
           borderTopWidth: 1,

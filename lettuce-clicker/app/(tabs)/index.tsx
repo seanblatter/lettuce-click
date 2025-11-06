@@ -154,6 +154,8 @@ export default function HomeScreen() {
     addHarvestAmount,
     spendHarvestAmount,
     grantEmojiUnlock,
+    isExpandedView,
+    setIsExpandedView,
   } = useGame();
 
   const lockedShopEmojis = useMemo(
@@ -212,7 +214,7 @@ export default function HomeScreen() {
   // Harvest ledger swipe state
   const [showMusicContainer, setShowMusicContainer] = useState(false);
   const [isGestureActive, setIsGestureActive] = useState(false);
-  const [isExpandedView, setIsExpandedView] = useState(false);
+
   
 
   const containerTranslateX = useSharedValue(0);
@@ -584,6 +586,9 @@ export default function HomeScreen() {
   }, []);
 
   const handleOpenMusic = useCallback(() => {
+    // Prevent navigation when in expanded view
+    if (isExpandedView) return;
+    
     setMenuOpen(false);
     const isLandscape = dimensions.width > dimensions.height;
     
@@ -594,17 +599,27 @@ export default function HomeScreen() {
       // Use modal in portrait mode
       setShowMusicQuickAction(true);
     }
-  }, [dimensions]);
+  }, [dimensions, isExpandedView]);
 
   const handleCloseMusicQuickAction = useCallback(() => {
     setShowMusicQuickAction(false);
   }, []);
 
   const handleOpenDreamCapsule = useCallback(() => {
+    if (isExpandedView) return;
     setMenuOpen(false);
-    // Navigate to music page and automatically open the Dream Capsule modal
     router.push('/music?openDreamCapsule=true');
-  }, []);
+  }, [isExpandedView]);
+
+  const handleToggleExpandedView = useCallback(() => {
+    setIsExpandedView(!isExpandedView);
+  }, [isExpandedView]);
+
+  const handleCloseExpandedView = useCallback(() => {
+    if (isExpandedView) {
+      setIsExpandedView(false);
+    }
+  }, [isExpandedView]);
 
   const handleSelectTheme = useCallback(
     (theme: HomeEmojiTheme) => {
@@ -896,23 +911,350 @@ export default function HomeScreen() {
     isWatchingResumeOffer,
   ]);
 
+
+
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: gardenSurfaceColor }]}>
-      <View style={[
-        styles.container, 
-        { backgroundColor: gardenSurfaceColor }
+    <>
+      <SafeAreaView style={[
+        styles.safeArea, 
+        { backgroundColor: gardenSurfaceColor },
+
       ]}>
         <View style={[
-          styles.headerWrapper, 
-          { 
-            paddingTop: headerPaddingTop,
-            paddingLeft: isLandscape ? Math.max(insets.left + 16, 24) : 24, // Add safe area padding in landscape
-            paddingRight: isLandscape ? Math.max(insets.right + 16, 24) : 24, // Add safe area padding in landscape
-          },
-          isLandscape && styles.headerWrapperLandscape
+          styles.container, 
+          { backgroundColor: gardenSurfaceColor },
+
         ]}>
-          <View style={styles.headerShelf}>
-            <Text style={[styles.headerText, isLandscape && styles.headerTextLandscape]}>Lettuce World</Text>
+          {isExpandedView ? (
+            /* EXPANDED VIEW - Only clicker and harvest ledger/dream capsule */
+            <Pressable
+              style={[
+                styles.expandedFullView,
+                {
+                  paddingLeft: isLandscape ? Math.max(insets.left + 16, 24) : 24,
+                  paddingRight: isLandscape ? Math.max(insets.right + 16, 24) : 24,
+                  paddingTop: Math.max(insets.top + 20, 40),
+                  paddingBottom: Math.max(insets.bottom + 20, 40),
+                }
+              ]}
+              onPress={handleCloseExpandedView}
+            >
+              <View style={[
+                styles.lettuceWrapper, 
+                isLandscape && styles.lettuceWrapperLandscape,
+                styles.lettuceWrapperExpandedAligned
+              ]}>
+                {isAmbientPlaying ? (
+                  <View style={styles.audioPulseContainer} pointerEvents="none">
+                    <Animated.View
+                      style={[
+                        styles.audioPulseRing,
+                        {
+                          borderColor: accentSurface,
+                          transform: [{ scale: audioPrimaryScale }],
+                          opacity: audioPrimaryOpacity,
+                        },
+                      ]}
+                    />
+                    <Animated.View
+                      style={[
+                        styles.audioPulseRingSecondary,
+                        {
+                          borderColor: accentHighlight,
+                          transform: [{ scale: audioSecondaryScale }],
+                          opacity: audioSecondaryOpacity,
+                        },
+                      ]}
+                    />
+                    <Animated.View
+                      style={[
+                        styles.audioPulseCore,
+                        {
+                          backgroundColor: accentSurface,
+                          shadowColor: accentColor,
+                          transform: [{ scale: audioCoreScale }],
+                        },
+                      ]}
+                    />
+                  </View>
+                ) : (
+                  <View style={styles.lettuceBackdrop}>
+                    <View style={[styles.backdropHalo, styles.backdropHaloOuter]} />
+                    <View style={[styles.backdropHalo, styles.backdropHaloMiddle]} />
+                    <View style={[styles.backdropHalo, styles.backdropHaloInner]} />
+                    <View style={[styles.backdropBubble, styles.backdropBubbleOne]} />
+                    <View style={[styles.backdropBubble, styles.backdropBubbleTwo]} />
+                    <View style={[styles.backdropBubble, styles.backdropBubbleThree]} />
+                  </View>
+                )}
+                <GestureDetector gesture={djGesture}>
+                  <Pressable
+                    accessibilityLabel="Harvest lettuce"
+                    onPress={addHarvest}
+                    style={({ pressed }) => [
+                      styles.lettuceButton,
+                      pressed && styles.lettucePressed,
+                    ]}
+                  >
+                    <View style={[styles.lettuceButtonBase, { backgroundColor: accentColor }]} />
+                    <View
+                      style={[
+                        styles.lettuceButtonFace,
+                        {
+                          backgroundColor: accentSurface,
+                          borderColor: accentColor,
+                          shadowColor: accentColor,
+                        },
+                      ]}
+                    >
+                      <View
+                        style={[
+                          styles.lettuceButtonHighlight,
+                          { backgroundColor: accentHighlight },
+                        ]}
+                      />
+                      <Reanimated.Text 
+                        style={[
+                          styles.lettuceEmoji, 
+                          isAmbientPlaying && djWheelStyle
+                        ]}
+                      >
+                        {customClickEmoji}
+                      </Reanimated.Text>
+                    </View>
+                  </Pressable>
+                </GestureDetector>
+                {isAmbientPlaying && (
+                  <Reanimated.View 
+                    key={`volume-indicator-${displayVolume.toFixed(3)}`}
+                    style={[
+                      styles.volumeIndicator,
+                      isLandscape && styles.volumeIndicatorLandscape
+                    ]}
+                  >
+                    <View style={[
+                      styles.volumeTrack,
+                      isLandscape && styles.volumeTrackLandscape
+                    ]}>
+                      <Reanimated.View 
+                        style={[
+                          styles.volumeFill, 
+                          volumeFillStyle,
+                          { 
+                            backgroundColor: accentColor,
+                          }
+                        ]} 
+                      />
+                    </View>
+                    <VolumeText 
+                      key={`volume-text-${displayVolume.toFixed(3)}`}
+                      style={[
+                        styles.volumeLabel, 
+                        isLandscape && styles.volumeLabelLandscape
+                      ]}
+                      color={accentColor}
+                    />
+                  </Reanimated.View>
+                )}
+              </View>
+
+              <View style={[styles.statsSection, isLandscape && styles.statsSectionLandscape]}>
+                <GestureDetector gesture={ledgerSwipeGesture}>
+                  <Reanimated.View style={containerAnimatedStyle}>
+                    {!showMusicContainer ? (
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.statsCard,
+                          { shadowColor: ledgerTheme.shadowColor },
+                          pressed && styles.statsCardPressed,
+                          isLandscape && styles.statsCardLandscape,
+                        ]}
+                        onPress={handleLedgerPress}
+                        accessibilityRole="button"
+                        accessibilityLabel="Harvest Ledger"
+                        accessibilityHint="Tap to cycle the ledger background color"
+                      >
+                        <View
+                          pointerEvents="none"
+                          style={[styles.statsCardBackdrop, { backgroundColor: ledgerTheme.backgroundColor }]}
+                        />
+                        <View
+                          pointerEvents="none"
+                          style={[
+                            styles.statsCardGrain,
+                            {
+                              backgroundColor: ledgerTheme.grainColor,
+                              opacity: ledgerTheme.grainOpacity,
+                            },
+                          ]}
+                        />
+                        <View
+                          pointerEvents="none"
+                          style={[styles.statsCardFrost, { backgroundColor: ledgerTheme.refraction }]}
+                        />
+                        <View
+                          pointerEvents="none"
+                          style={[styles.statsCardSheen, { backgroundColor: ledgerTheme.highlight }]}
+                        />
+                        <View
+                          pointerEvents="none"
+                          style={[styles.statsCardBorder, { borderColor: ledgerTheme.borderColor }]}
+                        />
+                        <View
+                          pointerEvents="none"
+                          style={[styles.statsCardInnerBorder, { borderColor: ledgerTheme.innerBorder }]}
+                        />
+                        <View
+                          pointerEvents="none"
+                          style={[styles.statsCardStitch, { borderColor: ledgerTheme.stitchColor }]}
+                        />
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Text style={[styles.statsTitle, { color: ledgerTheme.tint }]}>Harvest Ledger</Text>
+                          <Text style={[styles.statLabel, { color: ledgerTheme.muted, fontSize: 12, opacity: 0.6 }]}>← Swipe for music</Text>
+                        </View>
+                        <View style={styles.statRow}>
+                          <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Emojis collected</Text>
+                          <Text style={[styles.statValue, { color: ledgerTheme.tint }]}>
+                            {emojiCollectionCount.toLocaleString()}
+                          </Text>
+                        </View>
+                        <View style={styles.statRow}>
+                          <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Auto clicks /s</Text>
+                          <Text style={[styles.statValue, { color: ledgerTheme.tint }]}>
+                            {autoPerSecond.toLocaleString()}
+                          </Text>
+                        </View>
+                        <View style={styles.statRow}>
+                          <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Available harvest</Text>
+                          <Text style={[
+                            styles.statValue, 
+                            { 
+                              color: ledgerTheme.tint,
+                              fontSize: getDynamicFontSize(harvest)
+                            }
+                          ]}>
+                            {harvest.toLocaleString()}
+                          </Text>
+                        </View>
+                        <View style={styles.statRow}>
+                          <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Lifetime harvest</Text>
+                          <Text style={[
+                            styles.statValue, 
+                            { 
+                              color: ledgerTheme.tint,
+                              fontSize: getDynamicFontSize(lifetimeHarvest)
+                            }
+                          ]}>
+                            {lifetimeHarvest.toLocaleString()}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    ) : (
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.statsCard,
+                          { shadowColor: ledgerTheme.shadowColor },
+                          pressed && styles.statsCardPressed,
+                          isLandscape && styles.statsCardLandscape,
+                        ]}
+                        onPress={() => setShowMusicContainer(false)}
+                        accessibilityRole="button"
+                        accessibilityLabel="Music Container"
+                        accessibilityHint="Tap to return to harvest ledger or swipe to navigate"
+                      >
+                        <View
+                          pointerEvents="none"
+                          style={[styles.statsCardBackdrop, { backgroundColor: ledgerTheme.backgroundColor }]}
+                        />
+                        <View
+                          pointerEvents="none"
+                          style={[
+                            styles.statsCardGrain,
+                            {
+                              backgroundColor: ledgerTheme.grainColor,
+                              opacity: ledgerTheme.grainOpacity,
+                            },
+                          ]}
+                        />
+                        <View
+                          pointerEvents="none"
+                          style={[styles.statsCardFrost, { backgroundColor: ledgerTheme.refraction }]}
+                        />
+                        <View
+                          pointerEvents="none"
+                          style={[styles.statsCardSheen, { backgroundColor: ledgerTheme.highlight }]}
+                        />
+                        <View
+                          pointerEvents="none"
+                          style={[styles.statsCardBorder, { borderColor: ledgerTheme.borderColor }]}
+                        />
+                        <View
+                          pointerEvents="none"
+                          style={[styles.statsCardInnerBorder, { backgroundColor: ledgerTheme.innerBorder }]}
+                        />
+                        <View
+                          pointerEvents="none"
+                          style={[styles.statsCardStitch, { borderColor: ledgerTheme.stitchColor }]}
+                        />
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Text style={[styles.statsTitle, { color: ledgerTheme.tint }]}>🎵 Dream Capsule</Text>
+                          <View style={{ alignItems: 'flex-end' }}>
+                            <Text style={[styles.statLabel, { color: ledgerTheme.muted, fontSize: 12, opacity: 0.6 }]}>Swipe right →</Text>
+                            {isAmbientPlaying && (
+                              <Text style={[styles.statLabel, { color: ledgerTheme.muted, fontSize: 10, opacity: 0.5 }]}>
+                                Use device volume buttons
+                              </Text>
+                            )}
+                          </View>
+                        </View>
+                        <View style={styles.statRow}>
+                          <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Now Playing</Text>
+                          <Text style={[styles.statValue, { color: ledgerTheme.tint }]}>
+                            {isAmbientPlaying ? 'Forest Dawn' : 'Paused'}
+                          </Text>
+                        </View>
+                        <View style={styles.statRow}>
+                          <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Volume</Text>
+                          <VolumeText 
+                            style={[styles.statValue]}
+                            color={ledgerTheme.tint}
+                          />
+                        </View>
+                        <Pressable 
+                          style={({ pressed }) => [
+                            styles.statRow, 
+                            pressed && { opacity: 0.7, backgroundColor: 'rgba(255,255,255,0.1)' }
+                          ]}
+                          onPress={togglePlayback}
+                          accessibilityRole="button"
+                          accessibilityLabel={isAmbientPlaying ? "Pause music" : "Play music"}
+                        >
+                          <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Status</Text>
+                          <Text style={[styles.statValue, { color: ledgerTheme.tint, fontWeight: '600' }]}>
+                            {isAmbientPlaying ? '▶️ Playing' : '⏸️ Tap to Play'}
+                          </Text>
+                        </Pressable>
+                      </Pressable>
+                    )}
+                  </Reanimated.View>
+                </GestureDetector>
+              </View>
+            </Pressable>
+          ) : (
+            /* NORMAL VIEW - Everything visible */
+            <>
+            {/* Header always visible */}
+            <View style={[
+            styles.headerWrapper, 
+            { 
+              paddingTop: headerPaddingTop,
+              paddingLeft: isLandscape ? Math.max(insets.left + 16, 24) : 24, // Add safe area padding in landscape
+              paddingRight: isLandscape ? Math.max(insets.right + 16, 24) : 24, // Add safe area padding in landscape
+            },
+            isLandscape && styles.headerWrapperLandscape
+          ]}>
+            <View style={[styles.headerShelf, isLandscape && styles.headerShelfLandscape]}>
+              <Text style={[styles.headerText, isLandscape && styles.headerTextLandscape]}>Lettuce World</Text>
             <View style={styles.headerActions}>
               {isLandscape && (isAmbientPlaying || showMusicContainer) && (
                 <Pressable
@@ -922,8 +1264,7 @@ export default function HomeScreen() {
                     styles.alarmButton,
                     pressed && styles.alarmButtonPressed,
                   ]}
-                  onPress={handleOpenDreamCapsule}
-                  hitSlop={8}>
+                  onPress={handleOpenDreamCapsule}>
                   <Text style={styles.alarmIcon}>⏰</Text>
                 </Pressable>
               )}
@@ -935,17 +1276,28 @@ export default function HomeScreen() {
                   menuOpen && styles.menuButtonActive,
                   pressed && styles.menuButtonPressed,
                 ]}
-                onPress={() => setMenuOpen((prev) => !prev)}
-                hitSlop={8}>
+                onPress={() => setMenuOpen((prev) => !prev)}>
                 <Text style={[styles.menuIcon, menuOpen && styles.menuIconActive]}>
                   {menuOpen ? '✕' : customClickEmoji}
                 </Text>
               </Pressable>
+              {isLandscape && !isExpandedView && (
+                <Pressable
+                  accessibilityLabel="Expand view"
+                  accessibilityHint="Expand view and hide navigation"
+                  style={({ pressed }) => [
+                    styles.expandButton,
+                    pressed && styles.expandButtonPressed,
+                  ]}
+                  onPress={handleToggleExpandedView}>
+                  <Text style={styles.expandIcon}>⊞</Text>
+                </Pressable>
+              )}
             </View>
           </View>
         </View>
 
-        <View
+        <Pressable
           style={[
             styles.content, 
             styles.contentStatic, 
@@ -955,10 +1307,11 @@ export default function HomeScreen() {
               paddingLeft: isLandscape ? Math.max(insets.left + 16, 24) : 24, // Add safe area padding in landscape
               paddingRight: isLandscape ? Math.max(insets.right + 16, 24) : 24, // Add safe area padding in landscape
               flexDirection: isLandscape ? 'row' : 'column',
-              alignItems: isLandscape ? 'flex-start' : 'stretch', // Changed from center to flex-start for better alignment
-              justifyContent: isLandscape ? 'space-between' : 'space-between', // Ensure even distribution
+              alignItems: isLandscape ? 'flex-start' : 'stretch',
+              justifyContent: isLandscape ? 'space-between' : 'space-between',
             }
           ]}
+          onPress={isExpandedView ? handleCloseExpandedView : undefined}
         >
           <View style={[styles.lettuceWrapper, isLandscape && styles.lettuceWrapperLandscape]}>
             {isAmbientPlaying ? (
@@ -1259,6 +1612,9 @@ export default function HomeScreen() {
             </Reanimated.View>
           </GestureDetector>
         </View>
+        </Pressable>
+        </>
+        )}
 
         <Modal
           visible={menuOpen}
@@ -1661,118 +2017,9 @@ export default function HomeScreen() {
         <MusicContent mode="modal" onRequestClose={handleCloseMusicQuickAction} />
       </Modal>
 
-      <Modal
-        visible={isExpandedView}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setIsExpandedView(false)}
-      >
-        <Pressable 
-          style={styles.expandedBackdrop}
-          onPress={() => setIsExpandedView(false)}
-          accessibilityRole="button"
-          accessibilityLabel="Exit expanded view"
-        >
-          <View style={styles.expandedContainer}>
-            <SafeAreaView style={[styles.safeArea, { backgroundColor: gardenSurfaceColor }]}>
-              <View style={[styles.container, { backgroundColor: gardenSurfaceColor, transform: [{ scale: 1.1 }] }]}>
-                
-                {/* Dream Capsule Header */}
-                <View style={[
-                  styles.headerWrapper, 
-                  { 
-                    paddingTop: headerPaddingTop,
-                    paddingLeft: isLandscape ? Math.max(insets.left + 16, 24) : 24,
-                    paddingRight: isLandscape ? Math.max(insets.right + 16, 24) : 24,
-                  },
-                  isLandscape && styles.headerWrapperLandscape
-                ]}>
-                  <View style={styles.headerShelf}>
-                    <Text style={[styles.headerText, isLandscape && styles.headerTextLandscape]}>🎵 Dream Capsule</Text>
-                    <Pressable
-                      onPress={() => setIsExpandedView(false)}
-                      style={({ pressed }) => [
-                        styles.menuButton,
-                        pressed && styles.menuButtonPressed,
-                        isLandscape && styles.menuButtonLandscape,
-                      ]}
-                      accessibilityRole="button"
-                      accessibilityLabel="Exit expanded view"
-                    >
-                      <Text style={[styles.menuButtonText, { fontSize: 20 }]}>🔽</Text>
-                    </Pressable>
-                  </View>
-                </View>
-
-                {/* Expanded Audio Controls */}
-                <View style={[styles.expandedAudioSection]}>
-                  <GestureDetector gesture={djGesture}>
-                    <Reanimated.View style={[styles.djWheel, djWheelStyle, { transform: [{ scale: 2 }] }]}>
-                      <Text style={[styles.djWheelText, { color: accentColor, fontSize: 48 }]}>
-                        🎧
-                      </Text>
-                      <View style={styles.djWheelDots}>
-                        <View style={[styles.djWheelDot, { backgroundColor: accentColor, width: 8, height: 8 }]} />
-                        <View style={[styles.djWheelDot, { backgroundColor: accentColor, width: 8, height: 8 }]} />
-                        <View style={[styles.djWheelDot, { backgroundColor: accentColor, width: 8, height: 8 }]} />
-                        <View style={[styles.djWheelDot, { backgroundColor: accentColor, width: 8, height: 8 }]} />
-                        <View style={[styles.djWheelDot, { backgroundColor: accentColor, width: 8, height: 8 }]} />
-                        <View style={[styles.djWheelDot, { backgroundColor: accentColor, width: 8, height: 8 }]} />
-                      </View>
-                    </Reanimated.View>
-                  </GestureDetector>
-                  
-                  <Text style={[styles.expandedNowPlayingText, { color: accentColor }]}>
-                    {isAmbientPlaying ? 'Now Playing: Forest Dawn' : 'Paused'}
-                  </Text>
-                  
-                  <Pressable 
-                    onPress={togglePlayback}
-                    style={({ pressed }) => [
-                      styles.expandedPlayButton,
-                      { backgroundColor: accentColor },
-                      pressed && { opacity: 0.8, transform: [{ scale: 0.95 }] }
-                    ]}
-                    accessibilityRole="button"
-                    accessibilityLabel={isAmbientPlaying ? "Pause music" : "Play music"}
-                  >
-                    <Text style={styles.expandedPlayButtonText}>
-                      {isAmbientPlaying ? '⏸️ Pause' : '▶️ Play'}
-                    </Text>
-                  </Pressable>
-                  
-                  <View style={styles.expandedVolumeContainer}>
-                    <Text style={[styles.expandedVolumeLabel, { color: accentColor }]}>Volume</Text>
-                    <View style={[styles.expandedVolumeTrack, { borderColor: accentColor }]}>
-                      <Reanimated.View 
-                        style={[
-                          styles.expandedVolumeFill, 
-                          volumeFillStyle,
-                          { 
-                            backgroundColor: accentColor,
-                          }
-                        ]} 
-                      />
-                    </View>
-                    <VolumeText 
-                      style={[styles.expandedVolumePercentage]}
-                      color={accentColor}
-                    />
-                    <Text style={[styles.expandedVolumeHint, { color: accentColor }]}>
-                      Use device volume buttons or spin the wheel
-                    </Text>
-                  </View>
-                </View>
-                
-              </View>
-            </SafeAreaView>
-          </View>
-        </Pressable>
-      </Modal>
-
       </View>
-    </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </>
   );
 }
 
@@ -1781,10 +2028,25 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f2f9f2',
   },
+
   container: {
     flex: 1,
     backgroundColor: '#f2f9f2',
   },
+
+  expandedFullView: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1000,
+  },
+
   headerWrapper: {
     paddingBottom: 20,
     zIndex: 10,
@@ -1816,6 +2078,11 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(20, 83, 45, 0.1)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
+    textAlign: 'center',
+    flex: 1,
+    position: 'absolute',
+    left: 0,
+    right: 0,
   },
   menuButton: {
     paddingHorizontal: 6,
@@ -1863,6 +2130,39 @@ const styles = StyleSheet.create({
     color: '#166534',
     fontWeight: '700',
   },
+  headerShelfLandscape: {
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  headerSpacer: {
+    flex: 1,
+  },
+  expandButton: {
+    paddingHorizontal: 6,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    backgroundColor: 'transparent',
+  },
+  expandButtonPressed: {
+    backgroundColor: 'rgba(21, 101, 52, 0.14)',
+    borderColor: 'rgba(21, 101, 52, 0.22)',
+  },
+  expandButtonActive: {
+    backgroundColor: 'rgba(21, 101, 52, 0.08)',
+    borderColor: 'rgba(21, 101, 52, 0.16)',
+  },
+  expandIcon: {
+    fontSize: 24,
+    color: '#166534',
+    fontWeight: '700',
+  },
+  expandIconActive: {
+    color: '#0f5132',
+  },
+
   content: {
     gap: 28,
   },
@@ -1884,6 +2184,10 @@ const styles = StyleSheet.create({
     marginRight: 30, // Further reduced to give more space to harvest ledger
     marginLeft: 40,  // Slightly increased to center better
     alignSelf: 'flex-start',
+  },
+  lettuceWrapperExpandedAligned: {
+    marginTop: 40, // Push the clicker down to align better with harvest ledger
+    alignSelf: 'center',
   },
   lettuceBackdrop: {
     position: 'absolute',
@@ -2751,25 +3055,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     opacity: 1,
   },
-  expandedBackdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'transparent',
-    zIndex: 1000,
-  },
-  containerExpanded: {
-    transform: [{ scale: 1.05 }],
-    zIndex: 1001,
-  },
-  expandedContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-  },
+
   menuButtonLandscape: {
     paddingHorizontal: 4,
     paddingVertical: 4,
@@ -2807,62 +3093,5 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: '#fff',
   },
-  expandedAudioSection: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 32,
-    paddingHorizontal: 40,
-  },
-  expandedNowPlayingText: {
-    fontSize: 24,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  expandedPlayButton: {
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 24,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
-  expandedPlayButtonText: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#fff',
-    textAlign: 'center',
-  },
-  expandedVolumeContainer: {
-    alignItems: 'center',
-    gap: 16,
-    width: '100%',
-  },
-  expandedVolumeLabel: {
-    fontSize: 20,
-    fontWeight: '600',
-  },
-  expandedVolumeTrack: {
-    width: 200,
-    height: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    borderRadius: 4,
-    overflow: 'hidden',
-    borderWidth: 1,
-  },
-  expandedVolumeFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  expandedVolumePercentage: {
-    fontSize: 32,
-    fontWeight: '800',
-  },
-  expandedVolumeHint: {
-    fontSize: 14,
-    opacity: 0.8,
-    textAlign: 'center',
-  },
+
 });

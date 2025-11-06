@@ -131,6 +131,7 @@ type GameContextValue = {
   premiumAccentColor: string;
   customClickEmoji: string;
   gardenBackgroundColor: string;
+  isExpandedView: boolean;
   registerCustomEmoji: (emoji: string) => EmojiDefinition | null;
   setProfileLifetimeTotal: (value: number) => void;
   addHarvest: () => void;
@@ -161,6 +162,7 @@ type GameContextValue = {
   setPremiumAccentColor: (color: string) => void;
   setCustomClickEmoji: (emoji: string) => void;
   setGardenBackgroundColor: (color: string) => void;
+  setIsExpandedView: (value: boolean) => void;
   clearResumeNotice: () => void;
 };
 
@@ -574,6 +576,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [premiumAccentColor, setPremiumAccentColorState] = useState('#1f6f4a');
   const [customClickEmoji, setCustomClickEmojiState] = useState('🥬');
   const [gardenBackgroundColor, setGardenBackgroundColorState] = useState('#f2f9f2');
+  const [isExpandedView, setIsExpandedView] = useState(false);
   const initialisedRef = useRef(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const backgroundInfoRef = useRef<
@@ -1156,6 +1159,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     premiumAccentColor,
     customClickEmoji,
     gardenBackgroundColor,
+    isExpandedView,
     registerCustomEmoji,
     setProfileLifetimeTotal,
     addHarvest,
@@ -1180,6 +1184,8 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     setPremiumAccentColor,
     setCustomClickEmoji,
     setGardenBackgroundColor: setGardenBackgroundColorState,
+    isExpandedView,
+    setIsExpandedView,
     clearResumeNotice: () => setResumeNotice(null),
   }), [
     harvest,
@@ -1202,6 +1208,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     premiumAccentColor,
     customClickEmoji,
     gardenBackgroundColor,
+    isExpandedView,
     combinedEmojiCatalog,
     registerCustomEmoji,
     addHarvest,

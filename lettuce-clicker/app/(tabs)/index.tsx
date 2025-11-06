@@ -15,7 +15,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Reanimated, { useSharedValue, useAnimatedStyle, useAnimatedProps, runOnJS } from 'react-native-reanimated';
+import Reanimated, { useSharedValue, useAnimatedStyle, useAnimatedProps, runOnJS, FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 
@@ -156,6 +156,13 @@ export default function HomeScreen() {
     grantEmojiUnlock,
     isExpandedView,
     setIsExpandedView,
+    bedsideWidgetsEnabled,
+    hasPremiumUpgrade,
+    weatherData,
+    weatherError,
+    weatherLastUpdated,
+    updateWeatherData,
+    clearWeatherData,
   } = useGame();
 
   const lockedShopEmojis = useMemo(
@@ -621,6 +628,35 @@ export default function HomeScreen() {
     }
   }, [isExpandedView]);
 
+  const handleWeatherPress = useCallback(async () => {
+    if (weatherData) {
+      // Show current weather details
+      const lastUpdateTime = weatherLastUpdated ? new Date(weatherLastUpdated).toLocaleTimeString() : 'Never';
+      Alert.alert(
+        `Weather in ${weatherData.location}`,
+        `Temperature: ${weatherData.temperature}°C\nCondition: ${weatherData.condition}\nLast updated: ${lastUpdateTime}`,
+        [
+          { text: 'Refresh', onPress: updateWeatherData },
+          { text: 'Close', style: 'cancel' }
+        ]
+      );
+    } else {
+      // First time or error - try to fetch weather
+      await updateWeatherData();
+    }
+  }, [weatherData, weatherLastUpdated, updateWeatherData]);
+
+  // Auto-fetch weather when bedside widgets are first enabled
+  useEffect(() => {
+    if (bedsideWidgetsEnabled && !weatherData && !weatherError) {
+      // Fetch weather with a small delay to avoid overwhelming the API
+      const timer = setTimeout(() => {
+        updateWeatherData();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [bedsideWidgetsEnabled, weatherData, weatherError, updateWeatherData]);
+
   const handleSelectTheme = useCallback(
     (theme: HomeEmojiTheme) => {
       setHomeEmojiTheme(theme);
@@ -939,6 +975,65 @@ export default function HomeScreen() {
               ]}
               onPress={handleCloseExpandedView}
             >
+              {/* Bedside Widgets - Corner Overlays */}
+              {bedsideWidgetsEnabled && (
+                <>
+                  {/* Top Left - Alarm */}
+                  <Pressable
+                    style={styles.bedsideWidgetTopLeft}
+                    onPress={() => Alert.alert('Alarm', 'Alarm functionality coming soon!')}
+                    accessibilityLabel="Set alarm"
+                  >
+                    <Text style={styles.bedsideWidgetIcon}>⏰</Text>
+                  </Pressable>
+
+                  {/* Top Right - Weather */}
+                  <Pressable
+                    style={styles.bedsideWidgetTopRight}
+                    onPress={handleWeatherPress}
+                    accessibilityLabel={weatherData ? `Weather: ${weatherData.temperature}°C, ${weatherData.condition}` : 'Get weather'}
+                  >
+                    {weatherData ? (
+                      <View style={{ alignItems: 'center' }}>
+                        <Text style={styles.bedsideWidgetIcon}>{weatherData.emoji}</Text>
+                        <Text style={[styles.bedsideWidgetBatteryText, { fontSize: 8, marginTop: 2 }]}>
+                          {weatherData.temperature}°
+                        </Text>
+                      </View>
+                    ) : weatherError ? (
+                      <View style={{ alignItems: 'center' }}>
+                        <Text style={styles.bedsideWidgetIcon}>❌</Text>
+                        <Text style={[styles.bedsideWidgetBatteryText, { fontSize: 6, marginTop: 2 }]}>
+                          Tap
+                        </Text>
+                      </View>
+                    ) : (
+                      <View style={{ alignItems: 'center' }}>
+                        <Text style={styles.bedsideWidgetIcon}>🌤️</Text>
+                        <Text style={[styles.bedsideWidgetBatteryText, { fontSize: 6, marginTop: 2 }]}>
+                          Tap
+                        </Text>
+                      </View>
+                    )}
+                  </Pressable>
+
+                  {/* Bottom Left - Date */}
+                  <View style={styles.bedsideWidgetBottomLeft}>
+                    <Text style={styles.bedsideWidgetDateText}>
+                      {new Date().toLocaleDateString('en-US', { 
+                        weekday: 'short', 
+                        month: 'short', 
+                        day: 'numeric' 
+                      })}
+                    </Text>
+                  </View>
+
+                  {/* Bottom Right - Battery */}
+                  <View style={styles.bedsideWidgetBottomRight}>
+                    <Text style={styles.bedsideWidgetBatteryText}>🔋 85%</Text>
+                  </View>
+                </>
+              )}
               <View style={[
                 styles.lettuceWrapper, 
                 isLandscape && styles.lettuceWrapperLandscape,
@@ -1609,6 +1704,66 @@ export default function HomeScreen() {
                   </Pressable>
                 </Pressable>
               )}
+
+              {/* RSS Stream for Premium Users */}
+              {bedsideWidgetsEnabled && hasPremiumUpgrade && (
+                <Reanimated.View 
+                  entering={FadeInDown.duration(300).delay(200)}
+                  exiting={FadeOutUp.duration(200)}
+                  style={[styles.statsCard, { marginTop: 16 }]}
+                >
+                  <Pressable style={styles.statsCard}>
+                    <View
+                      pointerEvents="none"
+                      style={[styles.statsCardGrain, { backgroundColor: ledgerTheme.grainColor, opacity: ledgerTheme.grainOpacity }]}
+                    />
+                    <View
+                      pointerEvents="none"
+                      style={[styles.statsCardFrost, { backgroundColor: ledgerTheme.refraction }]}
+                    />
+                    <View
+                      pointerEvents="none"
+                      style={[styles.statsCardSheen, { backgroundColor: ledgerTheme.highlight }]}
+                    />
+                    <View
+                      pointerEvents="none"
+                      style={[styles.statsCardBorder, { borderColor: ledgerTheme.borderColor }]}
+                    />
+                    <View
+                      pointerEvents="none"
+                      style={[styles.statsCardInnerBorder, { borderColor: ledgerTheme.innerBorder }]}
+                    />
+                    <View
+                      pointerEvents="none"
+                      style={[styles.statsCardStitch, { borderColor: ledgerTheme.stitchColor }]}
+                    />
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={[styles.statsTitle, { color: ledgerTheme.tint }]}>📰 RSS Stream</Text>
+                      <Text style={[styles.statLabel, { color: ledgerTheme.muted, fontSize: 12, opacity: 0.6 }]}>Premium</Text>
+                    </View>
+                    <View style={styles.statRow}>
+                      <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Latest News</Text>
+                      <Text style={[styles.statValue, { color: ledgerTheme.tint, fontSize: 12 }]}>
+                        Coming Soon
+                      </Text>
+                    </View>
+                    <Pressable 
+                      style={({ pressed }) => [
+                        styles.statRow, 
+                        pressed && { opacity: 0.7, backgroundColor: 'rgba(255,255,255,0.1)' }
+                      ]}
+                      onPress={() => Alert.alert('RSS Stream', 'RSS news feed functionality coming soon for premium users!')}
+                      accessibilityRole="button"
+                      accessibilityLabel="View RSS news feed"
+                    >
+                      <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Status</Text>
+                      <Text style={[styles.statValue, { color: ledgerTheme.tint, fontWeight: '600' }]}>
+                        🌐 Tap to Configure
+                      </Text>
+                    </Pressable>
+                  </Pressable>
+                </Reanimated.View>
+              )}
             </Reanimated.View>
           </GestureDetector>
         </View>
@@ -2129,6 +2284,95 @@ const styles = StyleSheet.create({
     fontSize: 28,
     color: '#166534',
     fontWeight: '700',
+  },
+  bedsideButton: {
+    paddingHorizontal: 6,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    backgroundColor: 'transparent',
+  },
+  bedsideButtonPressed: {
+    backgroundColor: 'rgba(21, 101, 52, 0.14)',
+    borderColor: 'rgba(21, 101, 52, 0.22)',
+  },
+  bedsideIcon: {
+    fontSize: 26,
+    color: '#166534',
+    fontWeight: '700',
+  },
+  bedsideWidgetTopLeft: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    zIndex: 1001,
+  },
+  bedsideWidgetTopRight: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    zIndex: 1001,
+  },
+  bedsideWidgetBottomLeft: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    zIndex: 1001,
+  },
+  bedsideWidgetBottomRight: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    zIndex: 1001,
+  },
+  bedsideWidgetIcon: {
+    fontSize: 24,
+    textAlign: 'center',
+  },
+  bedsideWidgetDateText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    textAlign: 'center',
+  },
+  bedsideWidgetBatteryText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    textAlign: 'center',
   },
   headerShelfLandscape: {
     justifyContent: 'flex-end',

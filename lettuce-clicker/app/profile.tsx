@@ -61,6 +61,8 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
     setGardenBackgroundColor,
     profilePhotoWidgetEnabled,
     setProfilePhotoWidgetEnabled,
+    bedsideWidgetsEnabled,
+    setBedsideWidgetsEnabled,
     emojiCatalog,
     emojiInventory,
     registerCustomEmoji,
@@ -222,6 +224,13 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
       setProfilePhotoWidgetEnabled(value);
     },
     [setProfilePhotoWidgetEnabled]
+  );
+
+  const handleToggleBedsideWidgets = useCallback(
+    (value: boolean) => {
+      setBedsideWidgetsEnabled(value);
+    },
+    [setBedsideWidgetsEnabled]
   );
 
   const applyEmojiSelection = useCallback(
@@ -453,6 +462,24 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
                 onValueChange={handleTogglePhotoWidget}
                 disabled={widgetDisabled}
                 thumbColor={widgetThumbColor}
+                trackColor={{
+                  false: '#cbd5e0',
+                  true: '#86efac',
+                }}
+              />
+            </View>
+
+            <View style={styles.widgetToggleContainer}>
+              <View style={styles.widgetToggleTextContainer}>
+                <Text style={styles.widgetToggleLabel}>Bedside widgets</Text>
+                <Text style={styles.widgetToggleCopy}>
+                  Show alarm, weather, date, battery, and RSS feed for bedside use.
+                </Text>
+              </View>
+              <Switch
+                value={bedsideWidgetsEnabled}
+                onValueChange={handleToggleBedsideWidgets}
+                thumbColor={bedsideWidgetsEnabled ? '#047857' : '#f4f4f5'}
                 trackColor={{
                   false: '#cbd5e0',
                   true: '#86efac',

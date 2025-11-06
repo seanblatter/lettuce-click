@@ -8,6 +8,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { weatherService } from '../lib/weatherService';
 
 import { computeBellCurveCost, gardenEmojiCatalog } from '@/constants/emojiCatalog';
 import { AppState, AppStateStatus } from 'react-native';
@@ -132,6 +133,10 @@ type GameContextValue = {
   customClickEmoji: string;
   gardenBackgroundColor: string;
   isExpandedView: boolean;
+  bedsideWidgetsEnabled: boolean;
+  weatherData: { temperature: number; condition: string; emoji: string; location: string } | null;
+  weatherError: string | null;
+  weatherLastUpdated: number;
   registerCustomEmoji: (emoji: string) => EmojiDefinition | null;
   setProfileLifetimeTotal: (value: number) => void;
   addHarvest: () => void;
@@ -163,6 +168,9 @@ type GameContextValue = {
   setCustomClickEmoji: (emoji: string) => void;
   setGardenBackgroundColor: (color: string) => void;
   setIsExpandedView: (value: boolean) => void;
+  setBedsideWidgetsEnabled: (value: boolean) => void;
+  updateWeatherData: () => Promise<void>;
+  clearWeatherData: () => void;
   clearResumeNotice: () => void;
 };
 
@@ -577,6 +585,10 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [customClickEmoji, setCustomClickEmojiState] = useState('🥬');
   const [gardenBackgroundColor, setGardenBackgroundColorState] = useState('#f2f9f2');
   const [isExpandedView, setIsExpandedView] = useState(false);
+  const [bedsideWidgetsEnabled, setBedsideWidgetsEnabled] = useState(false);
+  const [weatherData, setWeatherData] = useState<{ temperature: number; condition: string; emoji: string; location: string } | null>(null);
+  const [weatherError, setWeatherError] = useState<string | null>(null);
+  const [weatherLastUpdated, setWeatherLastUpdated] = useState(0);
   const initialisedRef = useRef(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const backgroundInfoRef = useRef<
@@ -1160,6 +1172,10 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     customClickEmoji,
     gardenBackgroundColor,
     isExpandedView,
+    bedsideWidgetsEnabled,
+    weatherData,
+    weatherError,
+    weatherLastUpdated,
     registerCustomEmoji,
     setProfileLifetimeTotal,
     addHarvest,
@@ -1184,9 +1200,33 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     setPremiumAccentColor,
     setCustomClickEmoji,
     setGardenBackgroundColor: setGardenBackgroundColorState,
-    isExpandedView,
     setIsExpandedView,
+    setBedsideWidgetsEnabled,
     clearResumeNotice: () => setResumeNotice(null),
+    updateWeatherData: async () => {
+      setWeatherError(null);
+      try {
+        const result = await weatherService.getCurrentWeather(true);
+        if ('message' in result) {
+          setWeatherError(result.message);
+          setWeatherData(null);
+        } else {
+          setWeatherData(result);
+          setWeatherError(null);
+          setWeatherLastUpdated(Date.now());
+        }
+      } catch (error) {
+        console.error('Weather update error:', error);
+        setWeatherError('Weather service unavailable');
+        setWeatherData(null);
+      }
+    },
+    clearWeatherData: () => {
+      setWeatherData(null);
+      setWeatherError(null);
+      setWeatherLastUpdated(0);
+      weatherService.clearCache();
+    },
   }), [
     harvest,
     lifetimeHarvest,
@@ -1209,6 +1249,10 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     customClickEmoji,
     gardenBackgroundColor,
     isExpandedView,
+    bedsideWidgetsEnabled,
+    weatherData,
+    weatherError,
+    weatherLastUpdated,
     combinedEmojiCatalog,
     registerCustomEmoji,
     addHarvest,

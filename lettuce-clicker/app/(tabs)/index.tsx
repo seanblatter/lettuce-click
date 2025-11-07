@@ -30,6 +30,7 @@ import { useAmbientAudio } from '@/context/AmbientAudioContext';
 import { preloadRewardedAd, showRewardedAd } from '@/lib/rewardedAd';
 import { formatTemperature, getDisplayTemperature, detectTemperatureUnitFromLocation } from '@/lib/weatherUtils';
 import { TemperatureUnitModal } from '@/components/TemperatureUnitModal';
+import { RSSWidget } from '@/components/RSSWidget';
 
 const MODAL_STORAGE_KEY = 'lettuce-click:grow-your-park-dismissed';
 const DAILY_BONUS_LAST_CLAIM_KEY = 'lettuce-click:daily-bonus-last-claim';
@@ -166,10 +167,16 @@ export default function HomeScreen() {
     weatherLastUpdated,
     temperatureUnit,
     hasManuallySetTemperatureUnit,
+    rssFeeds,
+    rssItems,
+    rssError,
+    rssLastUpdated,
     updateWeatherData,
     clearWeatherData,
     setTemperatureUnit,
     setHasManuallySetTemperatureUnit,
+    updateRSSFeeds,
+    clearRSSData,
   } = useGame();
 
   const lockedShopEmojis = useMemo(
@@ -665,6 +672,17 @@ export default function HomeScreen() {
     }
   }, [bedsideWidgetsEnabled, weatherData, weatherError, updateWeatherData]);
 
+  // Auto-fetch RSS feeds when bedside widgets are enabled
+  useEffect(() => {
+    if (bedsideWidgetsEnabled && rssItems.length === 0 && !rssError) {
+      // Fetch RSS feeds with a small delay
+      const timer = setTimeout(() => {
+        updateRSSFeeds();
+      }, 2000); // Delay slightly more than weather to stagger requests
+      return () => clearTimeout(timer);
+    }
+  }, [bedsideWidgetsEnabled, rssItems, rssError, updateRSSFeeds]);
+
   // Auto-detect temperature unit based on location (only if user hasn't manually set it)
   useEffect(() => {
     if (weatherData && weatherData.location && !hasManuallySetTemperatureUnit) {
@@ -1060,6 +1078,8 @@ export default function HomeScreen() {
                 </>
               )}
 
+
+
               {/* Temperature Settings Container - Center of Expanded View */}
               {bedsideWidgetsEnabled && showTemperatureSettings && (
                 <View style={styles.temperatureSettingsContainer}>
@@ -1413,6 +1433,17 @@ export default function HomeScreen() {
                   </Reanimated.View>
                 </GestureDetector>
               </View>
+
+              {/* RSS Feed Widget - Below all bedside widgets (date, battery, alarm, weather) */}
+              {bedsideWidgetsEnabled && rssFeeds.some(feed => feed.enabled) && (
+                <View style={styles.rssWidgetContainer}>
+                  <RSSWidget
+                    items={rssItems}
+                    error={rssError}
+                    onRefresh={updateRSSFeeds}
+                  />
+                </View>
+              )}
             </Pressable>
           ) : (
             /* NORMAL VIEW - Everything visible */
@@ -3523,6 +3554,25 @@ const styles = StyleSheet.create({
   },
   temperatureUnitButtonTextActive: {
     color: '#FFFFFF',
+  },
+  rssWidgetContainer: {
+    position: 'absolute',
+    bottom: 20, // Slightly above bottom to avoid conflict with system UI
+    left: 16,
+    right: 16,
+    height: 90, // Good height for content
+    backgroundColor: 'rgba(255, 255, 255, 0.98)', // Very visible white background
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 15,
+    zIndex: 1003, // Very high to ensure visibility
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
   },
 
 });

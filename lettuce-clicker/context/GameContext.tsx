@@ -9,6 +9,7 @@ import React, {
   useState,
 } from 'react';
 import { weatherService } from '../lib/weatherService';
+import { rssService, DEFAULT_RSS_FEEDS, type RSSFeed, type RSSFeedItem } from '../lib/rssService';
 
 import { computeBellCurveCost, gardenEmojiCatalog } from '@/constants/emojiCatalog';
 import { AppState, AppStateStatus } from 'react-native';
@@ -139,6 +140,10 @@ type GameContextValue = {
   weatherLastUpdated: number;
   temperatureUnit: 'celsius' | 'fahrenheit';
   hasManuallySetTemperatureUnit: boolean;
+  rssFeeds: RSSFeed[];
+  rssItems: RSSFeedItem[];
+  rssError: string | null;
+  rssLastUpdated: number;
   registerCustomEmoji: (emoji: string) => EmojiDefinition | null;
   setProfileLifetimeTotal: (value: number) => void;
   addHarvest: () => void;
@@ -175,6 +180,11 @@ type GameContextValue = {
   clearWeatherData: () => void;
   setTemperatureUnit: (unit: 'celsius' | 'fahrenheit') => void;
   setHasManuallySetTemperatureUnit: (value: boolean) => void;
+  updateRSSFeeds: () => Promise<void>;
+  clearRSSData: () => void;
+  toggleRSSFeed: (feedId: string, enabled: boolean) => void;
+  addCustomRSSFeed: (feed: Omit<RSSFeed, 'id'>) => void;
+  removeRSSFeed: (feedId: string) => void;
   clearResumeNotice: () => void;
 };
 
@@ -563,6 +573,7 @@ type StoredGameState = {
   temperatureUnit?: 'celsius' | 'fahrenheit';
   bedsideWidgetsEnabled?: boolean;
   hasManuallySetTemperatureUnit?: boolean;
+  rssFeeds?: RSSFeed[];
 };
 
 const GameContext = createContext<GameContextValue | undefined>(undefined);
@@ -598,6 +609,10 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [weatherLastUpdated, setWeatherLastUpdated] = useState(0);
   const [temperatureUnit, setTemperatureUnit] = useState<'celsius' | 'fahrenheit'>('celsius');
   const [hasManuallySetTemperatureUnit, setHasManuallySetTemperatureUnit] = useState(false);
+  const [rssFeeds, setRssFeeds] = useState<RSSFeed[]>(DEFAULT_RSS_FEEDS);
+  const [rssItems, setRssItems] = useState<RSSFeedItem[]>([]);
+  const [rssError, setRssError] = useState<string | null>(null);
+  const [rssLastUpdated, setRssLastUpdated] = useState(0);
   const initialisedRef = useRef(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const backgroundInfoRef = useRef<
@@ -1121,7 +1136,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
           ? {
               ...placement,
               ...updates,
-            }
+            } as Placement
           : placement
       )
     );
@@ -1187,6 +1202,10 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     weatherLastUpdated,
     temperatureUnit,
     hasManuallySetTemperatureUnit,
+    rssFeeds,
+    rssItems,
+    rssError,
+    rssLastUpdated,
     registerCustomEmoji,
     setProfileLifetimeTotal,
     addHarvest,
@@ -1240,6 +1259,42 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     },
     setTemperatureUnit,
     setHasManuallySetTemperatureUnit,
+    updateRSSFeeds: async () => {
+      try {
+        setRssError(null);
+        const items = await rssService.fetchMultipleFeeds(rssFeeds);
+        setRssItems(items);
+        setRssLastUpdated(Date.now());
+      } catch (error) {
+        console.warn('RSS update error:', error);
+        setRssError('RSS service unavailable');
+        setRssItems([]);
+      }
+    },
+    clearRSSData: () => {
+      setRssItems([]);
+      setRssError(null);
+      setRssLastUpdated(0);
+      rssService.clearAllCache();
+    },
+    toggleRSSFeed: (feedId: string, enabled: boolean) => {
+      setRssFeeds(prevFeeds => 
+        prevFeeds.map(feed => 
+          feed.id === feedId ? { ...feed, enabled } : feed
+        )
+      );
+    },
+    addCustomRSSFeed: (feedData: Omit<RSSFeed, 'id'>) => {
+      const newFeed: RSSFeed = {
+        ...feedData,
+        id: `custom-${Date.now()}`,
+      };
+      setRssFeeds(prevFeeds => [...prevFeeds, newFeed]);
+    },
+    removeRSSFeed: (feedId: string) => {
+      setRssFeeds(prevFeeds => prevFeeds.filter(feed => feed.id !== feedId));
+      rssService.clearFeedCache(feedId);
+    },
   }), [
     harvest,
     lifetimeHarvest,
@@ -1379,7 +1434,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
             if (!shouldResetSession && parsed.ownedThemes && typeof parsed.ownedThemes === 'object') {
               setOwnedThemes(() => {
                 const merged = { ...defaultOwnedThemes };
-                Object.entries(parsed.ownedThemes).forEach(([key, value]) => {
+                Object.entries(parsed.ownedThemes!).forEach(([key, value]) => {
                   if (typeof value === 'boolean' && typeof key === 'string' && isHomeEmojiTheme(key)) {
                     const themeKey = key as HomeEmojiTheme;
                     merged[themeKey] = merged[themeKey] || value;
@@ -1427,6 +1482,9 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
             }
             if (typeof parsed.hasManuallySetTemperatureUnit === 'boolean') {
               setHasManuallySetTemperatureUnit(parsed.hasManuallySetTemperatureUnit);
+            }
+            if (Array.isArray(parsed.rssFeeds)) {
+              setRssFeeds(parsed.rssFeeds);
             }
           } catch {
             // ignore malformed stored data
@@ -1514,6 +1572,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       temperatureUnit,
       bedsideWidgetsEnabled,
       hasManuallySetTemperatureUnit,
+      rssFeeds,
     };
 
     AsyncStorage.setItem(GAME_STORAGE_KEY, JSON.stringify(payload)).catch(() => {
@@ -1534,6 +1593,8 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     purchasedUpgrades,
     ownedThemes,
     temperatureUnit,
+    rssFeeds,
+    rssItems,
   ]);
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;

@@ -1,3 +1,5 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 export interface RSSFeedItem {
   id: string;
   title: string;
@@ -14,7 +16,7 @@ export interface RSSFeed {
   url: string;
   category: string;
   enabled: boolean;
-  lastFetched?: number;
+  items?: RSSFeedItem[]; // Store items directly for instant access
 }
 
 export interface RSSCache {
@@ -24,340 +26,223 @@ export interface RSSCache {
   };
 }
 
-// Predefined popular RSS feeds (simplified for demo)
+// DYNAMIC RSS FEEDS - Real feeds that update daily!
 export const DEFAULT_RSS_FEEDS: RSSFeed[] = [
   {
-    id: 'demo-feed',
-    name: 'Demo News',
+    id: 'bbc-news',
+    name: 'BBC News',
     url: 'https://feeds.bbci.co.uk/news/rss.xml',
     category: 'News',
     enabled: true,
+    items: [] // Items will be populated by fetchRSSFeed
   },
+  {
+    id: 'techcrunch',
+    name: 'TechCrunch',
+    url: 'https://techcrunch.com/feed/',
+    category: 'Technology',
+    enabled: true,
+    items: []
+  },
+  {
+    id: 'reuters-business',
+    name: 'Reuters Business',
+    url: 'https://feeds.reuters.com/reuters/businessNews',
+    category: 'Business',
+    enabled: true,
+    items: []
+  },
+  {
+    id: 'cnn-news',
+    name: 'CNN News',
+    url: 'http://rss.cnn.com/rss/edition.rss',
+    category: 'News',
+    enabled: true,
+    items: []
+  },
+  {
+    id: 'hacker-news',
+    name: 'Hacker News',
+    url: 'https://hnrss.org/frontpage',
+    category: 'Technology',
+    enabled: true,
+    items: []
+  }
 ];
 
-class RSSService {
-  private cache: RSSCache = {};
-  private readonly CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
-  
-  // Multiple proxy options for better reliability
-  private readonly RSS_PROXIES = [
-    'https://api.allorigins.win/get?url=',
-    'https://cors-anywhere.herokuapp.com/',
-    'https://api.codetabs.com/v1/proxy?quest=',
-    'https://thingproxy.freeboard.io/fetch/',
-  ];
+// Cache settings
+const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+const RSS_CACHE_KEY = '@lettuce_rss_cache';
+const RSS_LAST_UPDATE_KEY = '@lettuce_rss_last_update';
+
+class DynamicRSSService {
 
   /**
-   * Fetch and parse RSS feed with fallback proxies
+   * Check if cache needs refresh (daily update)
    */
-  async fetchFeed(feed: RSSFeed): Promise<RSSFeedItem[]> {
+  private async shouldRefreshCache(): Promise<boolean> {
     try {
-      // Check cache first
-      const cached = this.cache[feed.id];
-      if (cached && Date.now() - cached.lastUpdated < this.CACHE_DURATION) {
-        console.log(`📦 Using cached data for ${feed.name}`);
-        return cached.items;
-      }
-
-      console.log(`🔄 Fetching RSS feed: ${feed.name}`);
+      const lastUpdate = await AsyncStorage.getItem(RSS_LAST_UPDATE_KEY);
+      if (!lastUpdate) return true;
       
-      // Try multiple proxies
-      for (let i = 0; i < this.RSS_PROXIES.length; i++) {
-        try {
-          const items = await this.tryFetchWithProxy(feed, i);
-          if (items.length > 0) {
-            // Update cache
-            this.cache[feed.id] = {
-              items,
-              lastUpdated: Date.now(),
-            };
-            console.log(`✅ Successfully fetched ${items.length} items from ${feed.name}`);
-            return items;
-          }
-        } catch (proxyError) {
-          const errorMsg = proxyError instanceof Error ? proxyError.message : 'Unknown error';
-          console.warn(`❌ Proxy ${i + 1} failed for ${feed.name}:`, errorMsg);
-          // Continue to next proxy
-        }
-      }
-
-      throw new Error('All proxies failed');
-
+      const timeSinceUpdate = Date.now() - parseInt(lastUpdate);
+      return timeSinceUpdate > CACHE_DURATION;
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      console.warn(`❌ Failed to fetch RSS feed ${feed.name}:`, errorMsg);
-      
-      // Return cached items if available
-      const cached = this.cache[feed.id];
-      if (cached) {
-        console.log(`📦 Falling back to cached data for ${feed.name}`);
-        return cached.items;
-      }
-      
-      // Return mock data as fallback to always show something
-      console.log(`🎭 Using mock data for ${feed.name} (all sources failed)`);
-      return this.getMockRSSItems(feed);
+      console.warn('Error checking cache timestamp:', error);
+      return true;
     }
   }
 
   /**
-   * Try fetching with a specific proxy
+   * Parse RSS XML to extract articles
    */
-  private async tryFetchWithProxy(feed: RSSFeed, proxyIndex: number): Promise<RSSFeedItem[]> {
-    const proxy = this.RSS_PROXIES[proxyIndex];
-    let proxyUrl: string;
+  private parseRSSXML(xmlText: string, feedSource: string): RSSFeedItem[] {
+    const items: RSSFeedItem[] = [];
+    
+    // Simple regex-based RSS parsing (for demo - in production use proper XML parser)
+    const itemRegex = /<item[^>]*>(.*?)<\/item>/gs;
+    const titleRegex = /<title[^>]*><!\[CDATA\[(.*?)\]\]><\/title>|<title[^>]*>(.*?)<\/title>/s;
+    const linkRegex = /<link[^>]*>(.*?)<\/link>/s;
+    const descRegex = /<description[^>]*><!\[CDATA\[(.*?)\]\]><\/description>|<description[^>]*>(.*?)<\/description>/s;
+    const dateRegex = /<pubDate[^>]*>(.*?)<\/pubDate>/s;
+    
+    let match;
+    let itemCount = 0;
+    
+    while ((match = itemRegex.exec(xmlText)) !== null && itemCount < 5) {
+      const itemXml = match[1];
+      
+      const titleMatch = titleRegex.exec(itemXml);
+      const linkMatch = linkRegex.exec(itemXml);
+      const descMatch = descRegex.exec(itemXml);
+      const dateMatch = dateRegex.exec(itemXml);
+      
+      const title = (titleMatch?.[1] || titleMatch?.[2] || 'Untitled').trim();
+      const link = linkMatch?.[1]?.trim() || '';
+      const description = (descMatch?.[1] || descMatch?.[2] || '').trim();
+      const pubDate = dateMatch?.[1] || new Date().toISOString();
+      
+      if (title && link) {
+        items.push({
+          id: `${feedSource}-${itemCount}-${Date.now()}`,
+          title: this.cleanText(title),
+          description: this.cleanText(description).slice(0, 200),
+          link: link,
+          pubDate: pubDate,
+          source: feedSource,
+          category: 'News'
+        });
+        itemCount++;
+      }
+    }
+    
+    console.log(`📰 Parsed ${items.length} articles from ${feedSource}`);
+    return items;
+  }
 
-    // Different proxy formats and handling
-    if (proxy.includes('allorigins')) {
-      proxyUrl = `${proxy}${encodeURIComponent(feed.url)}`;
-    } else if (proxy.includes('cors-anywhere')) {
-      proxyUrl = `${proxy}${feed.url}`;
-    } else if (proxy.includes('codetabs')) {
-      proxyUrl = `${proxy}${encodeURIComponent(feed.url)}`;
-    } else if (proxy.includes('thingproxy')) {
-      proxyUrl = `${proxy}${encodeURIComponent(feed.url)}`;
-    } else {
-      proxyUrl = `${proxy}${encodeURIComponent(feed.url)}`;
+  /**
+   * Clean HTML entities and tags from text
+   */
+  private cleanText(text: string): string {
+    return text
+      .replace(/<[^>]*>/g, '') // Remove HTML tags
+      .replace(/&quot;/g, '"')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&#x27;/g, "'")
+      .replace(/&#x2F;/g, '/')
+      .trim();
+  }
+
+  /**
+   * Fetch fresh RSS content from URL
+   */
+  async fetchFeed(feed: RSSFeed): Promise<RSSFeedItem[]> {
+    if (!feed.enabled) {
+      return [];
     }
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
-
+    const startTime = Date.now();
+    
     try {
-      console.log(`🌐 Trying proxy ${proxyIndex + 1}: ${proxy.split('/')[2]}`);
+      // Check cache first
+      const shouldRefresh = await this.shouldRefreshCache();
       
-      const response = await fetch(proxyUrl, {
-        signal: controller.signal,
-        headers: {
-          'Accept': 'application/json, text/plain, */*',
-          'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-          'X-Requested-With': 'XMLHttpRequest',
-        },
-        method: 'GET',
-      });
+      if (!shouldRefresh) {
+        // Try to load from cache
+        const cached = await this.getCachedItems(feed.id);
+        if (cached.length > 0) {
+          const loadTime = Date.now() - startTime;
+          console.log(`📱 Cache hit for ${feed.name}: ${cached.length} items in ${loadTime}ms`);
+          return cached;
+        }
+      }
 
+      console.log(`🔄 Fetching fresh content from ${feed.name}...`);
+      
+      // Fetch fresh content with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
+      const response = await fetch(feed.url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/xml, text/xml, application/rss+xml',
+          'User-Agent': 'LettuceClicker/1.0'
+        },
+        signal: controller.signal
+      });
+      
       clearTimeout(timeoutId);
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      let xmlText: string;
+      const xmlText = await response.text();
+      const items = this.parseRSSXML(xmlText, feed.name);
 
-      // Handle different proxy response formats
-      try {
-        if (proxy.includes('allorigins')) {
-          const data = await response.json();
-          if (data.status && data.status.http_code !== 200) {
-            throw new Error(`Proxy returned HTTP ${data.status.http_code}`);
-          }
-          xmlText = data.contents;
-        } else {
-          xmlText = await response.text();
-        }
-      } catch (parseError) {
-        throw new Error(`Failed to parse response: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
-      }
+      // Cache the results
+      await this.cacheItems(feed.id, items);
+      await AsyncStorage.setItem(RSS_LAST_UPDATE_KEY, Date.now().toString());
 
-      if (!xmlText || xmlText.length === 0) {
-        throw new Error('Empty response from proxy');
-      }
-
-      if (xmlText.includes('404') || xmlText.includes('Not Found')) {
-        throw new Error('RSS feed not found (404)');
-      }
-
-      const items = this.parseRSSContent(xmlText, feed);
-      if (items.length === 0) {
-        throw new Error('No valid RSS items parsed');
-      }
-
+      const loadTime = Date.now() - startTime;
+      console.log(`🆕 Fresh ${feed.name}: ${items.length} items in ${loadTime}ms`);
+      
       return items;
-
+      
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      console.warn(`❌ Proxy ${proxyIndex + 1} (${proxy.split('/')[2]}) failed: ${errorMsg}`);
-      throw error;
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  }
-
-  /**
-   * Parse RSS content (works in both React Native and Web)
-   */
-  private parseRSSContent(xmlText: string, feed: RSSFeed): RSSFeedItem[] {
-    try {
-      // Simple regex-based parsing that works everywhere
-      const items: RSSFeedItem[] = [];
+      console.warn(`❌ RSS fetch error for ${feed.name}:`, error instanceof Error ? error.message : error);
       
-      // Extract items using regex (more reliable than DOMParser in RN)
-      const itemMatches = xmlText.match(/<item[^>]*>[\s\S]*?<\/item>/gi) || [];
-      
-      itemMatches.forEach((itemXml, index) => {
-        try {
-          const title = this.extractTag(itemXml, 'title') || 'Untitled';
-          const description = this.extractTag(itemXml, 'description') || '';
-          const link = this.extractTag(itemXml, 'link') || '';
-          const pubDate = this.extractTag(itemXml, 'pubDate') || new Date().toISOString();
-          const category = this.extractTag(itemXml, 'category') || feed.category;
-
-          const id = `${feed.id}-${index}-${Date.now()}`;
-
-          items.push({
-            id,
-            title: this.cleanText(title),
-            description: this.cleanText(description).substring(0, 200), // Limit description
-            link,
-            pubDate,
-            source: feed.name,
-            category,
-          });
-        } catch (error) {
-          console.warn('Failed to parse RSS item:', error);
+      // Fallback to cache if network fails
+      try {
+        const cached = await this.getCachedItems(feed.id);
+        if (cached.length > 0) {
+          console.log(`📱 Network failed, using cached ${feed.name}: ${cached.length} items`);
+          return cached;
         }
-      });
-
-      return items.slice(0, 10); // Limit to 10 items per feed
-    } catch (error) {
-      console.warn('Failed to parse RSS XML:', error);
+      } catch (cacheError) {
+        console.warn(`❌ Cache fallback failed for ${feed.name}:`, cacheError);
+      }
+      
+      console.warn(`⚠️ No items available for ${feed.name}, returning empty array`);
       return [];
     }
   }
 
-  /**
-   * Extract tag content using regex (React Native compatible)
-   */
-  private extractTag(xml: string, tagName: string): string | null {
-    const regex = new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)<\\/${tagName}>`, 'i');
-    const match = xml.match(regex);
-    return match ? match[1].trim() : null;
-  }
+
+
+
+
+
 
   /**
-   * Generate mock RSS items when all proxies fail
-   */
-  private getMockRSSItems(feed: RSSFeed): RSSFeedItem[] {
-    const demoItems: RSSFeedItem[] = [
-      {
-        id: `demo-1-${Date.now()}`,
-        title: 'Breaking: Scientists discover new species in deep ocean',
-        description: 'Researchers have identified a previously unknown marine creature living at record depths.',
-        link: '#',
-        pubDate: new Date().toISOString(),
-        source: 'Science News',
-        category: 'Science',
-      },
-      {
-        id: `demo-2-${Date.now()}`,
-        title: 'Tech giant announces revolutionary AI breakthrough',
-        description: 'New artificial intelligence system shows remarkable capabilities in problem solving.',
-        link: '#',
-        pubDate: new Date(Date.now() - 300000).toISOString(),
-        source: 'Tech Today',
-        category: 'Technology',
-      },
-      {
-        id: `demo-3-${Date.now()}`,
-        title: 'Global climate summit reaches historic agreement',
-        description: 'World leaders unite on comprehensive environmental protection measures.',
-        link: '#',
-        pubDate: new Date(Date.now() - 600000).toISOString(),
-        source: 'World News',
-        category: 'Environment',
-      },
-      {
-        id: `demo-4-${Date.now()}`,
-        title: 'Space mission reveals stunning cosmic discoveries',
-        description: 'Latest telescope images show unprecedented details of distant galaxies.',
-        link: '#',
-        pubDate: new Date(Date.now() - 900000).toISOString(),
-        source: 'Space Daily',
-        category: 'Space',
-      },
-      {
-        id: `demo-5-${Date.now()}`,
-        title: 'Medical breakthrough offers hope for rare diseases',
-        description: 'New treatment shows promising results in clinical trials.',
-        link: '#',
-        pubDate: new Date(Date.now() - 1200000).toISOString(),
-        source: 'Medical Journal',
-        category: 'Health',
-      },
-    ];
-
-    return demoItems;
-  }
-
-  /**
-   * Parse RSS items from XML document
-   */
-  private parseRSSItems(xmlDoc: Document, feed: RSSFeed): RSSFeedItem[] {
-    const items: RSSFeedItem[] = [];
-    const itemNodes = xmlDoc.querySelectorAll('item');
-
-    itemNodes.forEach((item, index) => {
-      try {
-        const title = this.getTextContent(item, 'title') || 'Untitled';
-        const description = this.getTextContent(item, 'description') || '';
-        const link = this.getTextContent(item, 'link') || '';
-        const pubDate = this.getTextContent(item, 'pubDate') || new Date().toISOString();
-        const category = this.getTextContent(item, 'category') || feed.category;
-
-        // Create unique ID
-        const id = `${feed.id}-${index}-${Date.now()}`;
-
-        items.push({
-          id,
-          title: this.cleanText(title),
-          description: this.cleanText(description),
-          link,
-          pubDate,
-          source: feed.name,
-          category,
-        });
-      } catch (error) {
-        console.warn('Failed to parse RSS item:', error);
-      }
-    });
-
-    return items.slice(0, 10); // Limit to 10 items per feed
-  }
-
-  /**
-   * Get text content from XML element
-   */
-  private getTextContent(parent: Element, tagName: string): string | null {
-    const element = parent.querySelector(tagName);
-    return element?.textContent?.trim() || null;
-  }
-
-  /**
-   * Clean HTML tags and decode entities from text
-   */
-  private cleanText(text: string): string {
-    // Remove HTML tags
-    const cleaned = text.replace(/<[^>]*>/g, '');
-    
-    // Decode common HTML entities
-    const entityMap: { [key: string]: string } = {
-      '&amp;': '&',
-      '&lt;': '<',
-      '&gt;': '>',
-      '&quot;': '"',
-      '&#39;': "'",
-      '&apos;': "'",
-    };
-
-    return cleaned.replace(/&[a-zA-Z0-9#]+;/g, (match) => {
-      return entityMap[match] || match;
-    }).trim();
-  }
-
-  /**
-   * Fetch multiple feeds
+   * Get RSS items from multiple feeds - fetches fresh daily content!
    */
   async fetchMultipleFeeds(feeds: RSSFeed[]): Promise<RSSFeedItem[]> {
+    const startTime = Date.now();
+    
     const enabledFeeds = feeds.filter(feed => feed.enabled);
     
     if (enabledFeeds.length === 0) {
@@ -365,25 +250,28 @@ class RSSService {
       return [];
     }
 
-    console.log(`🔄 Fetching ${enabledFeeds.length} RSS feeds:`, enabledFeeds.map(f => f.name));
+    console.log(`🔄 Fetching RSS from ${enabledFeeds.length} feeds...`);
 
-    // Fetch all feeds in parallel
-    const promises = enabledFeeds.map(feed => this.fetchFeed(feed));
-    const results = await Promise.allSettled(promises);
+    // Fetch from all enabled feeds
+    console.log(`🔄 Creating promises for ${enabledFeeds.length} feeds...`);
+    const feedPromises = enabledFeeds.map(feed => this.fetchFeed(feed));
+    
+    console.log(`⏳ Waiting for ${feedPromises.length} feed promises to settle...`);
+    const feedResults = await Promise.allSettled(feedPromises);
+    console.log(`✅ All feed promises settled, processing results...`);
 
-    // Combine all items
     const allItems: RSSFeedItem[] = [];
-    let successCount = 0;
-    results.forEach((result, index) => {
+    
+    feedResults.forEach((result, index) => {
       if (result.status === 'fulfilled') {
+        console.log(`✅ ${enabledFeeds[index].name}: ${result.value.length} items`);
         allItems.push(...result.value);
-        successCount++;
       } else {
-        console.warn(`❌ Feed ${enabledFeeds[index].name} failed:`, result.reason);
+        console.warn(`❌ Failed to fetch ${enabledFeeds[index].name}:`, result.reason);
       }
     });
 
-    console.log(`📰 Successfully fetched ${successCount}/${enabledFeeds.length} feeds, ${allItems.length} total items`);
+    console.log(`📊 Total items collected: ${allItems.length}`);
 
     // Sort by date (newest first)
     allItems.sort((a, b) => {
@@ -392,30 +280,75 @@ class RSSService {
       return dateB - dateA;
     });
 
-    return allItems.slice(0, 20); // Limit to 20 total items
+    const loadTime = Date.now() - startTime;
+    console.log(`🆕 DYNAMIC RSS: Loaded ${allItems.length} items from ${enabledFeeds.length} feeds in ${loadTime}ms`);
+
+    return allItems.slice(0, 20);
   }
 
   /**
-   * Clear cache for a specific feed
+   * Get available feeds for configuration
+   */
+  getDefaultFeeds(): RSSFeed[] {
+    return DEFAULT_RSS_FEEDS;
+  }
+
+  /**
+   * Add a custom feed (for future expansion)
+   */
+  addCustomFeed(feed: RSSFeed): void {
+    DEFAULT_RSS_FEEDS.push(feed);
+  }
+
+  /**
+   * Update feed items (for future real RSS integration)
+   */
+  updateFeedItems(feedId: string, items: RSSFeedItem[]): void {
+    const feed = DEFAULT_RSS_FEEDS.find(f => f.id === feedId);
+    if (feed) {
+      feed.items = items;
+    }
+  }
+
+  /**
+   * Legacy compatibility - no longer needed but kept for compatibility
    */
   clearFeedCache(feedId: string): void {
-    delete this.cache[feedId];
+    // No cache to clear in instant mode
   }
 
   /**
-   * Clear all cache
+   * Clear all cache (no-op in instant mode)
    */
   clearAllCache(): void {
-    this.cache = {};
+    // No cache to clear in instant mode  
   }
 
   /**
-   * Get cached items for a feed
+   * Cache RSS items
    */
-  getCachedItems(feedId: string): RSSFeedItem[] {
-    const cached = this.cache[feedId];
-    return cached?.items || [];
+  private async cacheItems(feedId: string, items: RSSFeedItem[]): Promise<void> {
+    try {
+      const cacheKey = `${RSS_CACHE_KEY}_${feedId}`;
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(items));
+    } catch (error) {
+      console.warn('Failed to cache RSS items:', error);
+    }
+  }
+
+  /**
+   * Get cached items
+   */
+  async getCachedItems(feedId: string): Promise<RSSFeedItem[]> {
+    try {
+      const cacheKey = `${RSS_CACHE_KEY}_${feedId}`;
+      const cached = await AsyncStorage.getItem(cacheKey);
+      return cached ? JSON.parse(cached) : [];
+    } catch (error) {
+      console.warn('Failed to load cached items:', error);
+      return [];
+    }
   }
 }
 
-export const rssService = new RSSService();
+export const rssService = new DynamicRSSService();

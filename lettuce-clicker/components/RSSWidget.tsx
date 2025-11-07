@@ -1,257 +1,462 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
   Text, 
   ScrollView, 
-  Pressable, 
+  TouchableOpacity, 
   StyleSheet, 
-  Linking, 
   Alert,
-  RefreshControl 
+  RefreshControl,
+  Linking,
+  Dimensions,
+  PanResponder,
+  Animated,
+  Modal,
+  SafeAreaView
 } from 'react-native';
 import { type RSSFeedItem } from '@/lib/rssService';
+import { useGame } from '@/context/GameContext';
 
 interface RSSWidgetProps {
-  items: RSSFeedItem[];
-  isLoading?: boolean;
-  error?: string | null;
-  onRefresh?: () => Promise<void>;
-  onItemPress?: (item: RSSFeedItem) => void;
+  height?: number;
 }
 
-export const RSSWidget: React.FC<RSSWidgetProps> = ({
-  items = [],
-  isLoading = false,
-  error,
-  onRefresh,
-  onItemPress,
-}) => {
-  const [refreshing, setRefreshing] = React.useState(false);
-  
-  // Defensive check for items array
-  const safeItems = Array.isArray(items) ? items : [];
+export const RSSWidget: React.FC<RSSWidgetProps> = ({ height = 80 }) => {
+  const { rssFeeds, rssItems, updateRSSFeeds } = useGame();
+  const [refreshing, setRefreshing] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const screenHeight = Dimensions.get('window').height;
+
+  // Simple pan responder for swipe up
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (evt, gestureState) => {
+        return Math.abs(gestureState.dy) > 10;
+      },
+      onPanResponderRelease: (evt, gestureState) => {
+        if (gestureState.dy < -30) {
+          // Swipe up detected - show modal
+          setIsExpanded(true);
+        }
+      },
+    })
+  ).current;  console.log('📱 RSS Widget rendering with:', {
+    feedsCount: rssFeeds.length,
+    itemsCount: rssItems.length,
+    height
+  });
+
+
+  // Load items on mount and when feeds change
+  useEffect(() => {
+    console.log('🔄 RSS Widget useEffect triggered, rssFeeds.length:', rssFeeds.length);
+    console.log('🔍 RSS Widget current rssItems:', rssItems.length);
+    loadItems();
+  }, [rssFeeds]);
+
+  // Monitor rssItems changes
+  useEffect(() => {
+    console.log('📰 RSS Items updated:', rssItems.length, 'items');
+    if (rssItems.length > 0) {
+      console.log('📰 First RSS item:', rssItems[0].title);
+    }
+  }, [rssItems]);
+
+  const loadItems = async () => {
+    const startTime = Date.now();
+    
+    console.log('🚀 LoadItems called with rssFeeds:', rssFeeds.length, 'feeds');
+    
+    try {
+      // Trigger RSS update which will populate context state
+      await updateRSSFeeds();
+      
+      const loadTime = Date.now() - startTime;
+      console.log(`🆕 DYNAMIC RSS: Update triggered in ${loadTime}ms`);
+      
+    } catch (error) {
+      console.warn('RSS loading error:', error);
+    }
+  };
 
   const handleRefresh = async () => {
-    if (!onRefresh) return;
-    
     setRefreshing(true);
     try {
-      await onRefresh();
+      await updateRSSFeeds();
+      // Simulate refresh delay for UX
+      setTimeout(() => {
+        loadItems();
+        setRefreshing(false);
+      }, 300);
     } catch (error) {
       console.warn('RSS refresh error:', error);
-    } finally {
       setRefreshing(false);
     }
   };
 
-  const handleItemPress = (item: RSSFeedItem) => {
-    if (onItemPress) {
-      onItemPress(item);
-      return;
-    }
-
-    // Default behavior: open link or show alert
-    if (item.link) {
-      Alert.alert(
-        item.title,
-        'Open this article in your browser?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Open', 
-            onPress: () => {
-              Linking.openURL(item.link).catch(() => {
-                Alert.alert('Error', 'Unable to open link');
-              });
-            }
-          },
-        ]
-      );
-    } else {
-      Alert.alert(item.title, item.description);
-    }
-  };
-
-  const formatTime = (dateString: string) => {
+  const handleItemPress = async (item: RSSFeedItem) => {
+    console.log('RSS item pressed:', item.title);
     try {
-      const date = new Date(dateString);
-      const now = new Date();
-      const diff = now.getTime() - date.getTime();
-      
-      const minutes = Math.floor(diff / 60000);
-      const hours = Math.floor(diff / 3600000);
-      const days = Math.floor(diff / 86400000);
-      
-      if (minutes < 60) {
-        return `${minutes}m`;
-      } else if (hours < 24) {
-        return `${hours}h`;
-      } else if (days < 7) {
-        return `${days}d`;
+      const supported = await Linking.canOpenURL(item.link);
+      if (supported) {
+        await Linking.openURL(item.link);
+        console.log('📱 Opened article in system browser:', item.link);
       } else {
-        return date.toLocaleDateString('en-US', { 
-          month: 'short', 
-          day: 'numeric' 
-        });
+        Alert.alert(
+          'Cannot Open Link',
+          `Unable to open this article: ${item.title}`,
+          [{ text: 'OK', style: 'default' }]
+        );
       }
-    } catch {
-      return '';
+    } catch (error) {
+      console.error('Failed to open article:', error);
+      Alert.alert(
+        'Error',
+        'Failed to open the article. Please try again.',
+        [{ text: 'OK', style: 'default' }]
+      );
     }
   };
 
-  const truncateText = (text: string, maxLength: number) => {
-    if (text.length <= maxLength) return text;
-    return text.substring(0, maxLength).trim() + '...';
-  };
 
-  if (error) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>📰 Error loading news feeds</Text>
-        </View>
-      </View>
-    );
-  }
 
-  if (items.length === 0 && !isLoading) {
+  if (rssItems.length === 0) {
     return (
-      <View style={styles.container}>
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>📰 No news feeds enabled</Text>
+      <Animated.View 
+        style={[styles.container, { height }]} 
+        {...panResponder.panHandlers}
+      >
+        {/* Subtle swipe indicator */}
+        <View style={styles.swipeIndicator}>
+          <View style={styles.swipeHandle} />
         </View>
-      </View>
+        
+        <ScrollView
+          horizontal
+          style={{ flex: 1 }}
+          contentContainerStyle={styles.emptyContainer}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+        >
+          <View style={styles.emptyWidgetContainer}>
+            <Text style={styles.emptyText}>📰 Enable RSS feeds in Profile</Text>
+          </View>
+        </ScrollView>
+      </Animated.View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      {isLoading ? (
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>📰 Loading news...</Text>
-        </View>
-      ) : (
-        <>
-          {/* Debug info - remove in production */}
-          <View style={{ position: 'absolute', top: 2, left: 16, zIndex: 999 }}>
-            <Text style={{ fontSize: 8, color: '#666' }}>Items: {safeItems.length}</Text>
+    <Animated.View 
+      style={[styles.expandableContainer, { height }]} 
+      {...panResponder.panHandlers}
+    >
+      {/* Subtle swipe indicator */}
+      <View style={styles.swipeIndicator}>
+        <View style={styles.swipeHandle} />
+      </View>
+      
+      {/* Original horizontal scroll footer */}
+      <View style={styles.footerSection}>
+        <ScrollView
+          horizontal
+          style={{ flex: 1 }}
+          contentContainerStyle={styles.scrollContent}
+          showsHorizontalScrollIndicator={false}
+          showsVerticalScrollIndicator={false}
+          scrollEnabled={true}
+          bounces={true}
+          alwaysBounceVertical={false}
+          alwaysBounceHorizontal={true}
+          overScrollMode="auto"
+          decelerationRate="fast"
+        >
+          {rssItems.slice(0, 5).map((item: RSSFeedItem, index: number) => (
+            <React.Fragment key={item.id}>
+              <TouchableOpacity 
+                style={styles.articleContainer}
+                onPress={() => handleItemPress(item)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.sourceText}>{item.source?.toUpperCase()}</Text>
+                <Text style={styles.titleText} numberOfLines={2}>
+                  {item.title}
+                </Text>
+              </TouchableOpacity>
+              {index < Math.min(rssItems.length - 1, 4) && <View style={styles.separator} />}
+            </React.Fragment>
+          ))}
+        </ScrollView>
+      </View>
+
+      {/* Expanded articles grid */}
+      {isExpanded && (
+        <ScrollView style={styles.expandedContent} showsVerticalScrollIndicator={false}>
+          <View style={styles.articlesGrid}>
+            {rssItems.map((item: RSSFeedItem, index: number) => (
+              <TouchableOpacity
+                key={item.id}
+                style={styles.gridArticleContainer}
+                onPress={() => handleItemPress(item)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.gridSourceText}>{item.source?.toUpperCase()}</Text>
+                <Text style={styles.gridTitleText} numberOfLines={3}>
+                  {item.title}
+                </Text>
+                <Text style={styles.gridMetaText}>
+                  {item.source} • Tap to read
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
-          
-          <ScrollView
-            horizontal
-            style={styles.scrollView}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ alignItems: 'center', minHeight: '100%' }}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={handleRefresh}
-                tintColor="#666"
-              />
-            }
-          >
-            {safeItems.length > 0 ? (
-              safeItems.slice(0, 8).map((item, index) => {
-                if (!item || !item.id) return null;
-                
-                return (
-                  <Pressable
-                    key={`rss-item-${item.id}-${index}`}
-                    style={({ pressed }) => [
-                      styles.newsItem,
-                      pressed && styles.newsItemPressed,
-                    ]}
-                    onPress={() => handleItemPress(item)}
-                  >
-                    <View style={styles.newsContent}>
-                      <Text style={styles.newsSource}>{item.source || 'News'}</Text>
-                      <Text style={styles.newsTitle} numberOfLines={2}>
-                        {truncateText(item.title || 'Loading...', 50)}
-                      </Text>
-                    </View>
-                    {index < safeItems.slice(0, 8).length - 1 && (
-                      <View style={styles.separator} />
-                    )}
-                  </Pressable>
-                );
-              }).filter(Boolean)
-            ) : (
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>📰 No news feeds available</Text>
-              </View>
-            )}
-          </ScrollView>
-        </>
+        </ScrollView>
       )}
-    </View>
+      
+      {/* Simple Modal */}
+      <Modal
+        visible={isExpanded}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setIsExpanded(false)}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>📰 RSS Articles</Text>
+            <TouchableOpacity onPress={() => setIsExpanded(false)}>
+              <Text style={styles.closeButton}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={styles.modalContent}>
+            <View style={styles.gridContainer}>
+              {rssItems.map((item: RSSFeedItem, index: number) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.gridItem}
+                  onPress={() => handleItemPress(item)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.gridSource}>{item.source?.toUpperCase()}</Text>
+                  <Text style={styles.gridTitle} numberOfLines={3}>
+                    {item.title}
+                  </Text>
+                  <Text style={styles.gridMeta}>Tap to read</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+    </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    justifyContent: 'center',
+    backgroundColor: 'transparent', // Transparent - parent provides white footer background
+    borderRadius: 0, // No border radius for edge-to-edge footer
+    flex: 1, // Fill the footer container
   },
-  scrollView: {
-    flex: 1,
+  expandableContainer: {
+    backgroundColor: 'white',
+    borderRadius: 0,
+    overflow: 'hidden',
+    minHeight: 100,
   },
-  newsItem: {
+  footerSection: {
+    height: 100, // Fixed height for the footer section
+    backgroundColor: 'white',
+  },
+  expandedContent: {
+    flex: 1,
+    backgroundColor: 'white',
+    paddingTop: 10,
+  },
+  articlesGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    minWidth: 280,
-    height: '100%',
-    backgroundColor: 'transparent',
+    paddingBottom: 40,
   },
-  newsItemPressed: {
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
-    borderRadius: 8,
+  gridArticleContainer: {
+    width: '31%', // 3 columns with spacing
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  newsContent: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingVertical: 8,
-  },
-  newsSource: {
-    fontSize: 11,
+  gridSourceText: {
+    fontSize: 10,
     fontWeight: '700',
-    color: '#2563eb', // Blue color for source
-    textTransform: 'uppercase',
+    color: '#6366f1',
     marginBottom: 4,
-    letterSpacing: 0.5,
   },
-  newsTitle: {
-    fontSize: 15,
+  gridTitleText: {
+    fontSize: 11,
     fontWeight: '600',
-    color: '#1f2937', // Dark text for readability
-    lineHeight: 20,
+    color: '#1f2937',
+    lineHeight: 14,
+    marginBottom: 6,
   },
-  separator: {
-    width: 1,
-    height: 40,
-    backgroundColor: 'rgba(0, 0, 0, 0.15)',
-    marginLeft: 20,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 14,
+  gridMetaText: {
+    fontSize: 9,
     color: '#6b7280',
     fontWeight: '500',
+  },
+  scrollContent: {
+    paddingHorizontal: 20, // Increased for better spacing
+    alignItems: 'flex-start', // Align to top instead of center
+    minHeight: '100%',
+    paddingVertical: 0, // Remove vertical padding to maximize space
+    flexDirection: 'row', // Ensure horizontal layout
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
+  },
+  // Subtle container for empty state in footer
+  emptyWidgetContainer: {
+    backgroundColor: 'rgba(248, 250, 252, 0.9)',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.08)',
   },
   emptyText: {
     fontSize: 14,
+    color: '#374151',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  debugText: {
+    position: 'absolute',
+    top: 4,
+    left: 16,
+    fontSize: 10,
+    color: '#007AFF',
+    fontWeight: 'bold',
+  },
+  articleContainer: {
+    minWidth: 220, // Optimized for compact footer
+    maxWidth: 260, // Better fit in reduced height
+    paddingHorizontal: 12, // Reduced padding for compact design
+    paddingVertical: 6, // Compact vertical padding for smaller footer
+    backgroundColor: 'rgba(255, 255, 255, 0.98)', // High opacity white background for maximum readability
+    borderRadius: 12, // Larger radius for modern look
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 3, // More pronounced shadow
+    },
+    shadowOpacity: 0.12, // Stronger shadow for better definition
+    shadowRadius: 4,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.1)', // More visible border for definition
+  },
+  sourceText: {
+    fontSize: 10, // Compact size for footer
+    fontWeight: '800', // Very bold for visibility
+    color: '#1e40af', // Strong blue for visibility
+    letterSpacing: 0.4, // Tighter spacing
+    marginBottom: 4, // Reduced space for compact design
+    textTransform: 'uppercase',
+  },
+  titleText: {
+    fontSize: 13, // Slightly smaller for compact footer
+    fontWeight: '700', // Bolder for better visibility
+    color: '#000000', // Pure black for maximum contrast
+    lineHeight: 16, // Tighter line height for compact display
+    flexWrap: 'wrap', // Allow text to wrap properly
+  },
+  separator: {
+    width: 12, // Spacing between cards
+  },
+  swipeIndicator: {
+    alignItems: 'center',
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  swipeHandle: {
+    width: 36,
+    height: 3,
+    backgroundColor: '#d1d5db',
+    borderRadius: 2,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  closeButton: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#6b7280',
+    padding: 8,
+  },
+  modalContent: {
+    flex: 1,
+    padding: 16,
+  },
+  gridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  gridItem: {
+    width: '31%',
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  gridSource: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#6366f1',
+    marginBottom: 4,
+  },
+  gridTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#111827',
+    lineHeight: 16,
+    marginBottom: 6,
+  },
+  gridMeta: {
+    fontSize: 10,
     color: '#6b7280',
     fontWeight: '500',
-    textAlign: 'center',
   },
 });

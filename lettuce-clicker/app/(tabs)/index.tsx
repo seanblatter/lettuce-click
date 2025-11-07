@@ -141,6 +141,7 @@ export default function HomeScreen() {
   const {
     harvest,
     lifetimeHarvest,
+    formatLifetimeHarvest,
     autoPerSecond,
     addHarvest,
     orbitingUpgradeEmojis,
@@ -1038,7 +1039,6 @@ export default function HomeScreen() {
                   >
                     {weatherData ? (
                       <View style={{ alignItems: 'center' }} key={`${temperatureUnit}-${displayTemperature}`}>
-                        <Text style={styles.bedsideWidgetIcon}>{weatherData.emoji}</Text>
                         <Text style={styles.bedsideWidgetBatteryText}>
                           Now: {displayTemperature}°{temperatureUnit === 'fahrenheit' ? 'F' : 'C'}
                         </Text>
@@ -1304,7 +1304,6 @@ export default function HomeScreen() {
                         />
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                           <Text style={[styles.statsTitle, { color: ledgerTheme.tint }]}>Harvest Ledger</Text>
-                          <Text style={[styles.statLabel, { color: ledgerTheme.muted, fontSize: 12, opacity: 0.6 }]}>← Swipe for music</Text>
                         </View>
                         <View style={styles.statRow}>
                           <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Emojis collected</Text>
@@ -1312,12 +1311,14 @@ export default function HomeScreen() {
                             {emojiCollectionCount.toLocaleString()}
                           </Text>
                         </View>
-                        <View style={styles.statRow}>
-                          <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Auto clicks /s</Text>
-                          <Text style={[styles.statValue, { color: ledgerTheme.tint }]}>
-                            {autoPerSecond.toLocaleString()}
-                          </Text>
-                        </View>
+                        {!isExpandedView && (
+                          <View style={styles.statRow}>
+                            <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Auto clicks /s</Text>
+                            <Text style={[styles.statValue, { color: ledgerTheme.tint }]}>
+                              {autoPerSecond.toLocaleString()}
+                            </Text>
+                          </View>
+                        )}
                         <View style={styles.statRow}>
                           <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Available harvest</Text>
                           <Text style={[
@@ -1339,7 +1340,7 @@ export default function HomeScreen() {
                               fontSize: getDynamicFontSize(lifetimeHarvest)
                             }
                           ]}>
-                            {lifetimeHarvest.toLocaleString()}
+                            {formatLifetimeHarvest()}
                           </Text>
                         </View>
                       </Pressable>
@@ -1393,7 +1394,6 @@ export default function HomeScreen() {
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                           <Text style={[styles.statsTitle, { color: ledgerTheme.tint }]}>🎵 Dream Capsule</Text>
                           <View style={{ alignItems: 'flex-end' }}>
-                            <Text style={[styles.statLabel, { color: ledgerTheme.muted, fontSize: 12, opacity: 0.6 }]}>Swipe right →</Text>
                             {isAmbientPlaying && (
                               <Text style={[styles.statLabel, { color: ledgerTheme.muted, fontSize: 10, opacity: 0.5 }]}>
                                 Use device volume buttons
@@ -1435,13 +1435,17 @@ export default function HomeScreen() {
               </View>
 
               {/* RSS Feed Widget - Below all bedside widgets (date, battery, alarm, weather) */}
-              {bedsideWidgetsEnabled && rssFeeds.some(feed => feed.enabled) && (
+              {(() => {
+                const shouldShowRss = bedsideWidgetsEnabled && rssFeeds.some(feed => feed.enabled);
+                console.log('🔍 RSS Widget render check:', {
+                  bedsideWidgetsEnabled,
+                  enabledFeeds: rssFeeds.filter(f => f.enabled).length,
+                  shouldShowRss
+                });
+                return shouldShowRss;
+              })() && (
                 <View style={styles.rssWidgetContainer}>
-                  <RSSWidget
-                    items={rssItems}
-                    error={rssError}
-                    onRefresh={updateRSSFeeds}
-                  />
+                  <RSSWidget height={60} />
                 </View>
               )}
             </Pressable>
@@ -1688,7 +1692,6 @@ export default function HomeScreen() {
                   />
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Text style={[styles.statsTitle, { color: ledgerTheme.tint }]}>Harvest Ledger</Text>
-                    <Text style={[styles.statLabel, { color: ledgerTheme.muted, fontSize: 12, opacity: 0.6 }]}>← Swipe for music</Text>
                   </View>
                   <View style={styles.statRow}>
                     <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Emojis collected</Text>
@@ -1723,7 +1726,7 @@ export default function HomeScreen() {
                         fontSize: getDynamicFontSize(lifetimeHarvest)
                       }
                     ]}>
-                      {lifetimeHarvest.toLocaleString()}
+                      {formatLifetimeHarvest()}
                     </Text>
                   </View>
                 </Pressable>
@@ -1777,7 +1780,6 @@ export default function HomeScreen() {
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Text style={[styles.statsTitle, { color: ledgerTheme.tint }]}>🎵 Dream Capsule</Text>
                     <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={[styles.statLabel, { color: ledgerTheme.muted, fontSize: 12, opacity: 0.6 }]}>Swipe right →</Text>
                       {isAmbientPlaying && (
                         <Text style={[styles.statLabel, { color: ledgerTheme.muted, fontSize: 10, opacity: 0.5 }]}>
                           Use device volume buttons
@@ -2450,7 +2452,7 @@ const styles = StyleSheet.create({
   },
   bedsideWidgetBottomLeft: {
     position: 'absolute',
-    bottom: 20,
+    bottom: 60,
     left: 20,
     padding: 12,
     borderRadius: 12,
@@ -2464,7 +2466,7 @@ const styles = StyleSheet.create({
   },
   bedsideWidgetBottomRight: {
     position: 'absolute',
-    bottom: 20,
+    bottom: 60,
     right: 20,
     padding: 12,
     borderRadius: 12,
@@ -2534,8 +2536,8 @@ const styles = StyleSheet.create({
   },
   lettuceWrapper: {
     alignSelf: 'center',
-    width: 240,
-    height: 240,
+    width: 220,
+    height: 220,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 15, // Move slightly to the right in portrait mode too
@@ -2548,7 +2550,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   lettuceWrapperExpandedAligned: {
-    marginTop: 40, // Push the clicker down to align better with harvest ledger
+    marginTop: 10, // Further reduced to move clicker higher up
     alignSelf: 'center',
   },
   lettuceBackdrop: {
@@ -2623,18 +2625,18 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 18 },
   },
   lettuceButton: {
-    width: 220,
-    height: 220,
-    borderRadius: 110,
+    width: 200,
+    height: 200,
+    borderRadius: 100,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'visible',
   },
   lettuceButtonBase: {
     position: 'absolute',
-    width: 200,
-    height: 200,
-    borderRadius: 100,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
     opacity: 0.92,
     bottom: 10,
     shadowColor: '#0f172a',
@@ -2644,9 +2646,9 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   lettuceButtonFace: {
-    width: 188,
-    height: 188,
-    borderRadius: 94,
+    width: 168,
+    height: 168,
+    borderRadius: 84,
     borderWidth: 3,
     alignItems: 'center',
     justifyContent: 'center',
@@ -2691,21 +2693,24 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.95 }],
   },
   lettuceEmoji: {
-    fontSize: 76,
+    fontSize: 68,
   },
   statsCard: {
     position: 'relative',
-    borderRadius: 28,
-    paddingVertical: 22,
-    paddingHorizontal: 28, // Increased from 24 to make it slightly wider
-    gap: 16,
+    borderRadius: 24, // Slightly reduced for more compact look
+    paddingVertical: 18, // Reduced for more compact design
+    paddingHorizontal: 24, // Reduced for better fit
+    gap: 12, // Reduced gap for more compact design
     overflow: 'hidden',
-    shadowOpacity: 0.22,
-    shadowOffset: { width: 0, height: 10 },
-    shadowRadius: 20,
-    elevation: 6,
+    shadowOpacity: 0.18, // Slightly reduced shadow
+    shadowOffset: { width: 0, height: 8 }, // Slightly reduced shadow
+    shadowRadius: 16, // Slightly reduced shadow radius
+    elevation: 5, // Slightly reduced elevation
     backgroundColor: 'transparent',
-    minWidth: 280, // Added minimum width to accommodate larger numbers
+    minWidth: 240, // Reduced for better screen fit
+    maxWidth: 280, // Added max width for consistency
+    borderWidth: 0, // Remove border for cleaner look
+    borderColor: 'transparent',
   },
   statsCardPressed: {
     opacity: 0.94,
@@ -2717,16 +2722,16 @@ const styles = StyleSheet.create({
   },
   statsSectionLandscape: {
     flex: 0.7, // Increase flex to give it more space and pull it inward
-    marginLeft: 5, // Further reduced to move it more inward
+    marginLeft: -5, // Move further left for better alignment
     marginTop: -5, // Negative margin to move it up further in landscape
-    marginRight: 15, // Increase right margin to ensure proper spacing
+    marginRight: 20, // Increase right margin to maintain spacing
   },
   statsCardLandscape: {
-    paddingVertical: 18, // Slightly increased for better spacing
-    paddingHorizontal: 18, // Further reduced for better fit
-    gap: 12,
-    minWidth: 280, // Further reduced to ensure it fits comfortably
-    maxWidth: 300, // Reduced max width for better fit
+    paddingVertical: 16, // Slightly more compact for landscape
+    paddingHorizontal: 20, // Good balance for landscape
+    gap: 10, // Tighter gap for landscape
+    minWidth: 240, // Match portrait exactly
+    maxWidth: 260, // More constrained for better fit
   },
   statsCardBackdrop: {
     ...StyleSheet.absoluteFillObject,
@@ -2734,13 +2739,13 @@ const styles = StyleSheet.create({
   },
   statsCardGrain: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 28,
+    borderRadius: 24, // Match updated stats card border radius
     transform: [{ rotate: '2deg' }],
   },
   statsCardFrost: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 36,
-    opacity: 0.32,
+    borderRadius: 28, // Slightly larger than stats card
+    opacity: 0.22, // Subtler effect for cleaner look
     transform: [{ scaleX: 1.25 }, { scaleY: 1.3 }, { rotate: '12deg' }],
   },
   statsCardSheen: {
@@ -3557,22 +3562,20 @@ const styles = StyleSheet.create({
   },
   rssWidgetContainer: {
     position: 'absolute',
-    bottom: 20, // Slightly above bottom to avoid conflict with system UI
-    left: 16,
-    right: 16,
-    height: 90, // Good height for content
-    backgroundColor: 'rgba(255, 255, 255, 0.98)', // Very visible white background
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    borderRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 15,
-    zIndex: 1003, // Very high to ensure visibility
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.1)',
+    bottom: -50, // Moved lower to avoid covering date/battery widgets
+    left: -50, // Extend past left edge (charger port)
+    right: -50, // Extend past right edge (dynamic island)
+    height: 100, // Reduced height to avoid covering date/battery
+    backgroundColor: '#ffffff', // Full opacity white background
+    paddingHorizontal: 50, // Increased padding to account for extended edges
+    paddingVertical: 0,
+    paddingTop: 8, // Reduced top padding
+    paddingBottom: 45, // Reduced bottom padding
+    borderRadius: 0, // No border radius - true edge-to-edge bleeding
+    zIndex: 1003, // High z-index to sit on top
+    // Add subtle top border for separation
+    borderTopWidth: 0.5,
+    borderTopColor: 'rgba(0, 0, 0, 0.08)',
   },
 
 });

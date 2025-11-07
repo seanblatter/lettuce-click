@@ -112,6 +112,7 @@ type PassiveResumeNotice =
 type GameContextValue = {
   harvest: number;
   lifetimeHarvest: number;
+  formatLifetimeHarvest: (value?: number) => string;
   profileLifetimeTotal: number;
   tapValue: number;
   autoPerSecond: number;
@@ -603,7 +604,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [customClickEmoji, setCustomClickEmojiState] = useState('🥬');
   const [gardenBackgroundColor, setGardenBackgroundColorState] = useState('#f2f9f2');
   const [isExpandedView, setIsExpandedView] = useState(false);
-  const [bedsideWidgetsEnabled, setBedsideWidgetsEnabled] = useState(false);
+  const [bedsideWidgetsEnabled, setBedsideWidgetsEnabled] = useState(true);
   const [weatherData, setWeatherData] = useState<{ temperature: number; condition: string; emoji: string; location: string } | null>(null);
   const [weatherError, setWeatherError] = useState<string | null>(null);
   const [weatherLastUpdated, setWeatherLastUpdated] = useState(0);
@@ -1174,6 +1175,16 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const value = useMemo<GameContextValue>(() => ({
     harvest,
     lifetimeHarvest,
+    formatLifetimeHarvest: (value: number = lifetimeHarvest) => {
+      if (value >= 1000000000) {
+        return `${(value / 1000000000).toFixed(1)}B`;
+      } else if (value >= 1000000) {
+        return `${(value / 1000000).toFixed(1)}M`;
+      } else if (value >= 1000) {
+        return `${(value / 1000).toFixed(1)}K`;
+      }
+      return value.toFixed(0);
+    },
     profileLifetimeTotal,
     tapValue,
     autoPerSecond,
@@ -1261,10 +1272,16 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     setHasManuallySetTemperatureUnit,
     updateRSSFeeds: async () => {
       try {
+        console.log('🔄 GameContext updateRSSFeeds starting...');
         setRssError(null);
         const items = await rssService.fetchMultipleFeeds(rssFeeds);
+        console.log('✅ GameContext received items:', items.length);
+        if (items.length > 0) {
+          console.log('📰 Sample item:', items[0].title);
+        }
         setRssItems(items);
         setRssLastUpdated(Date.now());
+        console.log('✅ GameContext setRssItems called with', items.length, 'items');
       } catch (error) {
         console.warn('RSS update error:', error);
         setRssError('RSS service unavailable');
@@ -1484,7 +1501,25 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
               setHasManuallySetTemperatureUnit(parsed.hasManuallySetTemperatureUnit);
             }
             if (Array.isArray(parsed.rssFeeds)) {
-              setRssFeeds(parsed.rssFeeds);
+              // Check if stored feeds are the old format (without items)
+              const hasOldFormat = parsed.rssFeeds.some((f: any) => !f.items || f.items.length === 0);
+              
+              if (hasOldFormat) {
+                // Use new DEFAULT_RSS_FEEDS with curated content
+                console.log('🔄 Migrating from old RSS format to new instant feeds');
+                setRssFeeds(DEFAULT_RSS_FEEDS);
+              } else {
+                // Merge stored feed settings with new DEFAULT_RSS_FEEDS that have content
+                const mergedFeeds = DEFAULT_RSS_FEEDS.map(defaultFeed => {
+                  const storedFeed = parsed.rssFeeds?.find((f: any) => f.id === defaultFeed.id);
+                  return {
+                    ...defaultFeed,
+                    enabled: storedFeed?.enabled !== undefined ? storedFeed.enabled : defaultFeed.enabled
+                  };
+                });
+                setRssFeeds(mergedFeeds);
+                console.log('🔄 Merged RSS feeds: stored settings + new content');
+              }
             }
           } catch {
             // ignore malformed stored data

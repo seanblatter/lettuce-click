@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   View, 
   Text, 
@@ -22,7 +22,7 @@ interface RSSWidgetProps {
 }
 
 export const RSSWidget: React.FC<RSSWidgetProps> = ({ height = 80 }) => {
-  const { rssFeeds, rssItems, updateRSSFeeds } = useGame();
+  const { rssFeeds, rssItems, updateRSSFeeds, orbitingUpgradeEmojis } = useGame();
   const [refreshing, setRefreshing] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const screenHeight = Dimensions.get('window').height;
@@ -41,40 +41,25 @@ export const RSSWidget: React.FC<RSSWidgetProps> = ({ height = 80 }) => {
         }
       },
     })
-  ).current;  console.log('📱 RSS Widget rendering with:', {
-    feedsCount: rssFeeds.length,
-    itemsCount: rssItems.length,
-    height
-  });
-
+  ).current;
 
   // Load items on mount and when feeds change
   useEffect(() => {
-    console.log('🔄 RSS Widget useEffect triggered, rssFeeds.length:', rssFeeds.length);
-    console.log('🔍 RSS Widget current rssItems:', rssItems.length);
     loadItems();
   }, [rssFeeds]);
 
   // Monitor rssItems changes
   useEffect(() => {
-    console.log('📰 RSS Items updated:', rssItems.length, 'items');
-    if (rssItems.length > 0) {
-      console.log('📰 First RSS item:', rssItems[0].title);
+    // Only log occasionally when items actually change significantly
+    if (rssItems.length > 0 && rssItems.length % 10 === 0) {
+      console.log('📰 RSS Items updated:', rssItems.length, 'items');
     }
   }, [rssItems]);
 
   const loadItems = async () => {
-    const startTime = Date.now();
-    
-    console.log('🚀 LoadItems called with rssFeeds:', rssFeeds.length, 'feeds');
-    
     try {
       // Trigger RSS update which will populate context state
       await updateRSSFeeds();
-      
-      const loadTime = Date.now() - startTime;
-      console.log(`🆕 DYNAMIC RSS: Update triggered in ${loadTime}ms`);
-      
     } catch (error) {
       console.warn('RSS loading error:', error);
     }
@@ -132,16 +117,17 @@ export const RSSWidget: React.FC<RSSWidgetProps> = ({ height = 80 }) => {
           <View style={styles.swipeHandle} />
         </View>
         
-        <ScrollView
-          horizontal
-          style={{ flex: 1 }}
-          contentContainerStyle={styles.emptyContainer}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
-        >
-          <View style={styles.emptyWidgetContainer}>
-            <Text style={styles.emptyText}>📰 Enable RSS feeds in Profile</Text>
+        <View style={styles.previewContainer}>
+          <View style={styles.previewMainRow}>
+            <Text style={styles.previewTitle}>📰 RSS Articles</Text>
+            <View style={styles.emptyWidgetContainer}>
+              <Text style={styles.emptyText}>Enable RSS feeds in Profile</Text>
+            </View>
           </View>
-        </ScrollView>
+          <Text style={styles.moreIndicator}>
+            Swipe up to configure feeds
+          </Text>
+        </View>
       </Animated.View>
     );
   }
@@ -156,62 +142,37 @@ export const RSSWidget: React.FC<RSSWidgetProps> = ({ height = 80 }) => {
         <View style={styles.swipeHandle} />
       </View>
       
-      {/* Original horizontal scroll footer */}
+      {/* RSS Articles Preview Footer */}
       <View style={styles.footerSection}>
-        <ScrollView
-          horizontal
-          style={{ flex: 1 }}
-          contentContainerStyle={styles.scrollContent}
-          showsHorizontalScrollIndicator={false}
-          showsVerticalScrollIndicator={false}
-          scrollEnabled={true}
-          bounces={true}
-          alwaysBounceVertical={false}
-          alwaysBounceHorizontal={true}
-          overScrollMode="auto"
-          decelerationRate="fast"
-        >
-          {rssItems.slice(0, 5).map((item: RSSFeedItem, index: number) => (
-            <React.Fragment key={item.id}>
-              <TouchableOpacity 
-                style={styles.articleContainer}
-                onPress={() => handleItemPress(item)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.sourceText}>{item.source?.toUpperCase()}</Text>
-                <Text style={styles.titleText} numberOfLines={2}>
-                  {item.title}
-                </Text>
-              </TouchableOpacity>
-              {index < Math.min(rssItems.length - 1, 4) && <View style={styles.separator} />}
-            </React.Fragment>
-          ))}
-        </ScrollView>
+        <View style={styles.previewContainer}>
+          {/* Main horizontal layout */}
+          <View style={styles.previewMainRow}>
+            <Text style={styles.previewTitle}>📰 RSS Articles</Text>
+            <View style={styles.previewArticles}>
+              {rssItems.slice(0, 2).map((item: RSSFeedItem, index: number) => (
+                <TouchableOpacity 
+                  key={item.id}
+                  style={styles.previewArticle}
+                  onPress={() => handleItemPress(item)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.previewSource}>{item.source?.toUpperCase()}</Text>
+                  <Text style={styles.previewText} numberOfLines={1}>
+                    {item.title}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+          {/* Bottom indicator */}
+          {rssItems.length > 2 && (
+            <Text style={styles.moreIndicator}>
+              Swipe up for {rssItems.length - 2} more articles
+            </Text>
+          )}
+        </View>
       </View>
 
-      {/* Expanded articles grid */}
-      {isExpanded && (
-        <ScrollView style={styles.expandedContent} showsVerticalScrollIndicator={false}>
-          <View style={styles.articlesGrid}>
-            {rssItems.map((item: RSSFeedItem, index: number) => (
-              <TouchableOpacity
-                key={item.id}
-                style={styles.gridArticleContainer}
-                onPress={() => handleItemPress(item)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.gridSourceText}>{item.source?.toUpperCase()}</Text>
-                <Text style={styles.gridTitleText} numberOfLines={3}>
-                  {item.title}
-                </Text>
-                <Text style={styles.gridMetaText}>
-                  {item.source} • Tap to read
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </ScrollView>
-      )}
       
       {/* Simple Modal */}
       <Modal
@@ -220,32 +181,58 @@ export const RSSWidget: React.FC<RSSWidgetProps> = ({ height = 80 }) => {
         presentationStyle="pageSheet"
         onRequestClose={() => setIsExpanded(false)}
       >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>📰 RSS Articles</Text>
-            <TouchableOpacity onPress={() => setIsExpanded(false)}>
-              <Text style={styles.closeButton}>✕</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView style={styles.modalContent}>
-            <View style={styles.gridContainer}>
-              {rssItems.map((item: RSSFeedItem, index: number) => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={styles.gridItem}
-                  onPress={() => handleItemPress(item)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.gridSource}>{item.source?.toUpperCase()}</Text>
-                  <Text style={styles.gridTitle} numberOfLines={3}>
-                    {item.title}
+        <View style={styles.modalFullScreen}>
+          {/* Emoji background pattern when user has collected emojis */}
+          {orbitingUpgradeEmojis && orbitingUpgradeEmojis.length > 0 && (
+            <View style={styles.emojiBackground}>
+              {Array.from({ length: 15 }, (_, i) => {
+                const emoji = orbitingUpgradeEmojis[i % orbitingUpgradeEmojis.length];
+                return (
+                  <Text key={i} style={[
+                    styles.backgroundEmoji,
+                    {
+                      left: `${(i * 28 + 12) % 95}%`,
+                      top: `${(i * 18 + 15) % 85}%`,
+                      opacity: 0.1,
+                    }
+                  ]}>
+                    {emoji.emoji}
                   </Text>
-                  <Text style={styles.gridMeta}>Tap to read</Text>
-                </TouchableOpacity>
-              ))}
+                );
+              })}
             </View>
-          </ScrollView>
-        </SafeAreaView>
+          )}
+          
+          <SafeAreaView style={styles.modalSafeWrapper}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>📰 RSS Articles</Text>
+              <TouchableOpacity onPress={() => setIsExpanded(false)}>
+                <Text style={styles.closeButton}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView 
+              style={styles.modalContent}
+              contentContainerStyle={styles.modalScrollContent}
+            >
+              <View style={styles.gridContainer}>
+                {rssItems.map((item: RSSFeedItem, index: number) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={styles.gridItem}
+                    onPress={() => handleItemPress(item)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.gridSource}>{item.source?.toUpperCase()}</Text>
+                    <Text style={styles.gridTitle} numberOfLines={3}>
+                      {item.title}
+                    </Text>
+                    <Text style={styles.gridMeta}>Tap to read</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+          </SafeAreaView>
+        </View>
       </Modal>
     </Animated.View>
   );
@@ -401,8 +388,11 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   modalContainer: {
-    flex: 1,
     backgroundColor: '#fff',
+    maxHeight: '90%',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    overflow: 'hidden',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -458,5 +448,89 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#6b7280',
     fontWeight: '500',
+  },
+  // New footer navigator styles
+  previewContainer: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    justifyContent: 'space-between',
+  },
+  previewMainRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    flex: 1,
+  },
+  previewTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111827',
+    marginRight: 16,
+    minWidth: 100, // Fixed width for the title
+  },
+  previewArticles: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  previewArticle: {
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  previewSource: {
+    fontSize: 8,
+    fontWeight: '700',
+    color: '#6366f1',
+    marginBottom: 1,
+  },
+  previewText: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#374151',
+    lineHeight: 12,
+  },
+  moreIndicator: {
+    fontSize: 9,
+    color: '#9ca3af',
+    fontWeight: '500',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalFullScreen: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#fff',
+    width: '100%',
+    height: '100%',
+  },
+  modalSafeWrapper: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  modalScrollContent: {
+    paddingVertical: 16,
+    backgroundColor: '#fff',
+  },
+  emojiBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: -1,
+  },
+  backgroundEmoji: {
+    position: 'absolute',
+    fontSize: 24,
+    zIndex: -1,
   },
 });

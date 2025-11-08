@@ -246,17 +246,11 @@ class DynamicRSSService {
     const enabledFeeds = feeds.filter(feed => feed.enabled);
     
     if (enabledFeeds.length === 0) {
-      console.log('📭 No RSS feeds enabled');
       return [];
     }
 
-    console.log(`🔄 Fetching RSS from ${enabledFeeds.length} feeds...`);
-
     // Fetch from all enabled feeds
-    console.log(`🔄 Creating promises for ${enabledFeeds.length} feeds...`);
     const feedPromises = enabledFeeds.map(feed => this.fetchFeed(feed));
-    
-    console.log(`⏳ Waiting for ${feedPromises.length} feed promises to settle...`);
     const feedResults = await Promise.allSettled(feedPromises);
     console.log(`✅ All feed promises settled, processing results...`);
 
@@ -271,8 +265,6 @@ class DynamicRSSService {
       }
     });
 
-    console.log(`📊 Total items collected: ${allItems.length}`);
-
     // Sort by date (newest first)
     allItems.sort((a, b) => {
       const dateA = new Date(a.pubDate).getTime();
@@ -280,8 +272,11 @@ class DynamicRSSService {
       return dateB - dateA;
     });
 
+    // Only log occasionally for performance monitoring
     const loadTime = Date.now() - startTime;
-    console.log(`🆕 DYNAMIC RSS: Loaded ${allItems.length} items from ${enabledFeeds.length} feeds in ${loadTime}ms`);
+    if (loadTime > 1000 || allItems.length > 50) {
+      console.log(`🆕 RSS: Loaded ${allItems.length} items from ${enabledFeeds.length} feeds in ${loadTime}ms`);
+    }
 
     return allItems.slice(0, 20);
   }

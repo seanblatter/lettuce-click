@@ -1272,16 +1272,14 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     setHasManuallySetTemperatureUnit,
     updateRSSFeeds: async () => {
       try {
-        console.log('🔄 GameContext updateRSSFeeds starting...');
         setRssError(null);
         const items = await rssService.fetchMultipleFeeds(rssFeeds);
-        console.log('✅ GameContext received items:', items.length);
-        if (items.length > 0) {
-          console.log('📰 Sample item:', items[0].title);
-        }
         setRssItems(items);
         setRssLastUpdated(Date.now());
-        console.log('✅ GameContext setRssItems called with', items.length, 'items');
+        // Only log occasionally or when there are significant changes
+        if (items.length > 0 && items.length % 20 === 0) {
+          console.log('✅ GameContext RSS update:', items.length, 'items loaded');
+        }
       } catch (error) {
         console.warn('RSS update error:', error);
         setRssError('RSS service unavailable');

@@ -180,6 +180,12 @@ export default function HomeScreen() {
     clearRSSData,
   } = useGame();
 
+  // Get current theme for background emoji
+  const currentTheme = useMemo(() => 
+    emojiThemes.find(theme => theme.id === homeEmojiTheme), 
+    [emojiThemes, homeEmojiTheme]
+  );
+
   const lockedShopEmojis = useMemo(
     () => gardenEmojiCatalog.filter((emoji) => !emojiInventory[emoji.id]),
     [emojiInventory]
@@ -1019,6 +1025,10 @@ export default function HomeScreen() {
               ]}
               onPress={handleCloseExpandedView}
             >
+              {/* Emoji Theme Animations for Expanded View */}
+              {!isAmbientPlaying && orbitingUpgradeEmojis.length > 0 && (
+                <OrbitingUpgradeEmojis emojis={orbitingUpgradeEmojis} theme={homeEmojiTheme} />
+              )}
               {/* Bedside Widgets - Corner Overlays */}
               {bedsideWidgetsEnabled && (
                 <>
@@ -1272,6 +1282,7 @@ export default function HomeScreen() {
                           pointerEvents="none"
                           style={[styles.statsCardBackdrop, { backgroundColor: ledgerTheme.backgroundColor }]}
                         />
+                        
                         <View
                           pointerEvents="none"
                           style={[
@@ -1328,7 +1339,7 @@ export default function HomeScreen() {
                               fontSize: getDynamicFontSize(harvest)
                             }
                           ]}>
-                            {harvest.toLocaleString()}
+                            {formatLifetimeHarvest(harvest)}
                           </Text>
                         </View>
                         <View style={styles.statRow}>
@@ -1361,6 +1372,7 @@ export default function HomeScreen() {
                           pointerEvents="none"
                           style={[styles.statsCardBackdrop, { backgroundColor: ledgerTheme.backgroundColor }]}
                         />
+                        
                         <View
                           pointerEvents="none"
                           style={[
@@ -1437,11 +1449,6 @@ export default function HomeScreen() {
               {/* RSS Feed Widget - Below all bedside widgets (date, battery, alarm, weather) */}
               {(() => {
                 const shouldShowRss = bedsideWidgetsEnabled && rssFeeds.some(feed => feed.enabled);
-                console.log('🔍 RSS Widget render check:', {
-                  bedsideWidgetsEnabled,
-                  enabledFeeds: rssFeeds.filter(f => f.enabled).length,
-                  shouldShowRss
-                });
                 return shouldShowRss;
               })() && (
                 <View style={styles.rssWidgetContainer}>
@@ -1486,7 +1493,11 @@ export default function HomeScreen() {
                   pressed && styles.menuButtonPressed,
                 ]}
                 onPress={() => setMenuOpen((prev) => !prev)}>
-                <Text style={[styles.menuIcon, menuOpen && styles.menuIconActive]}>
+                <Text style={[
+                  styles.menuIcon, 
+                  !isLandscape && styles.menuIconPortrait, // Apply portrait positioning in vertical view
+                  menuOpen && styles.menuIconActive
+                ]}>
                   {menuOpen ? '✕' : customClickEmoji}
                 </Text>
               </Pressable>
@@ -1714,7 +1725,7 @@ export default function HomeScreen() {
                         fontSize: getDynamicFontSize(harvest)
                       }
                     ]}>
-                      {harvest.toLocaleString()}
+                      {formatLifetimeHarvest(harvest)}
                     </Text>
                   </View>
                   <View style={styles.statRow}>
@@ -1771,7 +1782,7 @@ export default function HomeScreen() {
                   />
                   <View
                     pointerEvents="none"
-                    style={[styles.statsCardInnerBorder, { borderColor: ledgerTheme.innerBorder }]}
+                    style={[styles.statsCardInnerBorder, { backgroundColor: ledgerTheme.innerBorder }]}
                   />
                   <View
                     pointerEvents="none"
@@ -1817,65 +1828,7 @@ export default function HomeScreen() {
                 </Pressable>
               )}
 
-              {/* RSS Stream for Premium Users */}
-              {bedsideWidgetsEnabled && hasPremiumUpgrade && (
-                <Reanimated.View 
-                  entering={FadeInDown.duration(300).delay(200)}
-                  exiting={FadeOutUp.duration(200)}
-                  style={[styles.statsCard, { marginTop: 16 }]}
-                >
-                  <Pressable style={styles.statsCard}>
-                    <View
-                      pointerEvents="none"
-                      style={[styles.statsCardGrain, { backgroundColor: ledgerTheme.grainColor, opacity: ledgerTheme.grainOpacity }]}
-                    />
-                    <View
-                      pointerEvents="none"
-                      style={[styles.statsCardFrost, { backgroundColor: ledgerTheme.refraction }]}
-                    />
-                    <View
-                      pointerEvents="none"
-                      style={[styles.statsCardSheen, { backgroundColor: ledgerTheme.highlight }]}
-                    />
-                    <View
-                      pointerEvents="none"
-                      style={[styles.statsCardBorder, { borderColor: ledgerTheme.borderColor }]}
-                    />
-                    <View
-                      pointerEvents="none"
-                      style={[styles.statsCardInnerBorder, { borderColor: ledgerTheme.innerBorder }]}
-                    />
-                    <View
-                      pointerEvents="none"
-                      style={[styles.statsCardStitch, { borderColor: ledgerTheme.stitchColor }]}
-                    />
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text style={[styles.statsTitle, { color: ledgerTheme.tint }]}>📰 RSS Stream</Text>
-                      <Text style={[styles.statLabel, { color: ledgerTheme.muted, fontSize: 12, opacity: 0.6 }]}>Premium</Text>
-                    </View>
-                    <View style={styles.statRow}>
-                      <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Latest News</Text>
-                      <Text style={[styles.statValue, { color: ledgerTheme.tint, fontSize: 12 }]}>
-                        Coming Soon
-                      </Text>
-                    </View>
-                    <Pressable 
-                      style={({ pressed }) => [
-                        styles.statRow, 
-                        pressed && { opacity: 0.7, backgroundColor: 'rgba(255,255,255,0.1)' }
-                      ]}
-                      onPress={() => Alert.alert('RSS Stream', 'RSS news feed functionality coming soon for premium users!')}
-                      accessibilityRole="button"
-                      accessibilityLabel="View RSS news feed"
-                    >
-                      <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Status</Text>
-                      <Text style={[styles.statValue, { color: ledgerTheme.tint, fontWeight: '600' }]}>
-                        🌐 Tap to Configure
-                      </Text>
-                    </Pressable>
-                  </Pressable>
-                </Reanimated.View>
-              )}
+
             </Reanimated.View>
           </GestureDetector>
         </View>
@@ -1900,17 +1853,7 @@ export default function HomeScreen() {
                 showsVerticalScrollIndicator={false}
                 bounces={true}
               >
-                <Pressable
-                  style={styles.menuProfileButton}
-                  onPress={() => {
-                    setMenuOpen(false);
-                    setShowProfileQuickAction(true);
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Open profile"
-                >
-                  <Text style={styles.menuProfileEmoji}>👤</Text>
-                </Pressable>
+                {/* Profile quick-open removed: integrated into Garden Profile card */}
                 <Pressable 
                   style={[styles.menuHero, { backgroundColor: accentSurface, shadowColor: accentColor }]}
                   onPress={() => {
@@ -1920,11 +1863,15 @@ export default function HomeScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Open profile"
                 >
-                  <View style={[styles.menuHeroBadge, { backgroundColor: accentColor }]}>
+                  <View style={[
+                    styles.menuHeroBadge,
+                    { backgroundColor: accentColor },
+                    !isLandscape && styles.menuHeroBadgePortrait
+                  ]}>
                     <Text style={styles.menuHeroEmoji}>{customClickEmoji}</Text>
                   </View>
                   <View style={styles.menuHeroTextBlock}>
-                    <Text style={styles.menuHeroTitle}>Garden menu</Text>
+                    <Text style={styles.menuHeroTitle}>Garden Profile</Text>
                     <Text style={styles.menuHeroCopy}>
                       Welcome back, {friendlyName}! Tend your profile, grab bonuses, and refresh your theme.
                     </Text>
@@ -2366,6 +2313,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'transparent',
     backgroundColor: 'transparent',
+    position: 'relative', // Enable absolute positioning for child
+    width: 42, // Fixed width for consistent positioning
+    height: 42, // Fixed height for consistent positioning
   },
   menuButtonActive: {
     backgroundColor: 'rgba(21, 101, 52, 0.08)',
@@ -2376,9 +2326,16 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(21, 101, 52, 0.22)',
   },
   menuIcon: {
-    fontSize: 30,
+    fontSize: 24,
     color: '#166534',
     fontWeight: '700',
+    position: 'absolute', // Absolute positioning within button
+    top: 2, // Position near top
+    right: 4, // Position near right edge
+  },
+  menuIconPortrait: {
+    top: 0, // Move further to top corner in portrait
+    right: 2, // Move further to right corner in portrait
   },
   menuIconActive: {
     color: '#0f5132',
@@ -2540,7 +2497,6 @@ const styles = StyleSheet.create({
     height: 220,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 15, // Move slightly to the right in portrait mode too
   },
   lettuceWrapperLandscape: {
     width: 200,
@@ -2719,6 +2675,7 @@ const styles = StyleSheet.create({
   statsSection: {
     flex: 1,
     marginTop: 15, // Slightly reduced to raise it up
+    alignItems: 'center', // Center the harvest ledger/dream capsule container
   },
   statsSectionLandscape: {
     flex: 0.7, // Increase flex to give it more space and pull it inward
@@ -2778,6 +2735,17 @@ const styles = StyleSheet.create({
     margin: 10,
     opacity: 0.75,
   },
+  statsCardEmojiBackground: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 24,
+    zIndex: 10, // Higher z-index to appear above other background layers
+  },
+  statsCardBackgroundEmoji: {
+    position: 'absolute',
+    fontSize: 20, // Slightly larger for better visibility
+    zIndex: 10, // Match container z-index
+    color: 'rgba(0, 0, 0, 0.15)', // Explicit color with transparency
+  },
   statsTitle: {
     fontSize: 22,
     fontWeight: '800',
@@ -2791,15 +2759,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     borderRadius: 8,
     minHeight: 32,
+    gap: 8, // Add gap between label and value to prevent overlap
   },
   statLabel: {
     fontSize: 15,
     fontWeight: '600',
     letterSpacing: 0.2,
+    flex: 1, // Allow label to take available space
+    flexShrink: 1, // Allow shrinking if needed
   },
   statValue: {
     fontSize: 20,
     fontWeight: '700',
+    textAlign: 'right', // Right-align the value
+    flexShrink: 0, // Prevent value from shrinking
   },
   modalOverlay: {
     flex: 1,
@@ -2902,6 +2875,7 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },
     elevation: 6,
+    position: 'relative', // Allow absolute children
   },
   menuHeroBadge: {
     width: 56,
@@ -2913,6 +2887,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 6 },
+  },
+  // Portrait variant: keep the badge inline to the left of the title (not absolute)
+  menuHeroBadgePortrait: {
+    position: 'relative',
+    top: 0,
+    right: 0,
+    marginRight: 12,
+    zIndex: 2,
   },
   menuHeroEmoji: {
     fontSize: 32,

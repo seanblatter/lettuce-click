@@ -127,7 +127,7 @@ export function TemperatureUnitModal({
         <View style={styles.modalContent}>
           <Text style={styles.title}>Temperature Unit</Text>
           <Text style={styles.subtitle}>
-            Choose how you'd like temperatures displayed in weather widgets
+            Choose how you’d like temperatures displayed in weather widgets
           </Text>
 
           <Pressable

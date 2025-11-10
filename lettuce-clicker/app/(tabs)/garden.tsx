@@ -18,6 +18,7 @@ export default function GardenScreen() {
     removePlacement,
     clearGarden,
     registerCustomEmoji,
+    addWidgetPromenadePhoto,
     gardenBackgroundColor,
   } = useGame();
 
@@ -36,6 +37,7 @@ export default function GardenScreen() {
         removePlacement={removePlacement}
         clearGarden={clearGarden}
         registerCustomEmoji={registerCustomEmoji}
+        addWidgetPromenadePhoto={addWidgetPromenadePhoto}
         gardenBackgroundColor={gardenBackgroundColor}
       />
     </SafeAreaView>

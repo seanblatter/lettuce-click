@@ -37,7 +37,7 @@ import { captureRef } from 'react-native-view-shot';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { emojiCategoryOrder, formatClickValue } from '@/constants/emojiCatalog';
-import { EmojiDefinition, Placement, TextStyleId } from '@/context/GameContext';
+import { EmojiDefinition, Placement, TextStyleId, WidgetPromenadeEntry } from '@/context/GameContext';
 
 type Props = {
   harvest: number;
@@ -58,6 +58,7 @@ type Props = {
   removePlacement: (placementId: string) => void;
   clearGarden: () => void;
   registerCustomEmoji: (emoji: string) => EmojiDefinition | null;
+  addWidgetPromenadePhoto: (uri: string) => WidgetPromenadeEntry | null;
   gardenBackgroundColor: string;
   title?: string;
 };
@@ -272,6 +273,7 @@ export function GardenSection({
   removePlacement,
   clearGarden,
   registerCustomEmoji,
+  addWidgetPromenadePhoto,
   gardenBackgroundColor,
   title = 'Lettuce Gardens',
 }: Props) {
@@ -850,14 +852,32 @@ export function GardenSection({
       await wait(80);
       const snapshotUri = await captureRef(canvasRef, { format: 'png', quality: 1 });
       await MediaLibrary.saveToLibraryAsync(snapshotUri);
-      Alert.alert('Garden saved', 'Your garden snapshot is now in your photos.');
+      Alert.alert(
+        'Garden saved',
+        'Your garden snapshot is now in your photos. Would you like to add it to your Widget Promenade for widgets?',
+        [
+          {
+            text: 'Photos only',
+            style: 'cancel',
+          },
+          {
+            text: 'Add to Promenade',
+            onPress: () => {
+              const entry = addWidgetPromenadePhoto(snapshotUri);
+              if (entry) {
+                Alert.alert('Widget ready', 'Your snapshot is ready in the Widget Promenade.');
+              }
+            },
+          },
+        ]
+      );
     } catch {
       Alert.alert('Save failed', 'We could not save the garden. Please try again.');
     } finally {
       setPenHiddenForSave(false);
       setIsSavingSnapshot(false);
     }
-  }, [canvasRef, isSavingSnapshot]);
+  }, [addWidgetPromenadePhoto, canvasRef, isSavingSnapshot]);
 
   const handleAddPhoto = useCallback(async () => {
     if (isPickingPhoto) {

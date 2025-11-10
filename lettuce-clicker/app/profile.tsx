@@ -19,6 +19,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useGame } from '@/context/GameContext';
 
 const PREMIUM_ACCENT_OPTIONS = ['#1f6f4a', '#047857', '#2563eb', '#a855f7', '#f97316', '#0ea5e9'];
+const CLICK_EMOJI_CHOICES = ['🍁', '🍪', '🌺', '🌲', '🌴', '🍄', '🍀', '🍎', '🍏', '🖼️', '🗺️', '🪙', '🛎️', '🌵'] as const;
 const BACKGROUND_WHEEL_COLORS = [
   '#f2f9f2',
   '#ffffff',
@@ -107,21 +108,17 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
   }, [premiumAccentColor]);
 
   const emojiOptions = useMemo(() => {
-    const sorted = [...emojiCatalog].sort(
-      (a, b) => Number(Boolean(emojiInventory[b.id])) - Number(Boolean(emojiInventory[a.id]))
-    );
-    const base = sorted.slice(0, 24);
-    const mapleLeaf = sorted.find((entry) => entry.emoji === '🍁');
-    const cookie = sorted.find((entry) => entry.emoji === '🍪');
-    const prioritizedSeeds = [mapleLeaf, cookie, ...base];
-    const deduped: typeof sorted = [];
-    prioritizedSeeds.forEach((entry) => {
-      if (entry && !deduped.some((item) => item.id === entry.id)) {
-        deduped.push(entry);
+    const options: EmojiDefinition[] = [];
+    CLICK_EMOJI_CHOICES.forEach((glyph) => {
+      const catalogEntry =
+        emojiCatalog.find((entry) => entry.emoji === glyph) ?? registerCustomEmoji(glyph) ?? null;
+
+      if (catalogEntry && !options.some((option) => option.id === catalogEntry.id)) {
+        options.push(catalogEntry);
       }
     });
-    return deduped.slice(0, 24);
-  }, [emojiCatalog, emojiInventory]);
+    return options;
+  }, [emojiCatalog, registerCustomEmoji]);
   const backgroundWheelPositions = useMemo(
     () =>
       BACKGROUND_WHEEL_COLORS.map((color, index) => {

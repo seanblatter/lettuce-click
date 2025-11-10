@@ -91,6 +91,12 @@ export type TextPlacement = PlacementBase & {
 
 export type Placement = EmojiPlacement | PhotoPlacement | TextPlacement;
 
+export type WidgetPromenadeEntry = {
+  id: string;
+  uri: string;
+  savedAt: number;
+};
+
 type ResumeNoticeBase = {
   timestamp: number;
   harvestSnapshot: number;
@@ -145,6 +151,7 @@ type GameContextValue = {
   rssItems: RSSFeedItem[];
   rssError: string | null;
   rssLastUpdated: number;
+  widgetPromenade: WidgetPromenadeEntry[];
   registerCustomEmoji: (emoji: string) => EmojiDefinition | null;
   setProfileLifetimeTotal: (value: number) => void;
   addHarvest: () => void;
@@ -187,6 +194,8 @@ type GameContextValue = {
   addCustomRSSFeed: (feed: Omit<RSSFeed, 'id'>) => void;
   removeRSSFeed: (feedId: string) => void;
   clearResumeNotice: () => void;
+  addWidgetPromenadePhoto: (uri: string) => WidgetPromenadeEntry | null;
+  removeWidgetPromenadePhoto: (entryId: string) => void;
 };
 
 const PROFILE_STORAGE_KEY = 'lettuce-click:profile';
@@ -575,6 +584,7 @@ type StoredGameState = {
   bedsideWidgetsEnabled?: boolean;
   hasManuallySetTemperatureUnit?: boolean;
   rssFeeds?: RSSFeed[];
+  widgetPromenade?: WidgetPromenadeEntry[];
 };
 
 const GameContext = createContext<GameContextValue | undefined>(undefined);
@@ -614,6 +624,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [rssItems, setRssItems] = useState<RSSFeedItem[]>([]);
   const [rssError, setRssError] = useState<string | null>(null);
   const [rssLastUpdated, setRssLastUpdated] = useState(0);
+  const [widgetPromenade, setWidgetPromenade] = useState<WidgetPromenadeEntry[]>([]);
   const initialisedRef = useRef(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const backgroundInfoRef = useRef<
@@ -1159,6 +1170,30 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     setPlacements([]);
   }, []);
 
+  const addWidgetPromenadePhoto = useCallback(
+    (uri: string): WidgetPromenadeEntry | null => {
+      const trimmed = uri.trim();
+
+      if (trimmed.length === 0) {
+        return null;
+      }
+
+      const entry: WidgetPromenadeEntry = {
+        id: `promenade-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        uri: trimmed,
+        savedAt: Date.now(),
+      };
+
+      setWidgetPromenade((prev) => [entry, ...prev.filter((item) => item.uri !== trimmed)]);
+      return entry;
+    },
+    []
+  );
+
+  const removeWidgetPromenadePhoto = useCallback((entryId: string) => {
+    setWidgetPromenade((prev) => prev.filter((item) => item.id !== entryId));
+  }, []);
+
   useEffect(() => {
     if (ownedThemes[homeEmojiTheme]) {
       return;
@@ -1217,6 +1252,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     rssItems,
     rssError,
     rssLastUpdated,
+    widgetPromenade,
     registerCustomEmoji,
     setProfileLifetimeTotal,
     addHarvest,
@@ -1310,6 +1346,8 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       setRssFeeds(prevFeeds => prevFeeds.filter(feed => feed.id !== feedId));
       rssService.clearFeedCache(feedId);
     },
+    addWidgetPromenadePhoto,
+    removeWidgetPromenadePhoto,
   }), [
     harvest,
     lifetimeHarvest,
@@ -1359,6 +1397,13 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     purchasePremiumUpgrade,
     setPremiumAccentColor,
     setCustomClickEmoji,
+    rssFeeds,
+    rssItems,
+    rssError,
+    rssLastUpdated,
+    widgetPromenade,
+    addWidgetPromenadePhoto,
+    removeWidgetPromenadePhoto,
   ]);
 
   useEffect(() => {
@@ -1501,7 +1546,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
             if (Array.isArray(parsed.rssFeeds)) {
               // Check if stored feeds are the old format (without items)
               const hasOldFormat = parsed.rssFeeds.some((f: any) => !f.items || f.items.length === 0);
-              
+
               if (hasOldFormat) {
                 // Use new DEFAULT_RSS_FEEDS with curated content
                 console.log('🔄 Migrating from old RSS format to new instant feeds');
@@ -1518,6 +1563,22 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
                 setRssFeeds(mergedFeeds);
                 console.log('🔄 Merged RSS feeds: stored settings + new content');
               }
+            }
+            if (Array.isArray(parsed.widgetPromenade)) {
+              const normalized = parsed.widgetPromenade
+                .filter((entry): entry is WidgetPromenadeEntry => {
+                  return (
+                    entry &&
+                    typeof entry === 'object' &&
+                    typeof entry.id === 'string' &&
+                    typeof entry.uri === 'string' &&
+                    typeof entry.savedAt === 'number'
+                  );
+                })
+                .sort((a, b) => b.savedAt - a.savedAt);
+              setWidgetPromenade(normalized);
+            } else if (shouldResetSession) {
+              setWidgetPromenade([]);
             }
           } catch {
             // ignore malformed stored data
@@ -1606,6 +1667,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       bedsideWidgetsEnabled,
       hasManuallySetTemperatureUnit,
       rssFeeds,
+      widgetPromenade,
     };
 
     AsyncStorage.setItem(GAME_STORAGE_KEY, JSON.stringify(payload)).catch(() => {
@@ -1628,6 +1690,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     temperatureUnit,
     rssFeeds,
     rssItems,
+    widgetPromenade,
   ]);
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;

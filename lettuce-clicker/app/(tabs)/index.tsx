@@ -128,6 +128,19 @@ const formatDuration = (milliseconds: number) => {
   return segments.join(':');
 };
 
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+const formatWidgetTimestamp = (timestamp: number) => {
+  const date = new Date(timestamp);
+  const month = MONTH_NAMES[date.getMonth()] ?? '';
+  const day = date.getDate();
+  const rawHours = date.getHours();
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  const meridiem = rawHours >= 12 ? 'PM' : 'AM';
+  const hours = rawHours % 12 === 0 ? 12 : rawHours % 12;
+  return `${month} ${day} • ${hours}:${minutes} ${meridiem}`;
+};
+
 export default function HomeScreen() {
   // Dynamic font size based on number length for harvest display
   const getDynamicFontSize = (value: number, baseFontSize: number = 20) => {
@@ -178,6 +191,8 @@ export default function HomeScreen() {
     setHasManuallySetTemperatureUnit,
     updateRSSFeeds,
     clearRSSData,
+    widgetPromenade,
+    removeWidgetPromenadePhoto,
   } = useGame();
 
   // Get current theme for background emoji
@@ -197,6 +212,7 @@ export default function HomeScreen() {
   const [showDailyBonus, setShowDailyBonus] = useState(false);
   const [showProfileQuickAction, setShowProfileQuickAction] = useState(false);
   const [showMusicQuickAction, setShowMusicQuickAction] = useState(false);
+  const [showWidgetPromenade, setShowWidgetPromenade] = useState(false);
   const [availableBonusSpins, setAvailableBonusSpins] = useState(0);
   const [bonusMessage, setBonusMessage] = useState<string | null>(null);
   const [lastBonusReward, setLastBonusReward] = useState<number | null>(null);
@@ -221,6 +237,7 @@ export default function HomeScreen() {
     music: new Animated.Value(0),
     bonus: new Animated.Value(0),
     themes: new Animated.Value(0),
+    widgets: new Animated.Value(0),
   }).current;
   
   // Hardware volume button synchronization
@@ -411,8 +428,17 @@ export default function HomeScreen() {
       music: quickActionWiggles.music.interpolate({ inputRange: [-1, 1], outputRange: ['-10deg', '10deg'] }),
       bonus: quickActionWiggles.bonus.interpolate({ inputRange: [-1, 1], outputRange: ['-10deg', '10deg'] }),
       themes: quickActionWiggles.themes.interpolate({ inputRange: [-1, 1], outputRange: ['-10deg', '10deg'] }),
+      widgets: quickActionWiggles.widgets.interpolate({ inputRange: [-1, 1], outputRange: ['-10deg', '10deg'] }),
     }),
     [quickActionWiggles]
+  );
+  const widgetPromenadeSorted = useMemo(
+    () => [...widgetPromenade].sort((a, b) => b.savedAt - a.savedAt),
+    [widgetPromenade]
+  );
+  const widgetPromenadeStatus = useMemo(
+    () => (widgetPromenade.length ? `${widgetPromenade.length} saved` : 'Start a gallery'),
+    [widgetPromenade.length]
   );
   const bonusFlipRotation = useMemo(
     () =>
@@ -642,6 +668,22 @@ export default function HomeScreen() {
     setShowMusicQuickAction(false);
   }, []);
 
+  const handleOpenWidgetPromenade = useCallback(() => {
+    setMenuOpen(false);
+    setShowWidgetPromenade(true);
+  }, []);
+
+  const handleCloseWidgetPromenade = useCallback(() => {
+    setShowWidgetPromenade(false);
+  }, []);
+
+  const handleRemovePromenadePhoto = useCallback(
+    (entryId: string) => {
+      removeWidgetPromenadePhoto(entryId);
+    },
+    [removeWidgetPromenadePhoto]
+  );
+
   const handleOpenDreamCapsule = useCallback(() => {
     if (isExpandedView) return;
     setMenuOpen(false);
@@ -706,6 +748,12 @@ export default function HomeScreen() {
       setShowTemperatureSettings(false);
     }
   }, [isExpandedView]);
+
+  useEffect(() => {
+    if (dimensions.width <= dimensions.height && isExpandedView) {
+      setIsExpandedView(false);
+    }
+  }, [dimensions.height, dimensions.width, isExpandedView, setIsExpandedView]);
 
   const handleSelectTheme = useCallback(
     (theme: HomeEmojiTheme) => {
@@ -1403,16 +1451,10 @@ export default function HomeScreen() {
                           pointerEvents="none"
                           style={[styles.statsCardStitch, { borderColor: ledgerTheme.stitchColor }]}
                         />
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Text style={[styles.statsTitle, { color: ledgerTheme.tint }]}>🎵 Dream Capsule</Text>
-                          <View style={{ alignItems: 'flex-end' }}>
-                            {isAmbientPlaying && (
-                              <Text style={[styles.statLabel, { color: ledgerTheme.muted, fontSize: 10, opacity: 0.5 }]}>
-                                Use device volume buttons
-                              </Text>
-                            )}
-                          </View>
-                        </View>
+                        <Text style={[styles.statsTitle, { color: ledgerTheme.tint }]}>🎵 Dream Capsule</Text>
+                        {isAmbientPlaying ? (
+                          <Text style={[styles.dreamCapsuleHint, { color: ledgerTheme.muted }]}>Use device volume buttons to adjust.</Text>
+                        ) : null}
                         <View style={styles.statRow}>
                           <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Now Playing</Text>
                           <Text style={[styles.statValue, { color: ledgerTheme.tint }]}>
@@ -1510,7 +1552,7 @@ export default function HomeScreen() {
                     pressed && styles.expandButtonPressed,
                   ]}
                   onPress={handleToggleExpandedView}>
-                  <Text style={styles.expandIcon}>⊞</Text>
+                  <Text style={styles.expandIcon}>⤢</Text>
                 </Pressable>
               )}
             </View>
@@ -1788,16 +1830,10 @@ export default function HomeScreen() {
                     pointerEvents="none"
                     style={[styles.statsCardStitch, { borderColor: ledgerTheme.stitchColor }]}
                   />
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text style={[styles.statsTitle, { color: ledgerTheme.tint }]}>🎵 Dream Capsule</Text>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      {isAmbientPlaying && (
-                        <Text style={[styles.statLabel, { color: ledgerTheme.muted, fontSize: 10, opacity: 0.5 }]}>
-                          Use device volume buttons
-                        </Text>
-                      )}
-                    </View>
-                  </View>
+                        <Text style={[styles.statsTitle, { color: ledgerTheme.tint }]}>🎵 Dream Capsule</Text>
+                        {isAmbientPlaying ? (
+                          <Text style={[styles.dreamCapsuleHint, { color: ledgerTheme.muted }]}>Use device volume buttons to adjust.</Text>
+                        ) : null}
                   <View style={styles.statRow}>
                     <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Now Playing</Text>
                     <Text style={[styles.statValue, { color: ledgerTheme.tint }]}>
@@ -1915,6 +1951,47 @@ export default function HomeScreen() {
                       </View>
                       <View style={[styles.menuItemMeta, styles.quickActionMeta]} pointerEvents="none">
                         <Text style={[styles.menuItemChevron, styles.quickActionChevron]}>›</Text>
+                      </View>
+                    </Pressable>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.menuItemCard,
+                        styles.quickActionCard,
+                        pressed && styles.menuItemCardPressed,
+                      ]}
+                      onPress={handleOpenWidgetPromenade}
+                      accessibilityRole="button"
+                      accessibilityLabel="Open Widget Promenade"
+                    >
+                      <Pressable
+                        style={styles.quickActionIconPressable}
+                        onPress={handleQuickActionEmojiPress('widgets')}
+                        accessibilityRole="button"
+                        accessibilityLabel="Animate widget promenade emoji"
+                        hitSlop={8}
+                      >
+                        <Animated.View
+                          style={[
+                            styles.menuItemIconWrap,
+                            styles.quickActionIconWrap,
+                            { transform: [{ rotate: quickActionRotations.widgets }] },
+                          ]}
+                        >
+                          <Text style={[styles.menuItemIcon, styles.quickActionIcon]}>🖼️</Text>
+                        </Animated.View>
+                      </Pressable>
+                      <View style={styles.menuItemBody}>
+                        <Text style={[styles.menuItemTitle, styles.quickActionTitle]}>Widget Promenade</Text>
+                        <Text style={[styles.menuItemSubtitle, styles.quickActionSubtitle]}>
+                          Showcase saved garden photos
+                        </Text>
+                      </View>
+                      <View style={[styles.menuItemMeta, styles.quickActionMeta]} pointerEvents="none">
+                        <View style={[styles.menuPill, styles.widgetQuickActionPill]}>
+                          <Text style={[styles.menuPillText, styles.widgetQuickActionPillText]}>
+                            {widgetPromenadeStatus}
+                          </Text>
+                        </View>
                       </View>
                     </Pressable>
                     <Pressable
@@ -2231,6 +2308,59 @@ export default function HomeScreen() {
         <MusicContent mode="modal" onRequestClose={handleCloseMusicQuickAction} />
       </Modal>
 
+      <Modal
+        visible={showWidgetPromenade}
+        animationType="slide"
+        onRequestClose={handleCloseWidgetPromenade}
+      >
+        <SafeAreaView style={styles.promenadeSafeArea}>
+          <View style={styles.promenadeContainer}>
+            <View style={styles.promenadeHeader}>
+              <Text style={styles.promenadeTitle}>Widget Promenade</Text>
+              <Pressable
+                style={styles.promenadeCloseButton}
+                onPress={handleCloseWidgetPromenade}
+                accessibilityLabel="Close Widget Promenade"
+              >
+                <Text style={styles.promenadeCloseText}>Done</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.promenadeSubtitle}>
+              Saved snapshots appear in your widget museum when you add Lettuce World to your home screen.
+            </Text>
+            {widgetPromenadeSorted.length === 0 ? (
+              <View style={styles.promenadeEmptyState}>
+                <Text style={styles.promenadeEmptyTitle}>No snapshots yet</Text>
+                <Text style={styles.promenadeEmptyCopy}>
+                  Save a garden photo and choose “Add to Promenade” to build your widget gallery.
+                </Text>
+              </View>
+            ) : (
+              <ScrollView
+                contentContainerStyle={styles.promenadeScrollContent}
+                showsVerticalScrollIndicator={false}
+              >
+                {widgetPromenadeSorted.map((entry) => (
+                  <View key={entry.id} style={styles.promenadeItem}>
+                    <Image source={{ uri: entry.uri }} style={styles.promenadeImage} />
+                    <View style={styles.promenadeMetaRow}>
+                      <Text style={styles.promenadeMetaText}>{formatWidgetTimestamp(entry.savedAt)}</Text>
+                      <Pressable
+                        style={styles.promenadeRemoveButton}
+                        onPress={() => handleRemovePromenadePhoto(entry.id)}
+                        accessibilityLabel="Remove snapshot from Widget Promenade"
+                      >
+                        <Text style={styles.promenadeRemoveText}>Remove</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </SafeAreaView>
+      </Modal>
+
       <TemperatureUnitModal
         visible={showTemperatureUnitModal}
         onClose={() => setShowTemperatureUnitModal(false)}
@@ -2517,30 +2647,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   audioPulseContainer: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
+    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
   },
   audioPulseRing: {
-    position: 'absolute',
-    width: 210,
-    height: 210,
-    borderRadius: 105,
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 999,
     borderWidth: 2,
   },
   audioPulseRingSecondary: {
-    position: 'absolute',
-    width: 170,
-    height: 170,
-    borderRadius: 85,
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 999,
     borderWidth: 2,
   },
   audioPulseCore: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    position: 'absolute',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
     backgroundColor: '#ecfdf3',
     shadowOpacity: 0.25,
     shadowRadius: 28,
@@ -3029,6 +3154,122 @@ const styles = StyleSheet.create({
   },
   quickActionPillText: {
     color: '#065f46',
+  },
+  widgetQuickActionPill: {
+    backgroundColor: '#dcfce7',
+  },
+  widgetQuickActionPillText: {
+    color: '#14532d',
+    fontWeight: '700',
+  },
+  dreamCapsuleHint: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 6,
+    opacity: 0.85,
+  },
+  promenadeSafeArea: {
+    flex: 1,
+    backgroundColor: '#f2f9f2',
+  },
+  promenadeContainer: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 32,
+  },
+  promenadeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  promenadeTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#14532d',
+  },
+  promenadeSubtitle: {
+    fontSize: 14,
+    color: '#1f2937',
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  promenadeCloseButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#14532d',
+  },
+  promenadeCloseText: {
+    color: '#f0fff4',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  promenadeEmptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  promenadeEmptyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#14532d',
+    marginBottom: 6,
+  },
+  promenadeEmptyCopy: {
+    fontSize: 14,
+    color: '#1f2937',
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+  promenadeScrollContent: {
+    paddingBottom: 48,
+    paddingTop: 12,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  promenadeItem: {
+    width: '48%',
+    backgroundColor: '#ecfdf5',
+    borderRadius: 18,
+    padding: 12,
+    marginBottom: 18,
+    shadowColor: 'rgba(20, 83, 45, 0.25)',
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
+  },
+  promenadeImage: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 12,
+    backgroundColor: '#d1fae5',
+  },
+  promenadeMetaRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  promenadeMetaText: {
+    fontSize: 12,
+    color: '#047857',
+    fontWeight: '600',
+  },
+  promenadeRemoveButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: 'rgba(21, 101, 52, 0.12)',
+  },
+  promenadeRemoveText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#14532d',
   },
   menuThemeHeader: {
     flexDirection: 'row',

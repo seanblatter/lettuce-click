@@ -3,7 +3,6 @@ import {
   Alert,
   Animated,
   Easing,
-  Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
@@ -748,7 +747,7 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
       width: '100%',
       maxWidth: isLandscape ? 680 : 520,
       alignSelf: 'center',
-      maxHeight: sleepSheetMaxHeight,
+      height: sleepSheetMaxHeight,
       borderRadius: 28,
     },
     sleepCardAura: {
@@ -770,7 +769,6 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
       shadowRadius: isDark ? 28 : 18,
       shadowOffset: { width: 0, height: isDark ? 18 : 12 },
       elevation: isDark ? 8 : 5,
-      overflow: 'hidden',
     },
     sleepHeaderBar: {
       flexDirection: 'row',
@@ -1213,21 +1211,21 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
     () => normalizedTimerMinutes - timerHourValue * 60,
     [normalizedTimerMinutes, timerHourValue]
   );
+  const [sleepTimerAction, setSleepTimerAction] = useState<TimerAction>('stop');
   const activeTimerAction = useMemo(
     () => TIMER_ACTION_OPTIONS.find((option) => option.id === sleepTimerAction),
     [sleepTimerAction]
   );
+  const [alarmHour, setAlarmHour] = useState<number>(7);
+  const [alarmMinute, setAlarmMinute] = useState<number>(0);
+  const [alarmPeriod, setAlarmPeriod] = useState<AlarmPeriod>('AM');
+  const [sleepCircle, setSleepCircle] = useState<SleepCircleState>(null);
   const secondaryActionLabel = useMemo(() => {
     if (sleepCircle) {
       return sleepMode === 'alarm' ? 'Clear alarm' : 'Clear timer';
     }
     return 'Cancel';
   }, [sleepCircle, sleepMode]);
-  const [sleepTimerAction, setSleepTimerAction] = useState<TimerAction>('stop');
-  const [alarmHour, setAlarmHour] = useState<number>(7);
-  const [alarmMinute, setAlarmMinute] = useState<number>(0);
-  const [alarmPeriod, setAlarmPeriod] = useState<AlarmPeriod>('AM');
-  const [sleepCircle, setSleepCircle] = useState<SleepCircleState>(null);
   const [sleepNow, setSleepNow] = useState(() => Date.now());
   const sleepTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const alarmPlayer = useAudioPlayer(ALARM_SOUND_URI);
@@ -2100,13 +2098,8 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
         )}
       </ScrollView>
 
-      <Modal
-        visible={sleepModalOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSleepModalOpen(false)}
-      >
-        <View style={styles.sleepOverlay}>
+      {sleepModalOpen && (
+        <View style={[StyleSheet.absoluteFillObject, styles.sleepOverlay]}>
           <Pressable style={styles.sleepBackdrop} onPress={() => setSleepModalOpen(false)} />
           <View style={styles.sleepCard}>
             <View pointerEvents="none" style={styles.sleepCardAura} />
@@ -2325,7 +2318,7 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
             </View>
           </View>
         </View>
-      </Modal>
+      )}
     </SafeAreaView>
   );
 }

@@ -2314,7 +2314,7 @@ export default function HomeScreen() {
         onRequestClose={handleCloseWidgetPromenade}
       >
         <SafeAreaView style={styles.promenadeSafeArea}>
-          <View style={styles.promenadeContainer}>
+          <View style={[styles.promenadeContainer, { paddingTop: insets.top + 24 }]}> 
             <View style={styles.promenadeHeader}>
               <Text style={styles.promenadeTitle}>Widget Promenade</Text>
               <Pressable

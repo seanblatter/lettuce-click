@@ -241,6 +241,21 @@ type EmojiToken = {
   normalized: string;
 };
 
+function formatHarvestDisplay(harvest: number): string {
+  if (harvest >= 1_000_000) {
+    // Show up to 3 significant digits, e.g. 1.23M, 12.3M, 123M
+    const millions = harvest / 1_000_000;
+    if (millions < 10) {
+      return millions.toFixed(2).replace(/\.00$/, '') + 'M';
+    } else if (millions < 100) {
+      return millions.toFixed(1).replace(/\.0$/, '') + 'M';
+    } else {
+      return Math.floor(millions).toLocaleString() + 'M';
+    }
+  }
+  return harvest.toLocaleString();
+}
+
 const formatEmojiDescription = (entry: InventoryEntry) => {
   if (!entry.tags.length) {
     return 'A fresh garden accent ready to brighten your park.';
@@ -1068,6 +1083,7 @@ export function GardenSection({
             },
           ]}
         />
+
       );
 
       for (let index = 1; index < stroke.points.length; index += 1) {
@@ -1383,7 +1399,7 @@ export function GardenSection({
           
           <Text style={[styles.harvestTitle, isLandscape && styles.harvestTitleLandscape]}>Welcome to Lettuce Garden</Text>
           <Text style={[styles.harvestAmount, isLandscape && styles.harvestAmountLandscape]}>
-            You have harvested {harvest.toLocaleString()} clicks.
+            You have harvested {formatHarvestDisplay(harvest)} clicks.
           </Text>
           <Text style={[styles.harvestHint, isLandscape && styles.harvestHintLandscape]}>
             Your harvest bankroll is ready—shop curated emoji sets and paint the garden to life.
@@ -3043,8 +3059,8 @@ const styles = StyleSheet.create({
     gap: 6,
     shadowColor: '#0f766e',
     shadowOpacity: 0.08,
+    shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 10,
     elevation: 3,
   },
   selectionStatusTitle: {
@@ -3477,11 +3493,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderWidth: 2,
     borderColor: '#15803d',
-    shadowColor: 'rgba(21, 128, 61, 0.32)',
-    shadowOpacity: 0.18,
+    shadowColor: 'rgba(21, 128, 61, 0.25)',
+    shadowOpacity: 0.15,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
+    elevation: 3,
   },
   shopTileCircleLocked: {
     borderColor: '#b45309',

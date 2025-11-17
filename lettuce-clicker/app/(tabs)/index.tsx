@@ -1099,14 +1099,6 @@ export default function HomeScreen() {
               {/* Bedside Widgets - Corner Overlays */}
               {bedsideWidgetsEnabled && (
                 <>
-                  {/* Top Left - Alarm */}
-                  <Pressable
-                    style={styles.bedsideWidgetTopLeft}
-                    onPress={() => Alert.alert('Alarm', 'Alarm functionality coming soon!')}
-                    accessibilityLabel="Set alarm"
-                  >
-                    <Text style={styles.bedsideWidgetIcon}>⏰</Text>
-                  </Pressable>
 
                   {/* Top Right - Weather */}
                   <Pressable
@@ -2394,6 +2386,21 @@ export default function HomeScreen() {
       {/* Expose selected artwork URI for widget use */}
       {/* const selectedWidgetPromenadeEntry = widgetPromenadeSorted.find(e => e.id === selectedWidgetPromenadeId) || null; */}
       {/* You can now use selectedWidgetPromenadeEntry?.uri for the Android widget */}
+
+      {/* iOS: Save selected artwork URI to App Group for WidgetKit */}
+      {Platform.OS === 'ios' && selectedWidgetPromenadeId && (() => {
+        const selectedEntry = widgetPromenadeSorted.find(e => e.id === selectedWidgetPromenadeId);
+        if (selectedEntry?.uri) {
+          // Save to App Group and trigger widget reload via NativeModules
+          try {
+            NativeModules.WidgetArtworkBridge?.saveArtworkUriToAppGroup?.(selectedEntry.uri);
+            NativeModules.WidgetArtworkBridge?.reloadWidgetTimelines?.();
+          } catch (e) {
+            // Ignore errors in render
+          }
+        }
+        return null;
+      })()}
       </View>
       </SafeAreaView>
     </>

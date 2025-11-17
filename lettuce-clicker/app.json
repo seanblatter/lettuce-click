@@ -10,7 +10,10 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.lettucepark.lettuce-clicker"
+      "bundleIdentifier": "com.lettucepark.lettuce-clicker",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -40,7 +43,8 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      "@bacons/apple-targets"
     ],
     "experiments": {
       "typedRoutes": true,
@@ -49,7 +53,20 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "e7a97dc9-dd83-45c6-bdea-f06ecf51ebb4"
+        "projectId": "e7a97dc9-dd83-45c6-bdea-f06ecf51ebb4",
+        "build": {
+          "experimental": {
+            "ios": {
+              "appExtensions": [
+                {
+                  "bundleIdentifier": "com.lettucepark.lettuce-clicker.widget",
+                  "targetName": "widget",
+                  "entitlements": {}
+                }
+              ]
+            }
+          }
+        }
       }
     },
     "owner": "lettucepark"

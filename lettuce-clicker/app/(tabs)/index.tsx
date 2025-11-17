@@ -721,17 +721,6 @@ export default function HomeScreen() {
     }
   }, [bedsideWidgetsEnabled, weatherData, weatherError, updateWeatherData]);
 
-  // Auto-fetch RSS feeds when bedside widgets are enabled
-  useEffect(() => {
-    if (bedsideWidgetsEnabled && rssItems.length === 0 && !rssError) {
-      // Fetch RSS feeds with a small delay
-      const timer = setTimeout(() => {
-        updateRSSFeeds();
-      }, 2000); // Delay slightly more than weather to stagger requests
-      return () => clearTimeout(timer);
-    }
-  }, [bedsideWidgetsEnabled, rssItems, rssError, updateRSSFeeds]);
-
   // Auto-detect temperature unit based on location (only if user hasn't manually set it)
   useEffect(() => {
     if (weatherData && weatherData.location && !hasManuallySetTemperatureUnit) {
@@ -1543,18 +1532,6 @@ export default function HomeScreen() {
                   {menuOpen ? '✕' : customClickEmoji}
                 </Text>
               </Pressable>
-              {isLandscape && !isExpandedView && (
-                <Pressable
-                  accessibilityLabel="Expand view"
-                  accessibilityHint="Expand view and hide navigation"
-                  style={({ pressed }) => [
-                    styles.expandButton,
-                    pressed && styles.expandButtonPressed,
-                  ]}
-                  onPress={handleToggleExpandedView}>
-                  <Text style={styles.expandIcon}>⤢</Text>
-                </Pressable>
-              )}
             </View>
           </View>
         </View>
@@ -1830,10 +1807,10 @@ export default function HomeScreen() {
                     pointerEvents="none"
                     style={[styles.statsCardStitch, { borderColor: ledgerTheme.stitchColor }]}
                   />
-                        <Text style={[styles.statsTitle, { color: ledgerTheme.tint }]}>🎵 Dream Capsule</Text>
-                        {isAmbientPlaying ? (
-                          <Text style={[styles.dreamCapsuleHint, { color: ledgerTheme.muted }]}>Use device volume buttons to adjust.</Text>
-                        ) : null}
+                  <Text style={[styles.statsTitle, { color: ledgerTheme.tint }]}>🎵 Dream Capsule</Text>
+                  {isAmbientPlaying ? (
+                    <Text style={[styles.dreamCapsuleHint, { color: ledgerTheme.muted }]}>Use device volume buttons to adjust.</Text>
+                  ) : null}
                   <View style={styles.statRow}>
                     <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Now Playing</Text>
                     <Text style={[styles.statValue, { color: ledgerTheme.tint }]}>
@@ -2048,6 +2025,8 @@ export default function HomeScreen() {
                         hitSlop={8}
                       >
                         <Animated.View
+
+
                           style={[
                             styles.menuItemIconWrap,
                             styles.quickActionIconWrap,
@@ -2168,14 +2147,14 @@ export default function HomeScreen() {
           <View style={styles.noticeCard}>
             <Text style={styles.noticeTitle}>{noticeTitle}</Text>
             <Text style={styles.noticeCopy}>{noticeCopy}</Text>
-            {activeNotice?.type === 'background' && activeNotice.passiveHarvest > 0 ? (
+            {activeNotice?.type === 'background' && activeNotice?.passiveHarvest && activeNotice.passiveHarvest > 0 ? (
               <Text style={styles.noticeInfoText}>
                 {hasDoubledPassiveHarvest
                   ? 'Bonus applied! Your doubled clicks are already in your harvest.'
                   : `Watch a quick clip to double your ${activeNotice.passiveHarvest.toLocaleString()} passive clicks.`}
               </Text>
             ) : null}
-            {activeNotice?.type === 'background' && activeNotice.passiveHarvest > 0 ? (
+            {activeNotice?.type === 'background' && activeNotice?.passiveHarvest && activeNotice.passiveHarvest > 0 ? (
               <Pressable
                 style={[
                   styles.noticeSecondaryButton,
@@ -2199,6 +2178,22 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
+
+      {lastBonusReward && (
+        <Text style={styles.bonusReward}>Last reward: {lastBonusReward.toLocaleString()} clicks</Text>
+      )}
+
+      {lastUnlockedEmoji && (
+        <View style={styles.bonusUnlockCard}>
+          <Text style={styles.bonusUnlockLabel}>Newest emoji reward</Text>
+          <View style={styles.bonusUnlockRow}>
+            <View style={styles.bonusUnlockGlyphWrap}>
+              <Text style={styles.bonusUnlockGlyph}>{lastUnlockedEmoji.emoji}</Text>
+            </View>
+            <Text style={styles.bonusUnlockName}>{lastUnlockedEmoji.name}</Text>
+          </View>
+        </View>
+      )}
 
       <Modal visible={showDailyBonus} animationType="slide" onRequestClose={handleCloseDailyBonus}>
         <SafeAreaView style={[styles.bonusSafeArea, { backgroundColor: gardenSurfaceColor }]}>

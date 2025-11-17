@@ -9,7 +9,7 @@ import React, {
   useState,
 } from 'react';
 import { weatherService } from '../lib/weatherService';
-import { rssService, DEFAULT_RSS_FEEDS, type RSSFeed, type RSSFeedItem } from '../lib/rssService';
+import { rssService, type RSSFeed, type RSSFeedItem } from '../lib/rssService';
 
 import { computeBellCurveCost, gardenEmojiCatalog } from '@/constants/emojiCatalog';
 import { AppState, AppStateStatus } from 'react-native';
@@ -620,7 +620,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [weatherLastUpdated, setWeatherLastUpdated] = useState(0);
   const [temperatureUnit, setTemperatureUnit] = useState<'celsius' | 'fahrenheit'>('celsius');
   const [hasManuallySetTemperatureUnit, setHasManuallySetTemperatureUnit] = useState(false);
-  const [rssFeeds, setRssFeeds] = useState<RSSFeed[]>(DEFAULT_RSS_FEEDS);
+  const [rssFeeds, setRssFeeds] = useState<RSSFeed[]>([]);
   const [rssItems, setRssItems] = useState<RSSFeedItem[]>([]);
   const [rssError, setRssError] = useState<string | null>(null);
   const [rssLastUpdated, setRssLastUpdated] = useState(0);
@@ -1550,18 +1550,17 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
               if (hasOldFormat) {
                 // Use new DEFAULT_RSS_FEEDS with curated content
                 console.log('🔄 Migrating from old RSS format to new instant feeds');
-                setRssFeeds(DEFAULT_RSS_FEEDS);
+                setRssFeeds([]);
               } else {
-                // Merge stored feed settings with new DEFAULT_RSS_FEEDS that have content
-                const mergedFeeds = DEFAULT_RSS_FEEDS.map(defaultFeed => {
-                  const storedFeed = parsed.rssFeeds?.find((f: any) => f.id === defaultFeed.id);
-                  return {
-                    ...defaultFeed,
-                    enabled: storedFeed?.enabled !== undefined ? storedFeed.enabled : defaultFeed.enabled
-                  };
-                });
-                setRssFeeds(mergedFeeds);
-                console.log('🔄 Merged RSS feeds: stored settings + new content');
+                // Removed logic for merging RSS feeds as it is no longer relevant
+                // const mergedFeeds = DEFAULT_RSS_FEEDS.map(defaultFeed => {
+                //   const storedFeed = parsed.rssFeeds?.find((f: any) => f.id === defaultFeed.id);
+                //   return {
+                //     ...defaultFeed,
+                //     enabled: storedFeed?.enabled !== undefined ? storedFeed.enabled : defaultFeed.enabled
+                //   };
+                // });
+                setRssFeeds(parsed.rssFeeds);
               }
             }
             if (Array.isArray(parsed.widgetPromenade)) {

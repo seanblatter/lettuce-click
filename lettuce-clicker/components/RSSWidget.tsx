@@ -120,9 +120,6 @@ export const RSSWidget: React.FC<RSSWidgetProps> = ({ height = 80 }) => {
         <View style={styles.previewContainer}>
           <View style={styles.previewMainRow}>
             <Text style={styles.previewTitle}>📰 RSS Articles</Text>
-            <View style={styles.emptyWidgetContainer}>
-              <Text style={styles.emptyText}>Enable RSS feeds in Profile</Text>
-            </View>
           </View>
           <Text style={styles.moreIndicator}>
             Swipe up to configure feeds

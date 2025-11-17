@@ -108,7 +108,7 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
   }, [premiumAccentColor]);
 
   const emojiOptions = useMemo(() => {
-    const options: EmojiDefinition[] = [];
+    const options: { id: string; emoji: string }[] = [];
     CLICK_EMOJI_CHOICES.forEach((glyph) => {
       const catalogEntry =
         emojiCatalog.find((entry) => entry.emoji === glyph) ?? registerCustomEmoji(glyph) ?? null;
@@ -118,7 +118,7 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
       }
     });
     return options;
-  }, [emojiCatalog, registerCustomEmoji]);
+  }, [CLICK_EMOJI_CHOICES, emojiCatalog]);
   const backgroundWheelPositions = useMemo(
     () =>
       BACKGROUND_WHEEL_COLORS.map((color, index) => {
@@ -485,7 +485,7 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
                             key={option.id}
                             style={[styles.emojiChoice, isSelected && styles.emojiChoiceActive]}
                             onPress={() => handleChooseEmoji(option.emoji)}
-                            accessibilityLabel={`Use ${option.name} as your click emoji`}
+                            accessibilityLabel={`Use ${option.emoji} as your click emoji`}
                             accessibilityState={{ selected: isSelected }}
                           >
                             <View style={[styles.emojiChoiceHalo, isSelected && styles.emojiChoiceHaloActive]} />
@@ -771,7 +771,7 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
                         key={option.id}
                         style={[styles.emojiChoice, isSelected && styles.emojiChoiceActive]}
                         onPress={() => handleChooseEmoji(option.emoji)}
-                        accessibilityLabel={`Use ${option.name} as your click emoji`}
+                        accessibilityLabel={`Use ${option.emoji} as your click emoji`}
                         accessibilityState={{ selected: isSelected }}
                       >
                         <View style={[styles.emojiChoiceHalo, isSelected && styles.emojiChoiceHaloActive]} />

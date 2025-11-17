@@ -26,50 +26,6 @@ export interface RSSCache {
   };
 }
 
-// DYNAMIC RSS FEEDS - Real feeds that update daily!
-export const DEFAULT_RSS_FEEDS: RSSFeed[] = [
-  {
-    id: 'bbc-news',
-    name: 'BBC News',
-    url: 'https://feeds.bbci.co.uk/news/rss.xml',
-    category: 'News',
-    enabled: true,
-    items: [] // Items will be populated by fetchRSSFeed
-  },
-  {
-    id: 'techcrunch',
-    name: 'TechCrunch',
-    url: 'https://techcrunch.com/feed/',
-    category: 'Technology',
-    enabled: true,
-    items: []
-  },
-  {
-    id: 'reuters-business',
-    name: 'Reuters Business',
-    url: 'https://feeds.reuters.com/reuters/businessNews',
-    category: 'Business',
-    enabled: true,
-    items: []
-  },
-  {
-    id: 'cnn-news',
-    name: 'CNN News',
-    url: 'http://rss.cnn.com/rss/edition.rss',
-    category: 'News',
-    enabled: true,
-    items: []
-  },
-  {
-    id: 'hacker-news',
-    name: 'Hacker News',
-    url: 'https://hnrss.org/frontpage',
-    category: 'Technology',
-    enabled: true,
-    items: []
-  }
-];
-
 // Cache settings
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 const RSS_CACHE_KEY = '@lettuce_rss_cache';
@@ -231,12 +187,6 @@ class DynamicRSSService {
     }
   }
 
-
-
-
-
-
-
   /**
    * Get RSS items from multiple feeds - fetches fresh daily content!
    */
@@ -285,24 +235,24 @@ class DynamicRSSService {
    * Get available feeds for configuration
    */
   getDefaultFeeds(): RSSFeed[] {
-    return DEFAULT_RSS_FEEDS;
+    return [];
   }
 
   /**
    * Add a custom feed (for future expansion)
    */
   addCustomFeed(feed: RSSFeed): void {
-    DEFAULT_RSS_FEEDS.push(feed);
+    // DEFAULT_RSS_FEEDS.push(feed);
   }
 
   /**
    * Update feed items (for future real RSS integration)
    */
   updateFeedItems(feedId: string, items: RSSFeedItem[]): void {
-    const feed = DEFAULT_RSS_FEEDS.find(f => f.id === feedId);
-    if (feed) {
-      feed.items = items;
-    }
+    // const feed = DEFAULT_RSS_FEEDS.find(f => f.id === feedId);
+    // if (feed) {
+    //   feed.items = items;
+    // }
   }
 
   /**

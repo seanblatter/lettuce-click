@@ -20,6 +20,8 @@ export default function GardenScreen() {
     registerCustomEmoji,
     addWidgetPromenadePhoto,
     gardenBackgroundColor,
+    hasPremiumUpgrade,
+    purchasePremiumUpgrade,
   } = useGame();
 
   return (
@@ -39,6 +41,8 @@ export default function GardenScreen() {
         registerCustomEmoji={registerCustomEmoji}
         addWidgetPromenadePhoto={addWidgetPromenadePhoto}
         gardenBackgroundColor={gardenBackgroundColor}
+        hasPremiumUpgrade={hasPremiumUpgrade}
+        purchasePremiumUpgrade={purchasePremiumUpgrade}
       />
     </SafeAreaView>
   );

@@ -30,7 +30,6 @@ import { useAmbientAudio } from '@/context/AmbientAudioContext';
 import { preloadRewardedAd, showRewardedAd } from '@/lib/rewardedAd';
 import { formatTemperature, getDisplayTemperature, detectTemperatureUnitFromLocation } from '@/lib/weatherUtils';
 import { TemperatureUnitModal } from '@/components/TemperatureUnitModal';
-import { RSSWidget } from '@/components/RSSWidget';
 import { Platform, NativeModules } from 'react-native';
 
 const MODAL_STORAGE_KEY = 'lettuce-click:grow-your-park-dismissed';
@@ -183,16 +182,10 @@ export default function HomeScreen() {
     weatherLastUpdated,
     temperatureUnit,
     hasManuallySetTemperatureUnit,
-    rssFeeds,
-    rssItems,
-    rssError,
-    rssLastUpdated,
     updateWeatherData,
     clearWeatherData,
     setTemperatureUnit,
     setHasManuallySetTemperatureUnit,
-    updateRSSFeeds,
-    clearRSSData,
     widgetPromenade,
     removeWidgetPromenadePhoto,
   } = useGame();
@@ -1507,15 +1500,6 @@ export default function HomeScreen() {
                 </GestureDetector>
               </View>
 
-              {/* RSS Feed Widget - Below all bedside widgets (date, battery, alarm, weather) */}
-              {(() => {
-                const shouldShowRss = bedsideWidgetsEnabled && rssFeeds.some(feed => feed.enabled);
-                return shouldShowRss;
-              })() && (
-                <View style={styles.rssWidgetContainer}>
-                  <RSSWidget height={60} />
-                </View>
-              )}
             </Pressable>
           ) : (
             /* NORMAL VIEW - Everything visible */
@@ -3807,23 +3791,6 @@ const styles = StyleSheet.create({
   },
   temperatureUnitButtonTextActive: {
     color: '#FFFFFF',
-  },
-  rssWidgetContainer: {
-    position: 'absolute',
-    bottom: -50, // Moved lower to avoid covering date/battery widgets
-    left: -50, // Extend past left edge (charger port)
-    right: -50, // Extend past right edge (dynamic island)
-    height: 100, // Reduced height to avoid covering date/battery
-    backgroundColor: '#ffffff', // Full opacity white background
-    paddingHorizontal: 50, // Increased padding to account for extended edges
-    paddingVertical: 0,
-    paddingTop: 8, // Reduced top padding
-    paddingBottom: 45, // Reduced bottom padding
-    borderRadius: 0, // No border radius - true edge-to-edge bleeding
-    zIndex: 1003, // High z-index to sit on top
-    // Add subtle top border for separation
-    borderTopWidth: 0.5,
-    borderTopColor: 'rgba(0, 0, 0, 0.08)',
   },
   promenadeItemSelected: {
     borderWidth: 2,

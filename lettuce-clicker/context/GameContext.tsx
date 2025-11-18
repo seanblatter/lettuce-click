@@ -12,6 +12,10 @@ import { weatherService } from '../lib/weatherService';
 import { rssService, type RSSFeed, type RSSFeedItem } from '../lib/rssService';
 
 import { computeBellCurveCost, gardenEmojiCatalog } from '@/constants/emojiCatalog';
+// Use small emoji name mapping to provide a real name for custom/freeform emojis when possible
+// We keep this import minimal and optional; fallback behavior preserves current name/tags.
+// @ts-ignore - package does not provide types
+import emojiNameMap from 'emoji-name-map';
 import { AppState, AppStateStatus } from 'react-native';
 
 export type HomeEmojiTheme =
@@ -722,7 +726,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         return customEmojiCatalog[customId];
       }
 
-      let createdDefinition: EmojiDefinition | null = null;
+  let createdDefinition: EmojiDefinition | null = null;
 
       setCustomEmojiCatalog((prev) => {
         if (prev[customId]) {
@@ -730,13 +734,31 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
           return prev;
         }
 
-        const nextDefinition: EmojiDefinition = {
+        const metaName = (emojiNameMap && (emojiNameMap[normalized] || emojiNameMap[trimmed])) || null;
+        const titleCase = (value: string) =>
+          value
+            .split(/\s+/)
+            .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+            .join(' ');
+
+  // Debug: log any time a custom emoji is registered and what meta info we found
+  // This helps validate the mapping for emoji glyphs like '❤️' or multi-codepoint sequences
+  // and is safe to keep for now since it's only an informational log.
+  // eslint-disable-next-line no-console
+  console.log('Registering custom emoji', { trimmed, normalized, metaName });
+
+  const nextDefinition: EmojiDefinition = {
           id: customId,
           emoji: trimmed,
-          name: `Garden Emoji ${trimmed}`,
+          name: metaName ? titleCase(metaName as string) : `Garden Emoji ${trimmed}`,
           cost: computeCustomEmojiCost(normalized),
           category: pickCustomCategory(normalized),
-          tags: [trimmed.toLowerCase(), normalized.toLowerCase(), 'custom emoji'],
+          tags: [
+            ...(metaName ? (metaName as string).split(/\s+/).map((s) => s.toLowerCase()) : []),
+            trimmed.toLowerCase(),
+            normalized.toLowerCase(),
+            ...(metaName ? [] : ['custom emoji']),
+          ],
           popularity: 1000 + Object.keys(prev).length,
         };
 

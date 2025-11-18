@@ -2128,10 +2128,7 @@ export function GardenSection({
                   </View>
                 ))}
               </View>
-              {/* Test content to force scrolling */}
-              <View style={{ height: 200, backgroundColor: '#e2e8f0', margin: 10, borderRadius: 8, justifyContent: 'center', alignItems: 'center' }}>
-                <Text>📜 SCROLL TEST - If you can see this, scrolling works! 📜</Text>
-              </View>
+              {/* Scrolling placeholder removed - no test content */}
             </View>
               {filteredShopInventory.length === 0 && (
                 <View style={styles.emptyState}>

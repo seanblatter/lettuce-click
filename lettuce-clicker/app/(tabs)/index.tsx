@@ -2197,9 +2197,7 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      {lastBonusReward && (
-        <Text style={styles.bonusReward}>Last reward: {lastBonusReward.toLocaleString()} clicks</Text>
-      )}
+      {/* Last reward shown in the bonus modal. Removed from the main page per design. */}
 
       {lastUnlockedEmoji && (
         <View style={styles.bonusUnlockCard}>
@@ -3284,10 +3282,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   promenadeRemoveButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 999,
     backgroundColor: 'rgba(21, 101, 52, 0.12)',
+    minWidth: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
   promenadeRemoveText: {
     fontSize: 12,

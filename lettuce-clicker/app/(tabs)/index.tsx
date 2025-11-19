@@ -1509,7 +1509,8 @@ export default function HomeScreen() {
 
               {/* RSS Feed Widget - Below all bedside widgets (date, battery, alarm, weather) */}
               {(() => {
-                const shouldShowRss = bedsideWidgetsEnabled && rssFeeds.some(feed => feed.enabled);
+                // Only show RSSWidget if user does NOT have premium
+                const shouldShowRss = !hasPremiumUpgrade && bedsideWidgetsEnabled && rssFeeds.some(feed => feed.enabled);
                 return shouldShowRss;
               })() && (
                 <View style={styles.rssWidgetContainer}>
@@ -1533,7 +1534,7 @@ export default function HomeScreen() {
             <View style={[styles.headerShelf, isLandscape && styles.headerShelfLandscape]}>
               <Text style={[styles.headerText, isLandscape && styles.headerTextLandscape]}>Lettuce World</Text>
             <View style={styles.headerActions}>
-              {isLandscape && (isAmbientPlaying || showMusicContainer) && (
+              {!isLandscape && (isAmbientPlaying || showMusicContainer) && (
                 <Pressable
                   accessibilityLabel="Open Dream Capsule"
                   accessibilityHint="Opens the Dream Capsule timer and alarm controls"
@@ -2446,16 +2447,21 @@ const styles = StyleSheet.create({
     textShadowRadius: 2,
   },
   headerTextLandscape: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: '#14532d',
-    letterSpacing: 0.4,
-    textShadowColor: 'rgba(20, 83, 45, 0.1)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-    textAlign: 'center',
-    flex: 1,
-    position: 'absolute',
+  fontSize: 24,
+  fontWeight: '900',
+  color: '#14532d',
+  letterSpacing: 0.4,
+  textShadowColor: 'rgba(20, 83, 45, 0.1)',
+  textShadowOffset: { width: 0, height: 1 },
+  textShadowRadius: 2,
+  textAlign: 'center',
+  flexShrink: 1,
+  flexGrow: 1,
+  maxWidth: '60%',
+  marginRight: 16,
+  marginLeft: 16,
+  alignSelf: 'center',
+  overflow: 'hidden',
   },
   menuButton: {
     paddingHorizontal: 6,
@@ -2603,9 +2609,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   headerShelfLandscape: {
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    position: 'relative',
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '100%',
+  position: 'relative',
   },
   headerSpacer: {
     flex: 1,

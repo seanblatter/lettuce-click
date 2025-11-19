@@ -398,260 +398,85 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
                 <Text style={closeTextStyle}>{closeLabel}</Text>
               </Pressable>
             </View>
-
-            <View style={styles.formSection}>
-              <Text style={styles.sectionLabel}>Display name</Text>
-              <TextInput
-                value={name}
-                onChangeText={setName}
-                placeholder="Your name"
-                style={styles.input}
-                returnKeyType="done"
-              />
-            </View>
-
-            <View style={styles.formSection}>
-              <Text style={styles.sectionLabel}>Username</Text>
-              <TextInput
-                value={username}
-                onChangeText={setUsername}
-                placeholder="@username"
-                style={styles.input}
-                returnKeyType="done"
-                autoCapitalize="none"
-              />
-            </View>
-
+            {/* ...existing modal content... */}
             <View style={styles.upgradeCard}>
               <Text style={styles.upgradeTitle}>Garden Plus customization</Text>
-              {hasPremiumUpgrade ? (
-                <>
-                  <Text style={styles.upgradeCopy}>Choose an accent color for your click target.</Text>
-                  <View style={styles.accentRow}>
-                    {PREMIUM_ACCENT_OPTIONS.map((color) => {
-                      const isActive = accentSelection === color;
+              <Text style={styles.upgradeCopy}>Choose an accent color for your click target.</Text>
+              <View style={styles.accentRow}>
+                {PREMIUM_ACCENT_OPTIONS.map((color) => {
+                  const isActive = accentSelection === color;
+                  return (
+                    <Pressable
+                      key={color}
+                      style={[styles.accentSwatch, { backgroundColor: color }, isActive && styles.accentSwatchActive]}
+                      onPress={() => handleSelectAccent(color)}
+                      accessibilityLabel={`Select accent color ${color}`}
+                      accessibilityState={{ selected: isActive }}
+                    >
+                      {isActive ? <Text style={styles.accentSwatchCheck}>✓</Text> : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <View style={styles.backgroundSection}>
+                <Text style={styles.backgroundTitle}>Garden background</Text>
+                <Text style={styles.backgroundCopy}>Set the color that surrounds your garden canvas.</Text>
+                <View style={styles.backgroundWheelContainer}>
+                  <View style={styles.backgroundWheel}>
+                    {backgroundWheelPositions.map(({ color, left, top }) => {
+                      const isActive = gardenBackgroundColor === color;
                       return (
                         <Pressable
                           key={color}
-                          style={[styles.accentSwatch, { backgroundColor: color }, isActive && styles.accentSwatchActive]}
-                          onPress={() => handleSelectAccent(color)}
-                          accessibilityLabel={`Select accent color ${color}`}
+                          style={[
+                            styles.backgroundWheelSwatch,
+                            { backgroundColor: color, left, top },
+                            isActive && styles.backgroundWheelSwatchActive,
+                          ]}
+                          onPress={() => handleSelectBackgroundColor(color)}
+                          accessibilityLabel={`Set garden background to ${color}`}
                           accessibilityState={{ selected: isActive }}
-                        >
-                          {isActive ? <Text style={styles.accentSwatchCheck}>✓</Text> : null}
-                        </Pressable>
+                        />
                       );
                     })}
+                    <View style={[styles.backgroundWheelCenter, { backgroundColor: gardenBackgroundColor }]} />
                   </View>
-                  <View style={styles.backgroundSection}>
-                    <Text style={styles.backgroundTitle}>Garden background</Text>
-                    <Text style={styles.backgroundCopy}>Set the color that surrounds your garden canvas.</Text>
-                    <View style={styles.backgroundWheelContainer}>
-                      <View style={styles.backgroundWheel}>
-                        {backgroundWheelPositions.map(({ color, left, top }) => {
-                          const isActive = gardenBackgroundColor === color;
-                          return (
-                            <Pressable
-                              key={color}
-                              style={[
-                                styles.backgroundWheelSwatch,
-                                { backgroundColor: color, left, top },
-                                isActive && styles.backgroundWheelSwatchActive,
-                              ]}
-                              onPress={() => handleSelectBackgroundColor(color)}
-                              accessibilityLabel={`Set garden background to ${color}`}
-                              accessibilityState={{ selected: isActive }}
-                            />
-                          );
-                        })}
-                        <View style={[styles.backgroundWheelCenter, { backgroundColor: gardenBackgroundColor }]} />
-                      </View>
-                    </View>
-                    <Pressable
-                      style={styles.backgroundResetButton}
-                      onPress={handleResetBackground}
-                      accessibilityLabel="Reset background color"
-                    >
-                      <Text style={styles.backgroundResetButtonText}>Reset</Text>
-                    </Pressable>
-                  </View>
-                  <Text style={styles.upgradeCopy}>Pick the emoji that appears on the home canvas and menu.</Text>
-                  {emojiOptions.length > 0 ? (
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.emojiRow}>
-                      {emojiOptions.map((option) => {
-                        const isSelected = option.emoji === customClickEmoji;
-                        return (
-                          <Pressable
-                            key={option.id}
-                            style={[styles.emojiChoice, isSelected && styles.emojiChoiceActive]}
-                            onPress={() => handleChooseEmoji(option.emoji)}
-                            accessibilityLabel={`Use ${option.emoji} as your click emoji`}
-                            accessibilityState={{ selected: isSelected }}
-                          >
-                            <View style={[styles.emojiChoiceHalo, isSelected && styles.emojiChoiceHaloActive]} />
-                            <View style={[styles.emojiChoiceInner, isSelected && styles.emojiChoiceInnerActive]}>
-                              <Text style={[styles.emojiChoiceGlyph, isSelected && styles.emojiChoiceGlyphActive]}>
-                                {option.emoji}
-                              </Text>
-                            </View>
-                          </Pressable>
-                        );
-                      })}
-                    </ScrollView>
-                  ) : (
-                    <Text style={styles.upgradeCopy}>Loading emoji options...</Text>
-                  )}
-                </>
+                </View>
+                <Pressable
+                  style={styles.backgroundResetButton}
+                  onPress={handleResetBackground}
+                  accessibilityLabel="Reset background color"
+                >
+                  <Text style={styles.backgroundResetButtonText}>Reset</Text>
+                </Pressable>
+              </View>
+              <Text style={styles.upgradeCopy}>Pick the emoji that appears on the home canvas and menu.</Text>
+              {emojiOptions.length > 0 ? (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.emojiRow}>
+                  {emojiOptions.map((option) => {
+                    const isSelected = option.emoji === customClickEmoji;
+                    return (
+                      <Pressable
+                        key={option.id}
+                        style={[styles.emojiChoice, isSelected && styles.emojiChoiceActive]}
+                        onPress={() => handleChooseEmoji(option.emoji)}
+                        accessibilityLabel={`Use ${option.emoji} as your click emoji`}
+                        accessibilityState={{ selected: isSelected }}
+                      >
+                        <View style={[styles.emojiChoiceHalo, isSelected && styles.emojiChoiceHaloActive]} />
+                        <View style={[styles.emojiChoiceInner, isSelected && styles.emojiChoiceInnerActive]}>
+                          <Text style={[styles.emojiChoiceGlyph, isSelected && styles.emojiChoiceGlyphActive]}>
+                            {option.emoji}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
               ) : (
-                <Text style={styles.upgradeCopy}>Unlock Garden Plus to customize your theme and click emoji.</Text>
+                <Text style={styles.upgradeCopy}>Loading emoji options...</Text>
               )}
             </View>
-
-            <View style={styles.widgetToggleContainer}>
-              <View style={styles.widgetToggleTextContainer}>
-                <Text style={styles.widgetToggleLabel}>Sync garden photo</Text>
-                <Text style={styles.widgetToggleCopy}>{widgetDescription}</Text>
-              </View>
-              <Switch
-                value={widgetValue}
-                onValueChange={handleTogglePhotoWidget}
-                disabled={widgetDisabled}
-                thumbColor={widgetThumbColor}
-                trackColor={{
-                  false: '#cbd5e0',
-                  true: '#86efac',
-                }}
-              />
-            </View>
-
-            <View style={styles.widgetToggleContainer}>
-              <View style={styles.widgetToggleTextContainer}>
-                <Text style={styles.widgetToggleLabel}>Bedside widgets</Text>
-                <Text style={styles.widgetToggleCopy}>
-                  Show alarm, weather, date, battery, and RSS feed for bedside use.
-                </Text>
-              </View>
-              <Switch
-                value={bedsideWidgetsEnabled}
-                onValueChange={handleToggleBedsideWidgets}
-                thumbColor={bedsideWidgetsEnabled ? '#047857' : '#f4f4f5'}
-                trackColor={{
-                  false: '#cbd5e0',
-                  true: '#86efac',
-                }}
-              />
-            </View>
-
-            {bedsideWidgetsEnabled && (
-              <>
-                <Pressable
-                  style={styles.rssFeedsToggleButton}
-                  onPress={() => setShowRSSFeeds(!showRSSFeeds)}
-                >
-                  <Text style={styles.rssFeedsToggleText}>
-                    📰 RSS Feeds ({rssFeeds.filter(f => f.enabled).length} enabled)
-                  </Text>
-                  <Text style={styles.rssFeedsToggleIcon}>
-                    {showRSSFeeds ? '▼' : '▶'}
-                  </Text>
-                </Pressable>
-
-                {showRSSFeeds && (
-                  <View style={styles.rssFeedsContainer}>
-                    <ScrollView style={styles.rssFeedsScrollView} showsVerticalScrollIndicator={false}>
-                      {rssFeeds.map((feed) => (
-                        <View key={feed.id} style={styles.rssFeedItem}>
-                          <View style={styles.rssFeedInfo}>
-                            <Text style={styles.rssFeedName}>{feed.name}</Text>
-                            <Text style={styles.rssFeedCategory}>{feed.category}</Text>
-                          </View>
-                          <View style={styles.rssFeedControls}>
-                            <Switch
-                              value={feed.enabled}
-                              onValueChange={(enabled) => handleToggleRSSFeed(feed.id, enabled)}
-                              thumbColor={feed.enabled ? '#047857' : '#f4f4f5'}
-                              trackColor={{
-                                false: '#cbd5e0',
-                                true: '#86efac',
-                              }}
-                              style={styles.rssFeedSwitch}
-                            />
-                            {feed.id.startsWith('custom-') && (
-                              <Pressable
-                                style={styles.rssFeedRemoveButton}
-                                onPress={() => handleRemoveFeed(feed.id, feed.name)}
-                              >
-                                <Text style={styles.rssFeedRemoveText}>✕</Text>
-                              </Pressable>
-                            )}
-                          </View>
-                        </View>
-                      ))}
-                    </ScrollView>
-
-                    <View style={styles.addFeedSection}>
-                      <Text style={styles.addFeedTitle}>Add Custom Feed</Text>
-                      
-                      <TextInput
-                        style={styles.addFeedInput}
-                        placeholder="Feed Name (e.g., Tech News)"
-                        value={newFeedName}
-                        onChangeText={setNewFeedName}
-                        maxLength={50}
-                      />
-                      
-                      <TextInput
-                        style={styles.addFeedInput}
-                        placeholder="RSS URL (https://...)"
-                        value={newFeedUrl}
-                        onChangeText={setNewFeedUrl}
-                        autoCapitalize="none"
-                        keyboardType="url"
-                        maxLength={200}
-                      />
-                      
-                      <View style={styles.categorySelector}>
-                        {['News', 'Technology', 'Sports', 'Entertainment', 'Business', 'Science'].map((category) => (
-                          <Pressable
-                            key={category}
-                            style={[
-                              styles.categoryOption,
-                              newFeedCategory === category && styles.categoryOptionSelected,
-                            ]}
-                            onPress={() => setNewFeedCategory(category)}
-                          >
-                            <Text
-                              style={[
-                                styles.categoryOptionText,
-                                newFeedCategory === category && styles.categoryOptionTextSelected,
-                              ]}
-                            >
-                              {category}
-                            </Text>
-                          </Pressable>
-                        ))}
-                      </View>
-                      
-                      <Pressable
-                        style={styles.addFeedButton}
-                        onPress={handleAddCustomFeed}
-                        disabled={!newFeedName.trim() || !newFeedUrl.trim()}
-                      >
-                        <Text style={styles.addFeedButtonText}>Add Feed</Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                )}
-              </>
-            )}
-            
-            <Pressable
-              style={styles.saveButton}
-              onPress={handleSaveProfile}
-              accessibilityLabel="Save profile changes"
-            >
-              <Text style={styles.saveButtonText}>Save Changes</Text>
-            </Pressable>
           </ScrollView>
         </View>
       </View>
@@ -659,6 +484,111 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
   }
 
   return (
+    <>
+      <View style={styles.formSection}>
+        <Text style={styles.sectionLabel}>Display name</Text>
+        <TextInput
+          value={name}
+          onChangeText={setName}
+          placeholder="Your name"
+          style={styles.input}
+          returnKeyType="done"
+        />
+      </View>
+      <View style={styles.formSection}>
+        <Text style={styles.sectionLabel}>Username</Text>
+        <TextInput
+          value={username}
+          onChangeText={setUsername}
+          placeholder="@username"
+          style={styles.input}
+          returnKeyType="done"
+          autoCapitalize="none"
+        />
+      </View>
+      <View style={styles.upgradeCard}>
+        <Text style={styles.upgradeTitle}>Garden Plus customization</Text>
+        <Text style={styles.upgradeCopy}>Choose an accent color for your click target.</Text>
+        <View style={styles.accentRow}>
+          {PREMIUM_ACCENT_OPTIONS.map((color) => {
+            const isActive = accentSelection === color;
+            return (
+              <Pressable
+                key={color}
+                style={[styles.accentSwatch, { backgroundColor: color }, isActive && styles.accentSwatchActive]}
+                onPress={() => handleSelectAccent(color)}
+                accessibilityLabel={`Select accent color ${color}`}
+                accessibilityState={{ selected: isActive }}
+              >
+                {isActive ? <Text style={styles.accentSwatchCheck}>✓</Text> : null}
+              </Pressable>
+            );
+          })}
+        </View>
+        <View style={styles.backgroundSection}>
+          <Text style={styles.backgroundTitle}>Garden background</Text>
+          <Text style={styles.backgroundCopy}>Set the color that surrounds your garden canvas.</Text>
+          <View style={styles.backgroundWheelContainer}>
+            <View style={styles.backgroundWheel}>
+              {backgroundWheelPositions.map(({ color, left, top }) => {
+                const isActive = gardenBackgroundColor === color;
+                return (
+                  <Pressable
+                    key={color}
+                    style={[
+                      styles.backgroundWheelSwatch,
+                      { backgroundColor: color, left, top },
+                      isActive && styles.backgroundWheelSwatchActive,
+                    ]}
+                    onPress={() => handleSelectBackgroundColor(color)}
+                    accessibilityLabel={`Set garden background to ${color}`}
+                    accessibilityState={{ selected: isActive }}
+                  />
+                );
+              })}
+              <View style={[styles.backgroundWheelCenter, { backgroundColor: gardenBackgroundColor }]} />
+            </View>
+          </View>
+          <Pressable
+            style={styles.backgroundResetButton}
+            onPress={handleResetBackground}
+            accessibilityLabel="Reset background color"
+          >
+            <Text style={styles.backgroundResetButtonText}>Reset</Text>
+          </Pressable>
+        </View>
+        <Text style={styles.upgradeCopy}>Pick the emoji that appears on the home canvas and menu.</Text>
+        {emojiOptions.length > 0 ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.emojiRow}>
+            {emojiOptions.map((option) => {
+              const isSelected = option.emoji === customClickEmoji;
+              return (
+                <Pressable
+                  key={option.id}
+                  style={[styles.emojiChoice, isSelected && styles.emojiChoiceActive]}
+                  onPress={() => handleChooseEmoji(option.emoji)}
+                  accessibilityLabel={`Use ${option.emoji} as your click emoji`}
+                  accessibilityState={{ selected: isSelected }}
+                >
+                  <View style={[styles.emojiChoiceHalo, isSelected && styles.emojiChoiceHaloActive]} />
+                  <View style={[styles.emojiChoiceInner, isSelected && styles.emojiChoiceInnerActive]}>
+                    <Text style={[styles.emojiChoiceGlyph, isSelected && styles.emojiChoiceGlyphActive]}>
+                      {option.emoji}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        ) : (
+          <Text style={styles.upgradeCopy}>Loading emoji options...</Text>
+        )}
+      </View>
+    </>
+  );
+
+// ...existing code...
+
     <SafeAreaView style={containerStyle}>
       <ScrollView
         contentContainerStyle={contentStyle}
@@ -830,7 +760,6 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
         </Pressable>
       </ScrollView>
     </SafeAreaView>
-  );
 }
 
 export default function ProfileScreen() {

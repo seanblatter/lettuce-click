@@ -9,6 +9,7 @@ import React, {
   useState,
 } from 'react';
 import { weatherService } from '../lib/weatherService';
+import { rssService, type RSSFeed, type RSSFeedItem } from '../lib/rssService';
 
 import { computeBellCurveCost, gardenEmojiCatalog } from '@/constants/emojiCatalog';
 // Use small emoji name mapping to provide a real name for custom/freeform emojis when possible
@@ -16,40 +17,6 @@ import { computeBellCurveCost, gardenEmojiCatalog } from '@/constants/emojiCatal
 // @ts-ignore - package does not provide types
 import emojiNameMap from 'emoji-name-map';
 import { AppState, AppStateStatus } from 'react-native';
-
-const VARIATION_SELECTOR_REGEX = /[\uFE0E\uFE0F]/g;
-
-type EmojiNameMapModule = {
-  emoji?: Record<string, string>;
-  [key: string]: unknown;
-};
-
-const emojiNameSource =
-  emojiNameMap && typeof emojiNameMap === 'object'
-    ? ((emojiNameMap as EmojiNameMapModule).emoji as Record<string, string> | undefined) ??
-      ((emojiNameMap as Record<string, string>) || undefined)
-    : undefined;
-
-const emojiMetadataByGlyph: Record<string, string> = emojiNameSource
-  ? Object.entries(emojiNameSource).reduce<Record<string, string>>((acc, [rawName, glyph]) => {
-      if (typeof glyph !== 'string' || glyph.length === 0) {
-        return acc;
-      }
-
-      const cleanName = rawName.replace(/[_-]+/g, ' ').trim();
-      if (!cleanName) {
-        return acc;
-      }
-
-      const normalizedGlyph = glyph.replace(VARIATION_SELECTOR_REGEX, '');
-      acc[glyph] = cleanName;
-      if (normalizedGlyph) {
-        acc[normalizedGlyph] = cleanName;
-      }
-
-      return acc;
-    }, {})
-  : {};
 
 export type HomeEmojiTheme =
   | 'circle'
@@ -184,6 +151,10 @@ type GameContextValue = {
   weatherLastUpdated: number;
   temperatureUnit: 'celsius' | 'fahrenheit';
   hasManuallySetTemperatureUnit: boolean;
+  rssFeeds: RSSFeed[];
+  rssItems: RSSFeedItem[];
+  rssError: string | null;
+  rssLastUpdated: number;
   widgetPromenade: WidgetPromenadeEntry[];
   registerCustomEmoji: (emoji: string) => EmojiDefinition | null;
   setProfileLifetimeTotal: (value: number) => void;
@@ -221,6 +192,11 @@ type GameContextValue = {
   clearWeatherData: () => void;
   setTemperatureUnit: (unit: 'celsius' | 'fahrenheit') => void;
   setHasManuallySetTemperatureUnit: (value: boolean) => void;
+  updateRSSFeeds: () => Promise<void>;
+  clearRSSData: () => void;
+  toggleRSSFeed: (feedId: string, enabled: boolean) => void;
+  addCustomRSSFeed: (feed: Omit<RSSFeed, 'id'>) => void;
+  removeRSSFeed: (feedId: string) => void;
   clearResumeNotice: () => void;
   addWidgetPromenadePhoto: (uri: string) => WidgetPromenadeEntry | null;
   removeWidgetPromenadePhoto: (entryId: string) => void;
@@ -611,6 +587,7 @@ type StoredGameState = {
   temperatureUnit?: 'celsius' | 'fahrenheit';
   bedsideWidgetsEnabled?: boolean;
   hasManuallySetTemperatureUnit?: boolean;
+  rssFeeds?: RSSFeed[];
   widgetPromenade?: WidgetPromenadeEntry[];
 };
 
@@ -647,6 +624,10 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [weatherLastUpdated, setWeatherLastUpdated] = useState(0);
   const [temperatureUnit, setTemperatureUnit] = useState<'celsius' | 'fahrenheit'>('celsius');
   const [hasManuallySetTemperatureUnit, setHasManuallySetTemperatureUnit] = useState(false);
+  const [rssFeeds, setRssFeeds] = useState<RSSFeed[]>([]);
+  const [rssItems, setRssItems] = useState<RSSFeedItem[]>([]);
+  const [rssError, setRssError] = useState<string | null>(null);
+  const [rssLastUpdated, setRssLastUpdated] = useState(0);
   const [widgetPromenade, setWidgetPromenade] = useState<WidgetPromenadeEntry[]>([]);
   const initialisedRef = useRef(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
@@ -665,6 +646,8 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const profileLifetimeTotalRef = useRef(profileLifetimeTotal);
   const tapValueRef = useRef(tapValue);
   const autoPerSecondRef = useRef(autoPerSecond);
+  const VARIATION_SELECTOR_REGEX = /[\uFE0E\uFE0F]/g;
+
   useEffect(() => {
     setOwnedThemes((prev) => {
       let updated: Record<HomeEmojiTheme, boolean> | null = null;
@@ -751,11 +734,10 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
           return prev;
         }
 
-        const metaName = emojiMetadataByGlyph[normalized] || emojiMetadataByGlyph[trimmed] || null;
+        const metaName = (emojiNameMap && (emojiNameMap[normalized] || emojiNameMap[trimmed])) || null;
         const titleCase = (value: string) =>
           value
-            .split(/[\s_-]+/)
-            .filter(Boolean)
+            .split(/\s+/)
             .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
             .join(' ');
 
@@ -768,11 +750,11 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const nextDefinition: EmojiDefinition = {
           id: customId,
           emoji: trimmed,
-          name: metaName ? titleCase(metaName) : `Garden Emoji ${trimmed}`,
+          name: metaName ? titleCase(metaName as string) : `Garden Emoji ${trimmed}`,
           cost: computeCustomEmojiCost(normalized),
           category: pickCustomCategory(normalized),
           tags: [
-            ...(metaName ? metaName.split(/\s+/).map((s) => s.toLowerCase()) : []),
+            ...(metaName ? (metaName as string).split(/\s+/).map((s) => s.toLowerCase()) : []),
             trimmed.toLowerCase(),
             normalized.toLowerCase(),
             ...(metaName ? [] : ['custom emoji']),
@@ -1288,6 +1270,10 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     weatherLastUpdated,
     temperatureUnit,
     hasManuallySetTemperatureUnit,
+    rssFeeds,
+    rssItems,
+    rssError,
+    rssLastUpdated,
     widgetPromenade,
     registerCustomEmoji,
     setProfileLifetimeTotal,
@@ -1342,6 +1328,46 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     },
     setTemperatureUnit,
     setHasManuallySetTemperatureUnit,
+    updateRSSFeeds: async () => {
+      try {
+        setRssError(null);
+        const items = await rssService.fetchMultipleFeeds(rssFeeds);
+        setRssItems(items);
+        setRssLastUpdated(Date.now());
+        // Only log occasionally or when there are significant changes
+        if (items.length > 0 && items.length % 20 === 0) {
+          console.log('✅ GameContext RSS update:', items.length, 'items loaded');
+        }
+      } catch (error) {
+        console.warn('RSS update error:', error);
+        setRssError('RSS service unavailable');
+        setRssItems([]);
+      }
+    },
+    clearRSSData: () => {
+      setRssItems([]);
+      setRssError(null);
+      setRssLastUpdated(0);
+      rssService.clearAllCache();
+    },
+    toggleRSSFeed: (feedId: string, enabled: boolean) => {
+      setRssFeeds(prevFeeds => 
+        prevFeeds.map(feed => 
+          feed.id === feedId ? { ...feed, enabled } : feed
+        )
+      );
+    },
+    addCustomRSSFeed: (feedData: Omit<RSSFeed, 'id'>) => {
+      const newFeed: RSSFeed = {
+        ...feedData,
+        id: `custom-${Date.now()}`,
+      };
+      setRssFeeds(prevFeeds => [...prevFeeds, newFeed]);
+    },
+    removeRSSFeed: (feedId: string) => {
+      setRssFeeds(prevFeeds => prevFeeds.filter(feed => feed.id !== feedId));
+      rssService.clearFeedCache(feedId);
+    },
     addWidgetPromenadePhoto,
     removeWidgetPromenadePhoto,
   }), [
@@ -1393,6 +1419,10 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     purchasePremiumUpgrade,
     setPremiumAccentColor,
     setCustomClickEmoji,
+    rssFeeds,
+    rssItems,
+    rssError,
+    rssLastUpdated,
     widgetPromenade,
     addWidgetPromenadePhoto,
     removeWidgetPromenadePhoto,
@@ -1535,6 +1565,26 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
             if (typeof parsed.hasManuallySetTemperatureUnit === 'boolean') {
               setHasManuallySetTemperatureUnit(parsed.hasManuallySetTemperatureUnit);
             }
+            if (Array.isArray(parsed.rssFeeds)) {
+              // Check if stored feeds are the old format (without items)
+              const hasOldFormat = parsed.rssFeeds.some((f: any) => !f.items || f.items.length === 0);
+
+              if (hasOldFormat) {
+                // Use new DEFAULT_RSS_FEEDS with curated content
+                console.log('🔄 Migrating from old RSS format to new instant feeds');
+                setRssFeeds([]);
+              } else {
+                // Removed logic for merging RSS feeds as it is no longer relevant
+                // const mergedFeeds = DEFAULT_RSS_FEEDS.map(defaultFeed => {
+                //   const storedFeed = parsed.rssFeeds?.find((f: any) => f.id === defaultFeed.id);
+                //   return {
+                //     ...defaultFeed,
+                //     enabled: storedFeed?.enabled !== undefined ? storedFeed.enabled : defaultFeed.enabled
+                //   };
+                // });
+                setRssFeeds(parsed.rssFeeds);
+              }
+            }
             if (Array.isArray(parsed.widgetPromenade)) {
               const normalized = parsed.widgetPromenade
                 .filter((entry): entry is WidgetPromenadeEntry => {
@@ -1637,6 +1687,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       temperatureUnit,
       bedsideWidgetsEnabled,
       hasManuallySetTemperatureUnit,
+      rssFeeds,
       widgetPromenade,
     };
 
@@ -1658,6 +1709,8 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     purchasedUpgrades,
     ownedThemes,
     temperatureUnit,
+    rssFeeds,
+    rssItems,
     widgetPromenade,
   ]);
 

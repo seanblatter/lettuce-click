@@ -60,8 +60,6 @@ type Props = {
   registerCustomEmoji: (emoji: string) => EmojiDefinition | null;
   addWidgetPromenadePhoto: (uri: string) => WidgetPromenadeEntry | null;
   gardenBackgroundColor: string;
-  hasPremiumUpgrade: boolean;
-  purchasePremiumUpgrade: () => void;
   title?: string;
 };
 
@@ -292,8 +290,6 @@ export function GardenSection({
   registerCustomEmoji,
   addWidgetPromenadePhoto,
   gardenBackgroundColor,
-  hasPremiumUpgrade,
-  purchasePremiumUpgrade,
   title = 'Lettuce Gardens',
 }: Props) {
   const insets = useSafeAreaInsets();
@@ -333,7 +329,6 @@ export function GardenSection({
   const [shopEmoji, setShopEmoji] = useState('🏡');
   const [inventoryEmoji, setInventoryEmoji] = useState('🧰');
   const [activeEmojiPicker, setActiveEmojiPicker] = useState<'shop' | 'inventory' | null>(null);
-  const [emojiPaywallTarget, setEmojiPaywallTarget] = useState<'shop' | 'inventory' | null>(null);
   const [shopPreview, setShopPreview] = useState<InventoryEntry | null>(null);
   const [selectedInventoryEmoji, setSelectedInventoryEmoji] = useState<InventoryEntry | null>(null);
   const [walletEmojis, setWalletEmojis] = useState<InventoryEntry[]>([]);
@@ -348,12 +343,6 @@ export function GardenSection({
   useEffect(() => {
     setTextSliderWidth(0);
   }, [isLandscape]);
-
-  useEffect(() => {
-    if (hasPremiumUpgrade && emojiPaywallTarget) {
-      setEmojiPaywallTarget(null);
-    }
-  }, [emojiPaywallTarget, hasPremiumUpgrade]);
 
   // Cleanup animation frame on unmount
   useEffect(() => {
@@ -1270,27 +1259,6 @@ export function GardenSection({
     setShopPreview(null);
   }, []);
   const handleOpenSheet = useCallback((sheet: 'shop' | 'inventory') => setActiveSheet(sheet), []);
-  const handleEmojiPickerPress = useCallback(
-    (target: 'shop' | 'inventory') => {
-      if (!hasPremiumUpgrade) {
-        setEmojiPaywallTarget(target);
-        return;
-      }
-
-      setActiveEmojiPicker((prev) => (prev === target ? null : target));
-    },
-    [hasPremiumUpgrade, setActiveEmojiPicker]
-  );
-  const handleCloseEmojiPaywall = useCallback(() => setEmojiPaywallTarget(null), []);
-  const handleUpgradeFromPaywall = useCallback(() => {
-    const target = emojiPaywallTarget;
-    purchasePremiumUpgrade();
-    setEmojiPaywallTarget(null);
-
-    if (target) {
-      setActiveEmojiPicker(target);
-    }
-  }, [emojiPaywallTarget, purchasePremiumUpgrade, setActiveEmojiPicker]);
   const togglePriceSortOrder = useCallback(
     () => setPriceSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc')),
     []
@@ -1950,7 +1918,9 @@ export function GardenSection({
                 <View style={styles.sheetHeaderButtons}>
                   <Pressable
                     style={styles.sheetEmojiButton}
-                    onPress={() => handleEmojiPickerPress('shop')}
+                    onPress={() =>
+                      setActiveEmojiPicker((prev) => (prev === 'shop' ? null : 'shop'))
+                    }
                     accessibilityRole="button"
                     accessibilityLabel="Change Garden shop icon"
                   >
@@ -2199,7 +2169,9 @@ export function GardenSection({
                 <View style={styles.sheetHeaderButtons}>
                   <Pressable
                     style={styles.sheetEmojiButton}
-                    onPress={() => handleEmojiPickerPress('inventory')}
+                    onPress={() =>
+                      setActiveEmojiPicker((prev) => (prev === 'inventory' ? null : 'inventory'))
+                    }
                     accessibilityRole="button"
                     accessibilityLabel="Change inventory icon"
                   >
@@ -2348,67 +2320,8 @@ export function GardenSection({
           </View>
         </View>
       </Modal>
-      <Modal
-        visible={emojiPaywallTarget !== null}
-        animationType={isLandscape ? 'fade' : 'slide'}
-        transparent
-        supportedOrientations={['portrait', 'landscape']}
-        onRequestClose={handleCloseEmojiPaywall}
-      >
-        <View style={styles.emojiPaywallOverlay}>
-          <Pressable style={styles.emojiPaywallBackdrop} onPress={handleCloseEmojiPaywall} />
-          <View style={[styles.emojiPaywallCard, { paddingBottom: insets.bottom + 24 }]}>
-            <View style={styles.emojiPaywallHandle} />
-            <Text style={styles.emojiPaywallTitle}>Unlock custom icons</Text>
-            <Text style={styles.emojiPaywallCopy}>
-              {emojiPaywallTarget === 'shop'
-                ? 'Choose a special emoji for your Garden shop icon.'
-                : 'Choose a special emoji for your inventory icon.'}
-            </Text>
-            <Text style={styles.emojiPaywallCopy}>
-              Upgrade to Garden Plus to pick custom icons. Subscribe for $2.99/month or own it forever for $35.
-            </Text>
-            <View style={styles.emojiPaywallButtons}>
-              <Pressable
-                style={[styles.emojiPaywallButton, styles.emojiPaywallButtonPrimary]}
-                onPress={handleUpgradeFromPaywall}
-                accessibilityRole="button"
-                accessibilityLabel="Upgrade monthly for $2.99"
-              >
-                <Text
-                  style={[styles.emojiPaywallButtonLabel, styles.emojiPaywallButtonLabelOnDark]}
-                >
-                  Garden Plus Monthly
-                </Text>
-                <Text
-                  style={[styles.emojiPaywallButtonSubtext, styles.emojiPaywallButtonSubtextOnDark]}
-                >
-                  $2.99 per month
-                </Text>
-              </Pressable>
-              <Pressable
-                style={[styles.emojiPaywallButton, styles.emojiPaywallButtonSecondary]}
-                onPress={handleUpgradeFromPaywall}
-                accessibilityRole="button"
-                accessibilityLabel="Unlock lifetime membership for $35"
-              >
-                <Text style={styles.emojiPaywallButtonLabel}>Lifetime Membership</Text>
-                <Text style={styles.emojiPaywallButtonSubtext}>One-time $35</Text>
-              </Pressable>
-            </View>
-            <Pressable
-              style={styles.emojiPaywallCloseButton}
-              onPress={handleCloseEmojiPaywall}
-              accessibilityRole="button"
-              accessibilityLabel="Close upgrade paywall"
-            >
-              <Text style={styles.emojiPaywallCloseText}>Not now</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-    </View>
-
+      </View>
+      
 
     </Fragment>
   );
@@ -4382,88 +4295,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 1 },
     elevation: 2,
-  },
-  emojiPaywallOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
-  },
-  emojiPaywallBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  emojiPaywallCard: {
-    backgroundColor: '#f8fafc',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    gap: 12,
-  },
-  emojiPaywallHandle: {
-    alignSelf: 'center',
-    width: 48,
-    height: 5,
-    borderRadius: 999,
-    backgroundColor: '#cbd5f5',
-  },
-  emojiPaywallTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0f172a',
-    textAlign: 'center',
-  },
-  emojiPaywallCopy: {
-    fontSize: 15,
-    color: '#334155',
-    textAlign: 'center',
-  },
-  emojiPaywallButtons: {
-    gap: 12,
-  },
-  emojiPaywallButton: {
-    borderRadius: 20,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
-  },
-  emojiPaywallButtonPrimary: {
-    backgroundColor: '#14532d',
-    borderWidth: 1,
-    borderColor: '#0f3e20',
-  },
-  emojiPaywallButtonSecondary: {
-    backgroundColor: '#fef9c3',
-    borderWidth: 1,
-    borderColor: '#facc15',
-  },
-  emojiPaywallButtonLabel: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  emojiPaywallButtonLabelOnDark: {
-    color: '#f0fdf4',
-  },
-  emojiPaywallButtonSubtext: {
-    fontSize: 13,
-    color: '#475569',
-    marginTop: 2,
-  },
-  emojiPaywallButtonSubtextOnDark: {
-    color: '#c4f1c5',
-  },
-  emojiPaywallCloseButton: {
-    paddingVertical: 8,
-    alignSelf: 'center',
-  },
-  emojiPaywallCloseText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#0f172a',
   },
   // Landscape-specific styles for modals
   sheetOverlayLandscape: {

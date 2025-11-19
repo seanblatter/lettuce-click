@@ -64,6 +64,10 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
     setProfilePhotoWidgetEnabled,
     bedsideWidgetsEnabled,
     setBedsideWidgetsEnabled,
+    rssFeeds,
+    toggleRSSFeed,
+    addCustomRSSFeed,
+    removeRSSFeed,
     emojiCatalog,
     emojiInventory,
     registerCustomEmoji,
@@ -76,6 +80,10 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
   const [isSaving, setIsSaving] = useState(false);
   const [emojiInput, setEmojiInput] = useState(customClickEmoji);
   const [accentSelection, setAccentSelection] = useState(premiumAccentColor);
+  const [showRSSFeeds, setShowRSSFeeds] = useState(false);
+  const [newFeedName, setNewFeedName] = useState('');
+  const [newFeedUrl, setNewFeedUrl] = useState('');
+  const [newFeedCategory, setNewFeedCategory] = useState('News');
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const emojiInputRef = useRef<TextInput>(null);
   const displayName = useMemo(() => {
@@ -228,6 +236,56 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
       setBedsideWidgetsEnabled(value);
     },
     [setBedsideWidgetsEnabled]
+  );
+
+  const handleToggleRSSFeed = useCallback(
+    (feedId: string, enabled: boolean) => {
+      toggleRSSFeed(feedId, enabled);
+    },
+    [toggleRSSFeed]
+  );
+
+  const handleAddCustomFeed = useCallback(() => {
+    if (!newFeedName.trim() || !newFeedUrl.trim()) {
+      Alert.alert('Missing Information', 'Please enter both feed name and URL.');
+      return;
+    }
+
+    if (!newFeedUrl.startsWith('http')) {
+      Alert.alert('Invalid URL', 'Please enter a valid HTTP or HTTPS URL.');
+      return;
+    }
+
+    addCustomRSSFeed({
+      name: newFeedName.trim(),
+      url: newFeedUrl.trim(),
+      category: newFeedCategory,
+      enabled: true,
+    });
+
+    setNewFeedName('');
+    setNewFeedUrl('');
+    setNewFeedCategory('News');
+    
+    Alert.alert('Success', 'RSS feed added successfully!');
+  }, [newFeedName, newFeedUrl, newFeedCategory, addCustomRSSFeed]);
+
+  const handleRemoveFeed = useCallback(
+    (feedId: string, feedName: string) => {
+      Alert.alert(
+        'Remove Feed',
+        `Are you sure you want to remove "${feedName}"?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Remove',
+            style: 'destructive',
+            onPress: () => removeRSSFeed(feedId),
+          },
+        ]
+      );
+    },
+    [removeRSSFeed]
   );
 
   const applyEmojiSelection = useCallback(
@@ -470,7 +528,7 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
               <View style={styles.widgetToggleTextContainer}>
                 <Text style={styles.widgetToggleLabel}>Bedside widgets</Text>
                 <Text style={styles.widgetToggleCopy}>
-                  Show alarm, weather, date, and battery for bedside use.
+                  Show alarm, weather, date, battery, and RSS feed for bedside use.
                 </Text>
               </View>
               <Switch
@@ -484,6 +542,109 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
               />
             </View>
 
+            {bedsideWidgetsEnabled && (
+              <>
+                <Pressable
+                  style={styles.rssFeedsToggleButton}
+                  onPress={() => setShowRSSFeeds(!showRSSFeeds)}
+                >
+                  <Text style={styles.rssFeedsToggleText}>
+                    📰 RSS Feeds ({rssFeeds.filter(f => f.enabled).length} enabled)
+                  </Text>
+                  <Text style={styles.rssFeedsToggleIcon}>
+                    {showRSSFeeds ? '▼' : '▶'}
+                  </Text>
+                </Pressable>
+
+                {showRSSFeeds && (
+                  <View style={styles.rssFeedsContainer}>
+                    <ScrollView style={styles.rssFeedsScrollView} showsVerticalScrollIndicator={false}>
+                      {rssFeeds.map((feed) => (
+                        <View key={feed.id} style={styles.rssFeedItem}>
+                          <View style={styles.rssFeedInfo}>
+                            <Text style={styles.rssFeedName}>{feed.name}</Text>
+                            <Text style={styles.rssFeedCategory}>{feed.category}</Text>
+                          </View>
+                          <View style={styles.rssFeedControls}>
+                            <Switch
+                              value={feed.enabled}
+                              onValueChange={(enabled) => handleToggleRSSFeed(feed.id, enabled)}
+                              thumbColor={feed.enabled ? '#047857' : '#f4f4f5'}
+                              trackColor={{
+                                false: '#cbd5e0',
+                                true: '#86efac',
+                              }}
+                              style={styles.rssFeedSwitch}
+                            />
+                            {feed.id.startsWith('custom-') && (
+                              <Pressable
+                                style={styles.rssFeedRemoveButton}
+                                onPress={() => handleRemoveFeed(feed.id, feed.name)}
+                              >
+                                <Text style={styles.rssFeedRemoveText}>✕</Text>
+                              </Pressable>
+                            )}
+                          </View>
+                        </View>
+                      ))}
+                    </ScrollView>
+
+                    <View style={styles.addFeedSection}>
+                      <Text style={styles.addFeedTitle}>Add Custom Feed</Text>
+                      
+                      <TextInput
+                        style={styles.addFeedInput}
+                        placeholder="Feed Name (e.g., Tech News)"
+                        value={newFeedName}
+                        onChangeText={setNewFeedName}
+                        maxLength={50}
+                      />
+                      
+                      <TextInput
+                        style={styles.addFeedInput}
+                        placeholder="RSS URL (https://...)"
+                        value={newFeedUrl}
+                        onChangeText={setNewFeedUrl}
+                        autoCapitalize="none"
+                        keyboardType="url"
+                        maxLength={200}
+                      />
+                      
+                      <View style={styles.categorySelector}>
+                        {['News', 'Technology', 'Sports', 'Entertainment', 'Business', 'Science'].map((category) => (
+                          <Pressable
+                            key={category}
+                            style={[
+                              styles.categoryOption,
+                              newFeedCategory === category && styles.categoryOptionSelected,
+                            ]}
+                            onPress={() => setNewFeedCategory(category)}
+                          >
+                            <Text
+                              style={[
+                                styles.categoryOptionText,
+                                newFeedCategory === category && styles.categoryOptionTextSelected,
+                              ]}
+                            >
+                              {category}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                      
+                      <Pressable
+                        style={styles.addFeedButton}
+                        onPress={handleAddCustomFeed}
+                        disabled={!newFeedName.trim() || !newFeedUrl.trim()}
+                      >
+                        <Text style={styles.addFeedButtonText}>Add Feed</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                )}
+              </>
+            )}
+            
             <Pressable
               style={styles.saveButton}
               onPress={handleSaveProfile}
@@ -1157,5 +1318,134 @@ const createResponsiveStyles = (isLandscape: boolean) => StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#22543d',
+  },
+  rssFeedsToggleButton: {
+    backgroundColor: '#f0fdf4',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  rssFeedsToggleText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#22543d',
+  },
+  rssFeedsToggleIcon: {
+    fontSize: 14,
+    color: '#22543d',
+  },
+  rssFeedsContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    overflow: 'hidden',
+  },
+  rssFeedsScrollView: {
+    maxHeight: 200,
+  },
+  rssFeedItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  rssFeedInfo: {
+    flex: 1,
+  },
+  rssFeedName: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1f2937',
+  },
+  rssFeedCategory: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 2,
+  },
+  rssFeedControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  rssFeedSwitch: {
+    transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }],
+  },
+  rssFeedRemoveButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#fee2e2',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  rssFeedRemoveText: {
+    fontSize: 12,
+    color: '#dc2626',
+    fontWeight: '600',
+  },
+  addFeedSection: {
+    padding: 16,
+    backgroundColor: '#f9fafb',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  addFeedTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 12,
+  },
+  addFeedInput: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    padding: 12,
+    fontSize: 14,
+    marginBottom: 8,
+    color: '#1f2937',
+  },
+  categorySelector: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  categoryOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#e5e7eb',
+  },
+  categoryOptionSelected: {
+    backgroundColor: '#dcfce7',
+  },
+  categoryOptionText: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontWeight: '500',
+  },
+  categoryOptionTextSelected: {
+    color: '#16a34a',
+  },
+  addFeedButton: {
+    backgroundColor: '#16a34a',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+  },
+  addFeedButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
   },
 });

@@ -71,6 +71,7 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
     emojiCatalog,
     emojiInventory,
     registerCustomEmoji,
+    resetGame,
   } = useGame();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
@@ -401,80 +402,113 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
             {/* ...existing modal content... */}
             <View style={styles.upgradeCard}>
               <Text style={styles.upgradeTitle}>Garden Plus customization</Text>
-              <Text style={styles.upgradeCopy}>Choose an accent color for your click target.</Text>
-              <View style={styles.accentRow}>
-                {PREMIUM_ACCENT_OPTIONS.map((color) => {
-                  const isActive = accentSelection === color;
-                  return (
-                    <Pressable
-                      key={color}
-                      style={[styles.accentSwatch, { backgroundColor: color }, isActive && styles.accentSwatchActive]}
-                      onPress={() => handleSelectAccent(color)}
-                      accessibilityLabel={`Select accent color ${color}`}
-                      accessibilityState={{ selected: isActive }}
-                    >
-                      {isActive ? <Text style={styles.accentSwatchCheck}>✓</Text> : null}
-                    </Pressable>
-                  );
-                })}
-              </View>
-              <View style={styles.backgroundSection}>
-                <Text style={styles.backgroundTitle}>Garden background</Text>
-                <Text style={styles.backgroundCopy}>Set the color that surrounds your garden canvas.</Text>
-                <View style={styles.backgroundWheelContainer}>
-                  <View style={styles.backgroundWheel}>
-                    {backgroundWheelPositions.map(({ color, left, top }) => {
-                      const isActive = gardenBackgroundColor === color;
+              {hasPremiumUpgrade ? (
+                <>
+                  <Text style={styles.upgradeCopy}>Choose an accent color for your click target.</Text>
+                  <View style={styles.accentRow}>
+                    {PREMIUM_ACCENT_OPTIONS.map((color) => {
+                      const isActive = accentSelection === color;
                       return (
                         <Pressable
                           key={color}
-                          style={[
-                            styles.backgroundWheelSwatch,
-                            { backgroundColor: color, left, top },
-                            isActive && styles.backgroundWheelSwatchActive,
-                          ]}
-                          onPress={() => handleSelectBackgroundColor(color)}
-                          accessibilityLabel={`Set garden background to ${color}`}
+                          style={[styles.accentSwatch, { backgroundColor: color }, isActive && styles.accentSwatchActive]}
+                          onPress={() => handleSelectAccent(color)}
+                          accessibilityLabel={`Select accent color ${color}`}
                           accessibilityState={{ selected: isActive }}
-                        />
+                        >
+                          {isActive ? <Text style={styles.accentSwatchCheck}>✓</Text> : null}
+                        </Pressable>
                       );
                     })}
-                    <View style={[styles.backgroundWheelCenter, { backgroundColor: gardenBackgroundColor }]} />
                   </View>
-                </View>
-                <Pressable
-                  style={styles.backgroundResetButton}
-                  onPress={handleResetBackground}
-                  accessibilityLabel="Reset background color"
-                >
-                  <Text style={styles.backgroundResetButtonText}>Reset</Text>
-                </Pressable>
-              </View>
-              <Text style={styles.upgradeCopy}>Pick the emoji that appears on the home canvas and menu.</Text>
-              {emojiOptions.length > 0 ? (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.emojiRow}>
-                  {emojiOptions.map((option) => {
-                    const isSelected = option.emoji === customClickEmoji;
-                    return (
-                      <Pressable
-                        key={option.id}
-                        style={[styles.emojiChoice, isSelected && styles.emojiChoiceActive]}
-                        onPress={() => handleChooseEmoji(option.emoji)}
-                        accessibilityLabel={`Use ${option.emoji} as your click emoji`}
-                        accessibilityState={{ selected: isSelected }}
-                      >
-                        <View style={[styles.emojiChoiceHalo, isSelected && styles.emojiChoiceHaloActive]} />
-                        <View style={[styles.emojiChoiceInner, isSelected && styles.emojiChoiceInnerActive]}>
-                          <Text style={[styles.emojiChoiceGlyph, isSelected && styles.emojiChoiceGlyphActive]}>
-                            {option.emoji}
-                          </Text>
-                        </View>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
+                  <View style={styles.backgroundSection}>
+                    <Text style={styles.backgroundTitle}>Garden background</Text>
+                    <Text style={styles.backgroundCopy}>Set the color that surrounds your garden canvas.</Text>
+                    <View style={styles.backgroundWheelContainer}>
+                      <View style={styles.backgroundWheel}>
+                        {backgroundWheelPositions.map(({ color, left, top }) => {
+                          const isActive = gardenBackgroundColor === color;
+                          return (
+                            <Pressable
+                              key={color}
+                              style={[
+                                styles.backgroundWheelSwatch,
+                                { backgroundColor: color, left, top },
+                                isActive && styles.backgroundWheelSwatchActive,
+                              ]}
+                              onPress={() => handleSelectBackgroundColor(color)}
+                              accessibilityLabel={`Set garden background to ${color}`}
+                              accessibilityState={{ selected: isActive }}
+                            />
+                          );
+                        })}
+                        <View style={[styles.backgroundWheelCenter, { backgroundColor: gardenBackgroundColor }]} />
+                      </View>
+                    </View>
+                    <Pressable
+                      style={styles.backgroundResetButton}
+                      onPress={handleResetBackground}
+                      accessibilityLabel="Reset background color"
+                    >
+                      <Text style={styles.backgroundResetText}>Reset to original</Text>
+                    </Pressable>
+                  </View>
+                  <Text style={styles.upgradeCopy}>Pick the emoji that appears on the home canvas and menu.</Text>
+                  {emojiOptions.length > 0 ? (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.emojiRow}>
+                      {emojiOptions.map((option) => {
+                        const isSelected = option.emoji === customClickEmoji;
+                        return (
+                          <Pressable
+                            key={option.id}
+                            style={[styles.emojiChoice, isSelected && styles.emojiChoiceActive]}
+                            onPress={() => handleChooseEmoji(option.emoji)}
+                            accessibilityLabel={`Use ${option.emoji} as your click emoji`}
+                            accessibilityState={{ selected: isSelected }}
+                          >
+                            <View style={[styles.emojiChoiceHalo, isSelected && styles.emojiChoiceHaloActive]} />
+                            <View style={[styles.emojiChoiceInner, isSelected && styles.emojiChoiceInnerActive]}>
+                              <Text style={[styles.emojiChoiceGlyph, isSelected && styles.emojiChoiceGlyphActive]}>
+                                {option.emoji}
+                              </Text>
+                            </View>
+                          </Pressable>
+                        );
+                      })}
+                    </ScrollView>
+                  ) : (
+                    <Text style={styles.emojiEmptyText}>Purchase garden decorations to see suggested emoji.</Text>
+                  )}
+                  <Pressable
+                    style={styles.emojiInputContainer}
+                    onPress={() => emojiInputRef.current?.focus()}
+                    accessible={false}
+                  >
+                    <TextInput
+                      ref={emojiInputRef}
+                      value={emojiInput}
+                      onChangeText={handleEmojiInputChange}
+                      placeholder="Type any emoji"
+                      style={styles.emojiInputField}
+                      maxLength={6}
+                      autoCorrect={false}
+                      autoCapitalize="none"
+                      returnKeyType="done"
+                    />
+                  </Pressable>
+                  <Text style={styles.emojiNote}>
+                    Tip: tap a suggestion or type an emoji to update your click button and menu instantly.
+                  </Text>
+                </>
               ) : (
-                <Text style={styles.upgradeCopy}>Loading emoji options...</Text>
+                <>
+                  <Text style={styles.upgradeCopy}>
+                    Upgrade for $2.99 to unlock custom emoji choices, accent colors, and garden backgrounds for your clicker.
+                  </Text>
+                  <Pressable style={styles.upgradeButton} onPress={handleUpgrade} accessibilityLabel="Upgrade to Garden Plus">
+                    <Text style={styles.upgradeButtonText}>Upgrade for $2.99</Text>
+                  </Pressable>
+                </>
               )}
             </View>
           </ScrollView>
@@ -483,109 +517,7 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
     );
   }
 
-  return (
-    <>
-      <View style={styles.formSection}>
-        <Text style={styles.sectionLabel}>Display name</Text>
-        <TextInput
-          value={name}
-          onChangeText={setName}
-          placeholder="Your name"
-          style={styles.input}
-          returnKeyType="done"
-        />
-      </View>
-      <View style={styles.formSection}>
-        <Text style={styles.sectionLabel}>Username</Text>
-        <TextInput
-          value={username}
-          onChangeText={setUsername}
-          placeholder="@username"
-          style={styles.input}
-          returnKeyType="done"
-          autoCapitalize="none"
-        />
-      </View>
-      <View style={styles.upgradeCard}>
-        <Text style={styles.upgradeTitle}>Garden Plus customization</Text>
-        <Text style={styles.upgradeCopy}>Choose an accent color for your click target.</Text>
-        <View style={styles.accentRow}>
-          {PREMIUM_ACCENT_OPTIONS.map((color) => {
-            const isActive = accentSelection === color;
-            return (
-              <Pressable
-                key={color}
-                style={[styles.accentSwatch, { backgroundColor: color }, isActive && styles.accentSwatchActive]}
-                onPress={() => handleSelectAccent(color)}
-                accessibilityLabel={`Select accent color ${color}`}
-                accessibilityState={{ selected: isActive }}
-              >
-                {isActive ? <Text style={styles.accentSwatchCheck}>✓</Text> : null}
-              </Pressable>
-            );
-          })}
-        </View>
-        <View style={styles.backgroundSection}>
-          <Text style={styles.backgroundTitle}>Garden background</Text>
-          <Text style={styles.backgroundCopy}>Set the color that surrounds your garden canvas.</Text>
-          <View style={styles.backgroundWheelContainer}>
-            <View style={styles.backgroundWheel}>
-              {backgroundWheelPositions.map(({ color, left, top }) => {
-                const isActive = gardenBackgroundColor === color;
-                return (
-                  <Pressable
-                    key={color}
-                    style={[
-                      styles.backgroundWheelSwatch,
-                      { backgroundColor: color, left, top },
-                      isActive && styles.backgroundWheelSwatchActive,
-                    ]}
-                    onPress={() => handleSelectBackgroundColor(color)}
-                    accessibilityLabel={`Set garden background to ${color}`}
-                    accessibilityState={{ selected: isActive }}
-                  />
-                );
-              })}
-              <View style={[styles.backgroundWheelCenter, { backgroundColor: gardenBackgroundColor }]} />
-            </View>
-          </View>
-          <Pressable
-            style={styles.backgroundResetButton}
-            onPress={handleResetBackground}
-            accessibilityLabel="Reset background color"
-          >
-            <Text style={styles.backgroundResetButtonText}>Reset</Text>
-          </Pressable>
-        </View>
-        <Text style={styles.upgradeCopy}>Pick the emoji that appears on the home canvas and menu.</Text>
-        {emojiOptions.length > 0 ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.emojiRow}>
-            {emojiOptions.map((option) => {
-              const isSelected = option.emoji === customClickEmoji;
-              return (
-                <Pressable
-                  key={option.id}
-                  style={[styles.emojiChoice, isSelected && styles.emojiChoiceActive]}
-                  onPress={() => handleChooseEmoji(option.emoji)}
-                  accessibilityLabel={`Use ${option.emoji} as your click emoji`}
-                  accessibilityState={{ selected: isSelected }}
-                >
-                  <View style={[styles.emojiChoiceHalo, isSelected && styles.emojiChoiceHaloActive]} />
-                  <View style={[styles.emojiChoiceInner, isSelected && styles.emojiChoiceInnerActive]}>
-                    <Text style={[styles.emojiChoiceGlyph, isSelected && styles.emojiChoiceGlyphActive]}>
-                      {option.emoji}
-                    </Text>
-                  </View>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        ) : (
-          <Text style={styles.upgradeCopy}>Loading emoji options...</Text>
-        )}
-      </View>
-    </>
-  );
+  // Continue to the main screen render below
 
 // ...existing code...
 
@@ -741,8 +673,7 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
           ) : (
             <>
               <Text style={styles.upgradeCopy}>
-                Upgrade for $2.99 to unlock custom emoji choices, accent colors, and garden backgrounds for your
-                clicker.
+                Upgrade for $2.99 to unlock custom emoji choices, accent colors, and garden backgrounds for your clicker.
               </Text>
               <Pressable style={styles.upgradeButton} onPress={handleUpgrade} accessibilityLabel="Upgrade to Garden Plus">
                 <Text style={styles.upgradeButtonText}>Upgrade for $2.99</Text>
@@ -757,6 +688,17 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
           disabled={isSaving}
         >
           <Text style={styles.saveButtonText}>{isSaving ? 'Saving…' : 'Save profile'}</Text>
+        </Pressable>
+        <Pressable
+          style={styles.resetButton}
+          onPress={() => {
+            Alert.alert('Reset game', 'Reset all game data and simulate a fresh install?', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Reset', style: 'destructive', onPress: () => resetGame() },
+            ]);
+          }}
+        >
+          <Text style={styles.resetButtonText}>Reset to new user</Text>
         </Pressable>
       </ScrollView>
     </SafeAreaView>
@@ -1189,6 +1131,15 @@ const createResponsiveStyles = (isLandscape: boolean) => StyleSheet.create({
   },
   modalBackdrop: {
     ...StyleSheet.absoluteFillObject,
+  },
+  resetButton: {
+    marginTop: 8,
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  resetButtonText: {
+    color: '#ef4444',
+    fontWeight: '600',
   },
   modalCard: {
     backgroundColor: '#f0fff4',

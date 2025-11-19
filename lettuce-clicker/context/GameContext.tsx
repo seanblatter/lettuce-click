@@ -200,6 +200,7 @@ type GameContextValue = {
   clearResumeNotice: () => void;
   addWidgetPromenadePhoto: (uri: string) => WidgetPromenadeEntry | null;
   removeWidgetPromenadePhoto: (entryId: string) => void;
+  resetGame: () => Promise<void>;
 };
 
 const PROFILE_STORAGE_KEY = 'lettuce-click:profile';
@@ -1192,6 +1193,54 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     setPlacements([]);
   }, []);
 
+  const resetGame = useCallback(async () => {
+    // Reset all in-memory state to defaults
+    setHarvest(0);
+    setLifetimeHarvest(0);
+    setProfileLifetimeTotal(0);
+    setPurchasedUpgrades({});
+    setOrbitingUpgradeEmojis([]);
+    setEmojiInventory({});
+    setPlacements([]);
+    setProfileName('');
+    setProfileUsername('');
+    setProfileImageUri(null);
+    setProfilePhotoWidgetEnabled(false);
+    setHomeEmojiThemeState('circle');
+    setOwnedThemes({ ...defaultOwnedThemes });
+    setResumeNotice(null);
+    setCustomEmojiCatalog({});
+    setHasPremiumUpgrade(false);
+    setPremiumAccentColorState('#1f6f4a');
+    setCustomClickEmojiState('🥬');
+    setGardenBackgroundColorState('#f2f9f2');
+    setIsExpandedView(false);
+    setBedsideWidgetsEnabled(true);
+    setWeatherData(null);
+    setWeatherError(null);
+    setWeatherLastUpdated(0);
+    setTemperatureUnit('celsius');
+    setHasManuallySetTemperatureUnit(false);
+    setRssFeeds([]);
+    setRssItems([]);
+    setRssError(null);
+    setRssLastUpdated(0);
+    setWidgetPromenade([]);
+
+    // Clear persisted storage
+    try {
+      await AsyncStorage.multiRemove([PROFILE_STORAGE_KEY, THEME_STORAGE_KEY, GAME_STORAGE_KEY, LAST_EXIT_STORAGE_KEY]);
+    } catch (error) {
+      // ignore persistence errors
+      console.warn('Failed to clear storage during reset', error);
+    }
+  }, [
+    setProfileName,
+    setProfileUsername,
+    setProfileImageUri,
+    setProfilePhotoWidgetEnabled,
+  ]);
+
   const addWidgetPromenadePhoto = useCallback(
     (uri: string): WidgetPromenadeEntry | null => {
       const trimmed = uri.trim();
@@ -1260,6 +1309,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     ownedThemes,
     resumeNotice,
     hasPremiumUpgrade,
+  resetGame,
     premiumAccentColor,
     customClickEmoji,
     gardenBackgroundColor,
@@ -1548,6 +1598,10 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
             }
             if (typeof parsed.hasPremiumUpgrade === 'boolean') {
               setHasPremiumUpgrade(parsed.hasPremiumUpgrade);
+              if (parsed.hasPremiumUpgrade) {
+                // Debug: premium status restored from storage, useful for troubleshooting tests
+                console.log('💠 Restored premium:', parsed.hasPremiumUpgrade);
+              }
             }
             if (typeof parsed.premiumAccentColor === 'string') {
               setPremiumAccentColorState(parsed.premiumAccentColor);

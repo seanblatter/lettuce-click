@@ -36,7 +36,7 @@ import Animated, {
 import { captureRef } from 'react-native-view-shot';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { emojiCategoryOrder, formatClickValue } from '@/constants/emojiCatalog';
+import { emojiCategoryOrder, formatClickValue, MIN_EMOJI_COST } from '@/constants/emojiCatalog';
 import { EmojiDefinition, Placement, TextStyleId, WidgetPromenadeEntry } from '@/context/GameContext';
 
 type Props = {
@@ -57,9 +57,10 @@ type Props = {
   updatePlacement: (placementId: string, updates: Partial<Placement>) => void;
   removePlacement: (placementId: string) => void;
   clearGarden: () => void;
-  registerCustomEmoji: (emoji: string) => EmojiDefinition | null;
+  registerCustomEmoji: (emoji: string, overrideCost?: number) => EmojiDefinition | null;
   addWidgetPromenadePhoto: (uri: string) => WidgetPromenadeEntry | null;
   gardenBackgroundColor: string;
+  hasPremiumUpgrade: boolean;
   title?: string;
 };
 
@@ -197,6 +198,10 @@ const TEXT_STYLE_MAP = TEXT_STYLE_OPTIONS.reduce<Record<TextStyleId, TextStyle>>
   return acc;
 }, {} as Record<TextStyleId, TextStyle>);
 
+const EMOJI_KITCHEN_API_KEY = process.env.EXPO_PUBLIC_TENOR_KEY ?? 'AIzaSyC3fF5lPfh6Yz9iJ2k2C2SRs4-FbX_o3uA';
+const EMOJI_KITCHEN_CLIENT_KEY = 'lettuce-clicker';
+const CUSTOM_FUSION_BASE_PRICE = 12000;
+
 const CATEGORY_LABELS: Record<EmojiDefinition['category'], string> = {
   plants: 'Plants & Foliage',
   scenery: 'Scenery & Sky',
@@ -213,9 +218,10 @@ const CATEGORY_ICONS: Record<EmojiDefinition['category'], string> = {
   accents: '✨',
 };
 
-type CategoryFilter = 'all' | EmojiDefinition['category'];
+type CategoryFilter = 'custom' | 'all' | EmojiDefinition['category'];
 
 const CATEGORY_OPTIONS: { id: CategoryFilter; label: string; icon: string }[] = [
+  { id: 'custom', label: 'Custom', icon: '🧪' },
   { id: 'all', label: 'All Items', icon: '🌼' },
   { id: 'plants', label: 'Plants', icon: '🪴' },
   { id: 'scenery', label: 'Scenery', icon: '🌅' },
@@ -333,6 +339,11 @@ export function GardenSection({
   const [selectedInventoryEmoji, setSelectedInventoryEmoji] = useState<InventoryEntry | null>(null);
   const [walletEmojis, setWalletEmojis] = useState<InventoryEntry[]>([]);
   const [isDrawingGestureActive, setIsDrawingGestureActive] = useState(false);
+  const [customEmojiOne, setCustomEmojiOne] = useState('🌸');
+  const [customEmojiTwo, setCustomEmojiTwo] = useState('🌿');
+  const [customFusionPreview, setCustomFusionPreview] = useState<string | null>(null);
+  const [customFusionError, setCustomFusionError] = useState<string | null>(null);
+  const [customFusionStatus, setCustomFusionStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   
   // Debug shopPreview state changes
   useEffect(() => {
@@ -389,6 +400,12 @@ export function GardenSection({
   useEffect(() => {
     setActiveEmojiPicker(null);
   }, [activeSheet]);
+
+  useEffect(() => {
+    setCustomFusionError(null);
+    setCustomFusionStatus('idle');
+    setCustomFusionPreview(null);
+  }, [customEmojiOne, customEmojiTwo]);
 
   const deleteZoneCenter = useMemo(() => {
     if (!penButtonLayout) {
@@ -519,9 +536,40 @@ export function GardenSection({
     [normalizedEmojiTokens, normalizedFilter, normalizedFilterEmoji, normalizedFilterWords]
   );
   const matchesCategory = useCallback(
-    (item: InventoryEntry) => (activeCategory === 'all' ? true : item.category === activeCategory),
+    (item: InventoryEntry) => {
+      if (activeCategory === 'custom') {
+        return item.id.startsWith('custom-');
+      }
+
+      return activeCategory === 'all' ? true : item.category === activeCategory;
+    },
     [activeCategory]
   );
+
+  const parseEmojiInput = useCallback((value: string) => {
+    const match = value.match(EMOJI_SEQUENCE_REGEX);
+    return match ? match[0] : '';
+  }, []);
+
+  const customFusionCost = useMemo(() => {
+    if (!customEmojiOne || !customEmojiTwo) {
+      return null;
+    }
+
+    const combo = `${customEmojiOne}${customEmojiTwo}`;
+    const codePoints = Array.from(combo)
+      .map((char) => char.codePointAt(0))
+      .filter((value): value is number => typeof value === 'number');
+
+    if (!codePoints.length) {
+      return MIN_EMOJI_COST + CUSTOM_FUSION_BASE_PRICE;
+    }
+
+    const score = codePoints.reduce((total, point) => total + point, 0);
+    return MIN_EMOJI_COST + CUSTOM_FUSION_BASE_PRICE + (score % 15000);
+  }, [customEmojiOne, customEmojiTwo]);
+
+  const canAttemptCustomFusion = Boolean(customEmojiOne && customEmojiTwo);
 
   useEffect(() => {
     if (emojiTokens.length === 0) {
@@ -1267,9 +1315,101 @@ export function GardenSection({
     (category: CategoryFilter) => {
       setActiveCategory(category);
       endInventoryDrag();
+      if (category === 'custom' && !hasPremiumUpgrade) {
+        Alert.alert(
+          'Upgrade to unlock Custom',
+          'Emoji Kitchen blends are a premium perk. Upgrade to mash two emoji together and save them.',
+          [{ text: 'Got it' }]
+        );
+      }
     },
-    [endInventoryDrag]
+    [endInventoryDrag, hasPremiumUpgrade]
   );
+
+  const fetchEmojiKitchenBlend = useCallback(async () => {
+    if (!canAttemptCustomFusion) {
+      setCustomFusionError('Pick two emoji to blend first.');
+      return;
+    }
+
+    if (!hasPremiumUpgrade) {
+      Alert.alert(
+        'Premium required',
+        'Custom emoji blends are only available for premium players. Upgrade to continue.'
+      );
+      return;
+    }
+
+    setCustomFusionStatus('loading');
+    setCustomFusionError(null);
+    setCustomFusionPreview(null);
+
+    const query = `${customEmojiOne} ${customEmojiTwo}`;
+
+    try {
+      const response = await fetch(
+        `https://tenor.googleapis.com/v2/featured?key=${EMOJI_KITCHEN_API_KEY}&client_key=${EMOJI_KITCHEN_CLIENT_KEY}&collection=emoji_kitchen_v6&q=${encodeURIComponent(
+          query
+        )}`
+      );
+
+      if (!response.ok) {
+        throw new Error('Emoji Kitchen is unavailable right now.');
+      }
+
+      const payload = await response.json();
+      const firstResult = payload?.results?.[0];
+      const formats = firstResult?.media_formats ?? {};
+      const preview: string | null =
+        formats.gif?.url ||
+        formats.mediumgif?.url ||
+        formats.tinygif?.url ||
+        formats.webp?.url ||
+        firstResult?.url ||
+        null;
+
+      if (!preview) {
+        throw new Error('No mashup found for that emoji pair yet.');
+      }
+
+      setCustomFusionPreview(preview);
+      setCustomFusionStatus('ready');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not blend these emoji.';
+      setCustomFusionError(message);
+      setCustomFusionStatus('error');
+    }
+  }, [canAttemptCustomFusion, customEmojiOne, customEmojiTwo, hasPremiumUpgrade]);
+
+  const handlePurchaseCustomFusion = useCallback(() => {
+    if (!canAttemptCustomFusion || !customFusionCost) {
+      setCustomFusionError('Blend two emoji first to price your mashup.');
+      return;
+    }
+
+    if (!hasPremiumUpgrade) {
+      Alert.alert(
+        'Upgrade to buy',
+        'Upgrade to Premium to save custom Emoji Kitchen blends to your garden inventory.'
+      );
+      return;
+    }
+
+    const fusionEmoji = `${customEmojiOne}${customEmojiTwo}`;
+    const created = registerCustomEmoji(fusionEmoji, customFusionCost);
+
+    if (!created) {
+      setCustomFusionError('Unable to save that blend. Try different emoji.');
+      return;
+    }
+
+    const success = purchaseEmoji(created.id);
+    if (success) {
+      setShopPreview(created);
+      setShopFilter('');
+      setActiveCategory('custom');
+    }
+  }, [canAttemptCustomFusion, customEmojiOne, customEmojiTwo, customFusionCost, hasPremiumUpgrade, purchaseEmoji, registerCustomEmoji]);
 
   const keyExtractor = useCallback((item: InventoryEntry) => item.id, []);
 
@@ -2032,7 +2172,111 @@ export function GardenSection({
                 })}
               </ScrollView>
             </View>
-            
+
+            {activeCategory === 'custom' && (
+              <View style={styles.customFusionCard}>
+                <View style={styles.customFusionHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.customFusionTitle}>Emoji Kitchen blend</Text>
+                    <Text style={styles.customFusionSubhead}>
+                      Pick two emoji to mesh into a premium, garden-ready sticker.
+                    </Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.customPremiumPill,
+                      { backgroundColor: hasPremiumUpgrade ? '#ecfdf3' : '#fff7ed' },
+                    ]}
+                  >
+                    <Text style={[styles.customPremiumPillText, { color: hasPremiumUpgrade ? '#16a34a' : '#ea580c' }]}>
+                      {hasPremiumUpgrade ? 'Premium unlocked' : 'Premium only'}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.customFusionInputRow}>
+                  <View style={styles.customFusionInputContainer}>
+                    <Text style={styles.customFusionLabel}>Emoji A</Text>
+                    <TextInput
+                      style={styles.customFusionInput}
+                      value={customEmojiOne}
+                      onChangeText={(value) => setCustomEmojiOne(parseEmojiInput(value) || value.trim())}
+                      placeholder="Tap to pick"
+                      maxLength={6}
+                      textAlign="center"
+                    />
+                  </View>
+                  <Text style={styles.customFusionPlus}>+</Text>
+                  <View style={styles.customFusionInputContainer}>
+                    <Text style={styles.customFusionLabel}>Emoji B</Text>
+                    <TextInput
+                      style={styles.customFusionInput}
+                      value={customEmojiTwo}
+                      onChangeText={(value) => setCustomEmojiTwo(parseEmojiInput(value) || value.trim())}
+                      placeholder="Tap to pick"
+                      maxLength={6}
+                      textAlign="center"
+                    />
+                  </View>
+                </View>
+
+                <Pressable
+                  style={[styles.customFusionButton, (!canAttemptCustomFusion || customFusionStatus === 'loading') && styles.customFusionButtonDisabled]}
+                  disabled={!canAttemptCustomFusion || customFusionStatus === 'loading'}
+                  onPress={fetchEmojiKitchenBlend}
+                  accessibilityRole="button"
+                  accessibilityLabel="Generate Emoji Kitchen mashup"
+                >
+                  <Text style={styles.customFusionButtonText}>
+                    {customFusionStatus === 'loading' ? 'Contacting Emoji Kitchen…' : 'Blend with Emoji Kitchen'}
+                  </Text>
+                </Pressable>
+
+                <View style={styles.customFusionPreviewRow}>
+                  {customFusionPreview ? (
+                    <Image
+                      source={{ uri: customFusionPreview }}
+                      style={styles.customFusionPreview}
+                      resizeMode="contain"
+                    />
+                  ) : (
+                    <View style={[styles.customFusionPreview, styles.customFusionPreviewPlaceholder]}>
+                      <Text style={styles.customFusionPlaceholderText}>
+                        {customFusionStatus === 'loading'
+                          ? 'Blending...'
+                          : 'Your Emoji Kitchen mashup will appear here'}
+                      </Text>
+                    </View>
+                  )}
+
+                  <View style={styles.customFusionMeta}>
+                    <Text style={styles.customFusionMetaLabel}>Price per mashup</Text>
+                    <Text style={styles.customFusionMetaValue}>
+                      {customFusionCost ? `${formatClickValue(customFusionCost)} lettuce` : 'Choose two emoji'}
+                    </Text>
+                    <Text style={styles.customFusionMetaHint}>
+                      Custom emoji blends are saved to your inventory once purchased.
+                    </Text>
+                    <Pressable
+                      style={[styles.customFusionPurchase, (!hasPremiumUpgrade || !customFusionCost) && styles.customFusionPurchaseDisabled]}
+                      disabled={!hasPremiumUpgrade || !customFusionCost}
+                      onPress={handlePurchaseCustomFusion}
+                      accessibilityRole="button"
+                      accessibilityLabel="Purchase custom emoji blend"
+                    >
+                      <Text style={styles.customFusionPurchaseText}>
+                        {hasPremiumUpgrade ? 'Buy custom emoji' : 'Upgrade to buy'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+
+                {customFusionError ? (
+                  <Text style={styles.customFusionError}>{customFusionError}</Text>
+                ) : null}
+              </View>
+            )}
+
             {/* Shop Preview Section - Shows selected emoji details */}
             {shopPreview && (
               <View style={{
@@ -2130,7 +2374,7 @@ export function GardenSection({
               </View>
               {/* Scrolling placeholder removed - no test content */}
             </View>
-              {filteredShopInventory.length === 0 && (
+              {filteredShopInventory.length === 0 && activeCategory !== 'custom' && (
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyStateTitle}>No emoji match your search</Text>
                   <Text style={styles.emptyStateCopy}>
@@ -3433,6 +3677,160 @@ const styles = StyleSheet.create({
   },
   categoryPillTextActive: {
     color: '#f0fff4',
+  },
+  customFusionCard: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#c7d2fe',
+    gap: 12,
+  },
+  customFusionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  customFusionTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  customFusionSubhead: {
+    color: '#475569',
+    fontSize: 13,
+    marginTop: 2,
+  },
+  customPremiumPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#d9f99d',
+  },
+  customPremiumPillText: {
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  customFusionInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  customFusionInputContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    padding: 10,
+  },
+  customFusionLabel: {
+    fontSize: 12,
+    color: '#475569',
+    marginBottom: 4,
+  },
+  customFusionInput: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    paddingVertical: 12,
+    fontSize: 26,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    color: '#0f172a',
+  },
+  customFusionPlus: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#0f172a',
+    paddingHorizontal: 6,
+  },
+  customFusionButton: {
+    backgroundColor: '#2563eb',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    shadowColor: '#1d4ed8',
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+  },
+  customFusionButtonDisabled: {
+    backgroundColor: '#cbd5e1',
+    shadowOpacity: 0,
+  },
+  customFusionButtonText: {
+    color: '#f8fafc',
+    fontWeight: '800',
+    fontSize: 15,
+  },
+  customFusionPreviewRow: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+  },
+  customFusionPreview: {
+    width: 140,
+    height: 140,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#fff',
+  },
+  customFusionPreviewPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  customFusionPlaceholderText: {
+    fontSize: 12,
+    color: '#475569',
+    textAlign: 'center',
+  },
+  customFusionMeta: {
+    flex: 1,
+    gap: 6,
+  },
+  customFusionMetaLabel: {
+    fontSize: 13,
+    color: '#0f172a',
+    fontWeight: '700',
+  },
+  customFusionMetaValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#14532d',
+  },
+  customFusionMetaHint: {
+    color: '#475569',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  customFusionPurchase: {
+    marginTop: 4,
+    backgroundColor: '#16a34a',
+    paddingVertical: 10,
+    borderRadius: 12,
+    alignItems: 'center',
+    shadowColor: '#15803d',
+    shadowOpacity: 0.16,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 2,
+  },
+  customFusionPurchaseDisabled: {
+    backgroundColor: '#e2e8f0',
+    shadowOpacity: 0,
+  },
+  customFusionPurchaseText: {
+    color: '#f8fafc',
+    fontWeight: '800',
+  },
+  customFusionError: {
+    marginTop: 6,
+    color: '#b91c1c',
+    fontWeight: '600',
   },
   sheetTileWrapper: {
     flex: 1,

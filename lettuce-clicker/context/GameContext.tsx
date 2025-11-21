@@ -156,7 +156,7 @@ type GameContextValue = {
   rssError: string | null;
   rssLastUpdated: number;
   widgetPromenade: WidgetPromenadeEntry[];
-  registerCustomEmoji: (emoji: string, overrideCost?: number) => EmojiDefinition | null;
+  registerCustomEmoji: (emoji: string) => EmojiDefinition | null;
   setProfileLifetimeTotal: (value: number) => void;
   addHarvest: () => void;
   addHarvestAmount: (amount: number) => void;
@@ -696,7 +696,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   }, []);
 
   const registerCustomEmoji = useCallback(
-    (emoji: string, overrideCost?: number): EmojiDefinition | null => {
+    (emoji: string): EmojiDefinition | null => {
       const trimmed = emoji.trim();
 
       if (trimmed.length === 0) {
@@ -748,11 +748,11 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   // eslint-disable-next-line no-console
   console.log('Registering custom emoji', { trimmed, normalized, metaName });
 
-        const nextDefinition: EmojiDefinition = {
+  const nextDefinition: EmojiDefinition = {
           id: customId,
           emoji: trimmed,
           name: metaName ? titleCase(metaName as string) : `Garden Emoji ${trimmed}`,
-          cost: overrideCost ?? computeCustomEmojiCost(normalized),
+          cost: computeCustomEmojiCost(normalized),
           category: pickCustomCategory(normalized),
           tags: [
             ...(metaName ? (metaName as string).split(/\s+/).map((s) => s.toLowerCase()) : []),

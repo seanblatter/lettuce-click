@@ -63,6 +63,7 @@ export type EmojiDefinition = {
   category: EmojiCategory;
   tags: string[];
   popularity: number;
+  imageUrl?: string;
 };
 
 type PlacementBase = {
@@ -156,7 +157,10 @@ type GameContextValue = {
   rssError: string | null;
   rssLastUpdated: number;
   widgetPromenade: WidgetPromenadeEntry[];
-  registerCustomEmoji: (emoji: string) => EmojiDefinition | null;
+  registerCustomEmoji: (
+    emoji: string,
+    options?: { name?: string; costOverride?: number; imageUrl?: string; tags?: string[] }
+  ) => EmojiDefinition | null;
   setProfileLifetimeTotal: (value: number) => void;
   addHarvest: () => void;
   addHarvestAmount: (amount: number) => void;
@@ -696,7 +700,10 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   }, []);
 
   const registerCustomEmoji = useCallback(
-    (emoji: string): EmojiDefinition | null => {
+    (
+      emoji: string,
+      options?: { name?: string; costOverride?: number; imageUrl?: string; tags?: string[] }
+    ): EmojiDefinition | null => {
       const trimmed = emoji.trim();
 
       if (trimmed.length === 0) {
@@ -727,7 +734,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         return customEmojiCatalog[customId];
       }
 
-  let createdDefinition: EmojiDefinition | null = null;
+      let createdDefinition: EmojiDefinition | null = null;
 
       setCustomEmojiCatalog((prev) => {
         if (prev[customId]) {
@@ -735,32 +742,36 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
           return prev;
         }
 
-        const metaName = (emojiNameMap && (emojiNameMap[normalized] || emojiNameMap[trimmed])) || null;
+        const metaName = options?.name
+          ? options.name
+          : (emojiNameMap && (emojiNameMap[normalized] || emojiNameMap[trimmed])) || null;
         const titleCase = (value: string) =>
           value
             .split(/\s+/)
             .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
             .join(' ');
 
-  // Debug: log any time a custom emoji is registered and what meta info we found
-  // This helps validate the mapping for emoji glyphs like '❤️' or multi-codepoint sequences
-  // and is safe to keep for now since it's only an informational log.
-  // eslint-disable-next-line no-console
-  console.log('Registering custom emoji', { trimmed, normalized, metaName });
+        // Debug: log any time a custom emoji is registered and what meta info we found
+        // This helps validate the mapping for emoji glyphs like '❤️' or multi-codepoint sequences
+        // and is safe to keep for now since it's only an informational log.
+        // eslint-disable-next-line no-console
+        console.log('Registering custom emoji', { trimmed, normalized, metaName });
 
-  const nextDefinition: EmojiDefinition = {
+        const nextDefinition: EmojiDefinition = {
           id: customId,
           emoji: trimmed,
           name: metaName ? titleCase(metaName as string) : `Garden Emoji ${trimmed}`,
-          cost: computeCustomEmojiCost(normalized),
+          cost: options?.costOverride ?? computeCustomEmojiCost(normalized),
           category: pickCustomCategory(normalized),
           tags: [
             ...(metaName ? (metaName as string).split(/\s+/).map((s) => s.toLowerCase()) : []),
             trimmed.toLowerCase(),
             normalized.toLowerCase(),
             ...(metaName ? [] : ['custom emoji']),
+            ...(options?.tags ?? []),
           ],
           popularity: 1000 + Object.keys(prev).length,
+          imageUrl: options?.imageUrl,
         };
 
         createdDefinition = nextDefinition;

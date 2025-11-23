@@ -36,8 +36,9 @@ import Animated, {
 import { captureRef } from 'react-native-view-shot';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { emojiCategoryOrder, formatClickValue } from '@/constants/emojiCatalog';
+import { computeBellCurveCost, emojiCategoryOrder, formatClickValue } from '@/constants/emojiCatalog';
 import { EmojiDefinition, Placement, TextStyleId, WidgetPromenadeEntry } from '@/context/GameContext';
+import { fetchEmojiKitchenMash } from '@/lib/emojiKitchenService';
 
 type Props = {
   harvest: number;
@@ -60,6 +61,8 @@ type Props = {
   registerCustomEmoji: (emoji: string) => EmojiDefinition | null;
   addWidgetPromenadePhoto: (uri: string) => WidgetPromenadeEntry | null;
   gardenBackgroundColor: string;
+  hasPremiumUpgrade: boolean;
+  purchasePremiumUpgrade: () => void;
   title?: string;
 };
 
@@ -213,9 +216,10 @@ const CATEGORY_ICONS: Record<EmojiDefinition['category'], string> = {
   accents: '✨',
 };
 
-type CategoryFilter = 'all' | EmojiDefinition['category'];
+type CategoryFilter = 'custom' | 'all' | EmojiDefinition['category'];
 
 const CATEGORY_OPTIONS: { id: CategoryFilter; label: string; icon: string }[] = [
+  { id: 'custom', label: 'Custom', icon: '🧪' },
   { id: 'all', label: 'All Items', icon: '🌼' },
   { id: 'plants', label: 'Plants', icon: '🪴' },
   { id: 'scenery', label: 'Scenery', icon: '🌅' },
@@ -290,6 +294,8 @@ export function GardenSection({
   registerCustomEmoji,
   addWidgetPromenadePhoto,
   gardenBackgroundColor,
+  hasPremiumUpgrade,
+  purchasePremiumUpgrade,
   title = 'Lettuce Gardens',
 }: Props) {
   const insets = useSafeAreaInsets();
@@ -333,6 +339,13 @@ export function GardenSection({
   const [selectedInventoryEmoji, setSelectedInventoryEmoji] = useState<InventoryEntry | null>(null);
   const [walletEmojis, setWalletEmojis] = useState<InventoryEntry[]>([]);
   const [isDrawingGestureActive, setIsDrawingGestureActive] = useState(false);
+  const [customEmojiLeft, setCustomEmojiLeft] = useState('🌸');
+  const [customEmojiRight, setCustomEmojiRight] = useState('🌟');
+  const [customBlendPreview, setCustomBlendPreview] = useState<string | null>(null);
+  const [customBlendDescription, setCustomBlendDescription] = useState('');
+  const [customBlendCost, setCustomBlendCost] = useState<number | null>(null);
+  const [customBlendError, setCustomBlendError] = useState<string | null>(null);
+  const [isLoadingCustomBlend, setIsLoadingCustomBlend] = useState(false);
   
   // Debug shopPreview state changes
   useEffect(() => {
@@ -519,9 +532,31 @@ export function GardenSection({
     [normalizedEmojiTokens, normalizedFilter, normalizedFilterEmoji, normalizedFilterWords]
   );
   const matchesCategory = useCallback(
-    (item: InventoryEntry) => (activeCategory === 'all' ? true : item.category === activeCategory),
+    (item: InventoryEntry) => {
+      if (activeCategory === 'all') {
+        return true;
+      }
+
+      if (activeCategory === 'custom') {
+        return item.id.startsWith('custom-');
+      }
+
+      return item.category === activeCategory;
+    },
     [activeCategory]
   );
+
+  const computeKitchenEmojiCost = useCallback((emojiValue: string) => {
+    const codePoints = Array.from(emojiValue).map((char) => char.codePointAt(0) ?? 0);
+
+    if (codePoints.length === 0) {
+      return computeBellCurveCost(0.5);
+    }
+
+    const hash = codePoints.reduce((accumulator, point) => (accumulator * 257 + point) % 1_000_003, 0);
+    const normalized = hash / 1_000_003;
+    return computeBellCurveCost(normalized);
+  }, []);
 
   useEffect(() => {
     if (emojiTokens.length === 0) {
@@ -537,6 +572,86 @@ export function GardenSection({
       registerCustomEmoji(token.original);
     });
   }, [emojiTokens, registerCustomEmoji]);
+
+  useEffect(() => {
+    if (activeCategory !== 'custom') {
+      setCustomBlendError(null);
+    }
+  }, [activeCategory]);
+
+  const handleBlendCustomEmoji = useCallback(async () => {
+    if (!hasPremiumUpgrade) {
+      setCustomBlendError('Upgrade to blend custom Emoji Kitchen stickers.');
+      return;
+    }
+
+    setCustomBlendError(null);
+    setIsLoadingCustomBlend(true);
+
+    try {
+      const result = await fetchEmojiKitchenMash(customEmojiLeft, customEmojiRight);
+      const compositeEmoji = `${customEmojiLeft}${customEmojiRight}`;
+      const estimatedCost = computeKitchenEmojiCost(compositeEmoji);
+      setCustomBlendPreview(result.imageUrl);
+      setCustomBlendDescription(result.description);
+      setCustomBlendCost(estimatedCost);
+    } catch (error) {
+      setCustomBlendPreview(null);
+      setCustomBlendDescription('');
+      setCustomBlendCost(null);
+      setCustomBlendError(
+        error instanceof Error ? error.message : 'Unable to create a mashup right now. Please try again.'
+      );
+    } finally {
+      setIsLoadingCustomBlend(false);
+    }
+  }, [computeKitchenEmojiCost, customEmojiLeft, customEmojiRight, hasPremiumUpgrade]);
+
+  const handlePurchaseCustomBlend = useCallback(async () => {
+    if (!customBlendPreview) {
+      setCustomBlendError('Create a blend with Emoji Kitchen first.');
+      return;
+    }
+
+    const compositeEmoji = `${customEmojiLeft}${customEmojiRight}`;
+    const blendCost = customBlendCost ?? computeKitchenEmojiCost(compositeEmoji);
+
+    const definition = registerCustomEmoji(compositeEmoji, {
+      name: customBlendDescription ? `Emoji Kitchen: ${customBlendDescription}` : undefined,
+      costOverride: blendCost,
+      imageUrl: customBlendPreview,
+      tags: ['emoji kitchen', 'blend', compositeEmoji],
+    });
+
+    if (!definition) {
+      setCustomBlendError('Unable to save your custom emoji.');
+      return;
+    }
+
+    await wait(32);
+
+    const success = purchaseEmoji(definition.id);
+
+    if (!success) {
+      setCustomBlendError('Earn more clicks to purchase this blend.');
+      return;
+    }
+
+    setCustomBlendError(null);
+    setSelectedEmoji(definition.id);
+    setShopPreview(null);
+    handleOpenSheet('inventory');
+  }, [
+    computeKitchenEmojiCost,
+    customBlendCost,
+    customBlendDescription,
+    customBlendPreview,
+    customEmojiLeft,
+    customEmojiRight,
+    handleOpenSheet,
+    purchaseEmoji,
+    registerCustomEmoji,
+  ]);
 
   const filteredShopInventory = useMemo(() => {
     const filtered = inventoryList.filter((item) => matchesCategory(item) && matchesFilter(item));
@@ -1332,15 +1447,19 @@ export function GardenSection({
           accessibilityLabel={`${item.name} emoji`}
           accessibilityHint={`${accessibilityHint} Price ${formatClickValue(item.cost)} clicks.`}
         >
-          <View style={styles.shopTileAura}>
-            <View style={styles.shopTileHalo} />
-            <View style={[styles.shopTileCircle, locked && styles.shopTileCircleLocked]}>
-              <Text style={styles.shopTileEmoji}>{item.emoji}</Text>
+            <View style={styles.shopTileAura}>
+              <View style={styles.shopTileHalo} />
+              <View style={[styles.shopTileCircle, locked && styles.shopTileCircleLocked]}>
+                {item.imageUrl ? (
+                  <Image source={{ uri: item.imageUrl }} style={styles.shopTileEmojiImage} resizeMode="contain" />
+                ) : (
+                  <Text style={styles.shopTileEmoji}>{item.emoji}</Text>
+                )}
+              </View>
             </View>
-          </View>
-        </Pressable>
-      </View>
-    );
+          </Pressable>
+        </View>
+      );
   };
 
   const renderInventoryItem: ListRenderItem<InventoryEntry> = ({ item, index }) => {
@@ -1445,7 +1564,13 @@ export function GardenSection({
                     }}
                     disabled={!emoji}
                   >
-                    {emoji && <Text style={styles.walletEmoji}>{emoji.emoji}</Text>}
+                    {emoji && (
+                      emoji.imageUrl ? (
+                        <Image source={{ uri: emoji.imageUrl }} style={styles.walletEmojiImage} resizeMode="contain" />
+                      ) : (
+                        <Text style={styles.walletEmoji}>{emoji.emoji}</Text>
+                      )
+                    )}
                   </Pressable>
                 );
               })}
@@ -1497,20 +1622,24 @@ export function GardenSection({
                 }
 
                 return (
-                <DraggablePlacement
-                  key={placement.id}
-                  placement={placement}
-                  baseSize={EMOJI_SIZE}
-                  onUpdate={(updates) => updatePlacement(placement.id, updates)}
-                  onDragBegin={handlePlacementDragBegin}
-                  onDragMove={handlePlacementDragMove}
-                  onDragEnd={handlePlacementDragEnd}
-                  onGestureActivated={handlePlacementGesture}
-                >
-                  <Text style={styles.canvasEmojiGlyph}>{emoji.emoji}</Text>
-                </DraggablePlacement>
-              );
-            }
+                  <DraggablePlacement
+                    key={placement.id}
+                    placement={placement}
+                    baseSize={EMOJI_SIZE}
+                    onUpdate={(updates) => updatePlacement(placement.id, updates)}
+                    onDragBegin={handlePlacementDragBegin}
+                    onDragMove={handlePlacementDragMove}
+                    onDragEnd={handlePlacementDragEnd}
+                    onGestureActivated={handlePlacementGesture}
+                  >
+                    {emoji.imageUrl ? (
+                      <Image source={{ uri: emoji.imageUrl }} style={styles.canvasEmojiImage} resizeMode="contain" />
+                    ) : (
+                      <Text style={styles.canvasEmojiGlyph}>{emoji.emoji}</Text>
+                    )}
+                  </DraggablePlacement>
+                );
+              }
 
               if (placement.kind === 'photo') {
                 return (
@@ -1936,32 +2065,32 @@ export function GardenSection({
                   </Pressable>
                 </View>
               </View>
-            {activeEmojiPicker === 'shop' ? (
-              <View style={styles.sheetEmojiChooser}>
-                {SHOP_EMOJI_CHOICES.map((emoji) => {
-                  const isActive = shopEmoji === emoji;
-                  return (
-                    <Pressable
-                      key={emoji}
-                      style={[styles.sheetEmojiOption, isActive && styles.sheetEmojiOptionActive]}
-                      onPress={() => {
-                        setShopEmoji(emoji);
-                        setActiveEmojiPicker(null);
-                      }}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: isActive }}
-                      accessibilityLabel={`Use ${emoji} for GardenShop`}
-                    >
-                      <Text
-                        style={[styles.sheetEmojiOptionText, isActive && styles.sheetEmojiOptionTextActive]}
+              {activeEmojiPicker === 'shop' ? (
+                <View style={styles.sheetEmojiChooser}>
+                  {SHOP_EMOJI_CHOICES.map((emoji) => {
+                    const isActive = shopEmoji === emoji;
+                    return (
+                      <Pressable
+                        key={emoji}
+                        style={[styles.sheetEmojiOption, isActive && styles.sheetEmojiOptionActive]}
+                        onPress={() => {
+                          setShopEmoji(emoji);
+                          setActiveEmojiPicker(null);
+                        }}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: isActive }}
+                        accessibilityLabel={`Use ${emoji} for GardenShop`}
                       >
-                        {emoji}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            ) : null}
+                        <Text
+                          style={[styles.sheetEmojiOptionText, isActive && styles.sheetEmojiOptionTextActive]}
+                        >
+                          {emoji}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : null}
             <View style={styles.sheetSearchBlock}>
               <View style={styles.searchRow}>
                 <TextInput
@@ -2032,7 +2161,96 @@ export function GardenSection({
                 })}
               </ScrollView>
             </View>
-            
+
+            {activeCategory === 'custom' && (
+              <View style={styles.customBlendCard}>
+                <Text style={styles.customBlendTitle}>Create with Emoji Kitchen</Text>
+                <Text style={styles.customBlendCopy}>
+                  Pick two emoji to blend into a brand-new garden decoration. Premium members can purchase the mashup to
+                  add it to their inventory.
+                </Text>
+
+                {hasPremiumUpgrade ? (
+                  <>
+                    <View style={styles.customBlendInputs}>
+                      <TextInput
+                        style={styles.customBlendInput}
+                        value={customEmojiLeft}
+                        onChangeText={(value) => setCustomEmojiLeft(value.trim())}
+                        maxLength={6}
+                        placeholder="🌸"
+                        accessibilityLabel="First emoji for Emoji Kitchen"
+                      />
+                      <Text style={styles.customBlendPlus}>+</Text>
+                      <TextInput
+                        style={styles.customBlendInput}
+                        value={customEmojiRight}
+                        onChangeText={(value) => setCustomEmojiRight(value.trim())}
+                        maxLength={6}
+                        placeholder="✨"
+                        accessibilityLabel="Second emoji for Emoji Kitchen"
+                      />
+                    </View>
+
+                    <Pressable
+                      style={[styles.customBlendButton, isLoadingCustomBlend && styles.customBlendButtonDisabled]}
+                      onPress={handleBlendCustomEmoji}
+                      disabled={isLoadingCustomBlend}
+                    >
+                      <Text style={styles.customBlendButtonText}>
+                        {isLoadingCustomBlend ? 'Blending...' : 'Blend in Emoji Kitchen'}
+                      </Text>
+                    </Pressable>
+
+                    {customBlendError ? <Text style={styles.customBlendError}>{customBlendError}</Text> : null}
+
+                    {customBlendPreview && (
+                      <View style={styles.customBlendPreviewRow}>
+                        <Image
+                          source={{ uri: customBlendPreview }}
+                          style={styles.customBlendImage}
+                          resizeMode="contain"
+                        />
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.customBlendName} numberOfLines={2}>
+                            {customBlendDescription || 'Emoji Kitchen blend'}
+                          </Text>
+                          <Text style={styles.customBlendPrice}>
+                            Costs {formatClickValue(customBlendCost ?? computeKitchenEmojiCost(`${customEmojiLeft}${customEmojiRight}`))}{' '}
+                            clicks
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+
+                    <Pressable
+                      style={[
+                        styles.customBlendPurchase,
+                        (!customBlendPreview || isLoadingCustomBlend) && styles.customBlendButtonDisabled,
+                      ]}
+                      disabled={!customBlendPreview || isLoadingCustomBlend}
+                      onPress={handlePurchaseCustomBlend}
+                      accessibilityLabel="Purchase custom Emoji Kitchen blend"
+                    >
+                      <Text style={styles.customBlendPurchaseText}>
+                        {customBlendPreview ? 'Purchase blend' : 'Create a blend to purchase'}
+                      </Text>
+                    </Pressable>
+                  </>
+                ) : (
+                  <View style={styles.customBlendUpsell}>
+                    <Text style={styles.customBlendUpsellTitle}>Premium required</Text>
+                    <Text style={styles.customBlendUpsellCopy}>
+                      Upgrade to unlock Emoji Kitchen mashups, premium accents, and special garden backgrounds.
+                    </Text>
+                    <Pressable style={styles.customBlendUpsellButton} onPress={purchasePremiumUpgrade}>
+                      <Text style={styles.customBlendUpsellButtonText}>Upgrade to Premium</Text>
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+            )}
+
             {/* Shop Preview Section - Shows selected emoji details */}
             {shopPreview && (
               <View style={{
@@ -2056,7 +2274,15 @@ export function GardenSection({
                     alignItems: 'center',
                     marginRight: 12,
                   }}>
-                    <Text style={{ fontSize: 32 }}>{shopPreview.emoji}</Text>
+                    {shopPreview.imageUrl ? (
+                      <Image
+                        source={{ uri: shopPreview.imageUrl }}
+                        style={styles.previewEmojiImage}
+                        resizeMode="contain"
+                      />
+                    ) : (
+                      <Text style={{ fontSize: 32 }}>{shopPreview.emoji}</Text>
+                    )}
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#0f172a' }}>
@@ -2130,7 +2356,7 @@ export function GardenSection({
               </View>
               {/* Scrolling placeholder removed - no test content */}
             </View>
-              {filteredShopInventory.length === 0 && (
+              {filteredShopInventory.length === 0 && activeCategory !== 'custom' && (
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyStateTitle}>No emoji match your search</Text>
                   <Text style={styles.emptyStateCopy}>
@@ -2242,13 +2468,21 @@ export function GardenSection({
                 </Text>
               </View>
               {selectedInventoryEmoji && (
-                <View style={styles.emojiStatsContainer}>
-                  <View style={styles.emojiStatsHeader}>
-                    <View style={styles.emojiStatsIconContainer}>
-                      <Text style={styles.emojiStatsIcon}>{selectedInventoryEmoji.emoji}</Text>
-                    </View>
-                    <View style={styles.emojiStatsInfo}>
-                      <Text style={styles.emojiStatsName}>{selectedInventoryEmoji.name}</Text>
+                  <View style={styles.emojiStatsContainer}>
+                    <View style={styles.emojiStatsHeader}>
+                      <View style={styles.emojiStatsIconContainer}>
+                        {selectedInventoryEmoji.imageUrl ? (
+                          <Image
+                            source={{ uri: selectedInventoryEmoji.imageUrl }}
+                            style={styles.emojiStatsIconImage}
+                            resizeMode="contain"
+                          />
+                        ) : (
+                          <Text style={styles.emojiStatsIcon}>{selectedInventoryEmoji.emoji}</Text>
+                        )}
+                      </View>
+                      <View style={styles.emojiStatsInfo}>
+                        <Text style={styles.emojiStatsName}>{selectedInventoryEmoji.name}</Text>
                       <Text style={styles.emojiStatsCategory}>
                         {CATEGORY_ICONS[selectedInventoryEmoji.category]} {CATEGORY_LABELS[selectedInventoryEmoji.category]}
                       </Text>
@@ -2475,11 +2709,15 @@ function InventoryTileItem({
         >
           <View style={styles.shopTileAura}>
             <View style={styles.shopTileHalo} />
-            <View style={[
-              styles.shopTileCircle, 
-              isSelected && { borderColor: '#0f766e', backgroundColor: '#ecfdf3' }
-            ]}>
-              <Text style={styles.shopTileEmoji}>{item.emoji}</Text>
+          <View style={[
+            styles.shopTileCircle,
+            isSelected && { borderColor: '#0f766e', backgroundColor: '#ecfdf3' }
+          ]}>
+              {item.imageUrl ? (
+                <Image source={{ uri: item.imageUrl }} style={styles.shopTileEmojiImage} resizeMode="contain" />
+              ) : (
+                <Text style={styles.shopTileEmoji}>{item.emoji}</Text>
+              )}
             </View>
           </View>
         </Pressable>
@@ -3151,6 +3389,10 @@ const styles = StyleSheet.create({
   canvasEmojiGlyph: {
     fontSize: 34,
   },
+  canvasEmojiImage: {
+    width: 42,
+    height: 42,
+  },
   canvasPhotoFrame: {
     width: '100%',
     height: '100%',
@@ -3502,6 +3744,127 @@ const styles = StyleSheet.create({
   },
   shopTileEmoji: {
     fontSize: 32,
+  },
+  shopTileEmojiImage: {
+    width: 36,
+    height: 36,
+  },
+  customBlendCard: {
+    backgroundColor: '#ecfeff',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#7dd3fc',
+    marginHorizontal: 4,
+    gap: 12,
+  },
+  customBlendTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  customBlendCopy: {
+    fontSize: 14,
+    color: '#334155',
+    lineHeight: 20,
+  },
+  customBlendInputs: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  customBlendInput: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 20,
+  },
+  customBlendPlus: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#0ea5e9',
+  },
+  customBlendButton: {
+    backgroundColor: '#0ea5e9',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  customBlendButtonDisabled: {
+    opacity: 0.5,
+  },
+  customBlendButtonText: {
+    color: '#ecfeff',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  customBlendError: {
+    color: '#b91c1c',
+    fontSize: 13,
+  },
+  customBlendPreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  customBlendImage: {
+    width: 78,
+    height: 78,
+    borderRadius: 14,
+    backgroundColor: '#fff',
+  },
+  customBlendName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 4,
+  },
+  customBlendPrice: {
+    fontSize: 14,
+    color: '#0f172a',
+  },
+  customBlendPurchase: {
+    backgroundColor: '#15803d',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  customBlendPurchaseText: {
+    color: '#ecfdf3',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  customBlendUpsell: {
+    backgroundColor: '#fef9c3',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#facc15',
+    gap: 8,
+  },
+  customBlendUpsellTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#713f12',
+  },
+  customBlendUpsellCopy: {
+    fontSize: 14,
+    color: '#854d0e',
+    lineHeight: 20,
+  },
+  customBlendUpsellButton: {
+    backgroundColor: '#f59e0b',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  customBlendUpsellButtonText: {
+    color: '#fefce8',
+    fontWeight: '700',
   },
   sheetCloseButton: {
     marginTop: 12,
@@ -4092,6 +4455,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 15,
   },
+  previewEmojiImage: {
+    width: 44,
+    height: 44,
+  },
   inventoryTileAura: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -4179,6 +4546,10 @@ const styles = StyleSheet.create({
   },
   emojiStatsIcon: {
     fontSize: 32,
+  },
+  emojiStatsIconImage: {
+    width: 36,
+    height: 36,
   },
   emojiStatsInfo: {
     flex: 1,
@@ -4276,6 +4647,10 @@ const styles = StyleSheet.create({
   },
   walletEmoji: {
     fontSize: 24,
+  },
+  walletEmojiImage: {
+    width: 28,
+    height: 28,
   },
   walletEmpty: {
     alignItems: 'center',

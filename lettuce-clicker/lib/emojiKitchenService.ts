@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import emojiKitchenMetadata from './emojiKitchenMetadata.json';
 
 type EmojiKitchenResponse = {
   url?: string;
@@ -9,14 +10,24 @@ type EmojiKitchenResponse = {
   description?: string;
 };
 
-const API_URL = 'https://emojikitchen.dev/api/v1/merge';
-
 const normalizeEmoji = (value: string) => value.trim();
 
 export type EmojiKitchenMash = {
   imageUrl: string;
   description: string;
 };
+
+// Patch: add type for metadata
+interface EmojiKitchenMetadata {
+  data: Record<string, {
+    combinations: Record<string, Array<{
+      gStaticUrl: string;
+      alt: string;
+    }>>;
+  }>;
+}
+
+const emojiKitchenMetadataTyped = emojiKitchenMetadata as EmojiKitchenMetadata;
 
 export async function fetchEmojiKitchenMash(baseEmoji: string, blendEmoji: string): Promise<EmojiKitchenMash> {
   const first = normalizeEmoji(baseEmoji);
@@ -26,33 +37,34 @@ export async function fetchEmojiKitchenMash(baseEmoji: string, blendEmoji: strin
     throw new Error('Choose two emoji to blend.');
   }
 
-  const params = new URLSearchParams({ emoji1: first, emoji2: second });
-  const requestUrl = `${API_URL}?${params.toString()}`;
-  const response = await fetch(requestUrl, {
-    headers: {
-      'User-Agent': `lettuce-click/${Platform.OS}`,
-      accept: 'application/json',
-    },
-  });
+  // Convert emoji to codepoints
+  function toCodepoint(emoji: string) {
+    return Array.from(emoji)
+      .map((c) => c.codePointAt(0)?.toString(16))
+      .filter(Boolean)
+      .join('-');
+  }
+  const leftCodepoint = toCodepoint(first);
+  const rightCodepoint = toCodepoint(second);
 
-  if (!response.ok) {
-    throw new Error('Emoji Kitchen is unavailable right now.');
+  // Try both orders (some combos are only one-way)
+  let combo = undefined;
+  if (
+    emojiKitchenMetadataTyped.data?.[leftCodepoint]?.combinations?.[rightCodepoint]?.length
+  ) {
+    combo = emojiKitchenMetadataTyped.data[leftCodepoint].combinations[rightCodepoint][0];
+  } else if (
+    emojiKitchenMetadataTyped.data?.[rightCodepoint]?.combinations?.[leftCodepoint]?.length
+  ) {
+    combo = emojiKitchenMetadataTyped.data[rightCodepoint].combinations[leftCodepoint][0];
   }
 
-  const data = (await response.json()) as EmojiKitchenResponse;
-  const derivedUrl =
-    data?.url ||
-    data?.imageUrl ||
-    data?.png ||
-    data?.result?.url ||
-    (Array.isArray(data?.results) ? data.results.find((entry) => Boolean(entry.url))?.url : undefined);
-
-  if (!derivedUrl) {
-    throw new Error('Emoji Kitchen did not return a blend for those picks.');
+  if (!combo) {
+    throw new Error('No Emoji Kitchen mashup for those picks.');
   }
 
   return {
-    imageUrl: derivedUrl,
-    description: data?.description || `${first} + ${second}`,
+    imageUrl: combo.gStaticUrl,
+    description: combo.alt || `${first} + ${second}`,
   };
 }

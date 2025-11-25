@@ -39,7 +39,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { computeBellCurveCost, emojiCategoryOrder, formatClickValue } from '@/constants/emojiCatalog';
 import { EmojiDefinition, Placement, TextStyleId, WidgetPromenadeEntry } from '@/context/GameContext';
-import { fetchEmojiKitchenMash, formatCustomEmojiName } from '@/lib/emojiKitchenService';
+import { fetchEmojiKitchenMash, formatCustomEmojiName, getRandomCompatibleEmoji } from '@/lib/emojiKitchenService';
 
 type Props = {
   harvest: number;
@@ -607,6 +607,51 @@ export function GardenSection({
       setIsLoadingCustomBlend(false);
     }
   }, [computeKitchenEmojiCost, customEmojiLeft, customEmojiRight, hasPremiumUpgrade]);
+
+  const handleRandomizeBlend = useCallback(async () => {
+    // Filter for base emojis (not custom ones) to ensure better compatibility
+    const candidates = emojiCatalog.filter(e => !e.id.startsWith('custom-'));
+    
+    if (candidates.length < 2) return;
+
+    setIsLoadingCustomBlend(true);
+    setCustomBlendError(null);
+    setCustomBlendPreview(null);
+    setCustomBlendDescription('');
+    setCustomBlendCost(null);
+
+    try {
+      let attempts = 0;
+      const maxAttempts = 5;
+      
+      while (attempts < maxAttempts) {
+        // Pick a random base emoji
+        const left = candidates[Math.floor(Math.random() * candidates.length)].emoji;
+        
+        // Find a compatible partner
+        const right = await getRandomCompatibleEmoji(left);
+        
+        if (right) {
+          setCustomEmojiLeft(left);
+          setCustomEmojiRight(right);
+          break;
+        }
+        
+        attempts++;
+      }
+      
+      if (attempts >= maxAttempts) {
+        // Fallback if we can't find a match quickly (unlikely but safe)
+        const pick = () => candidates[Math.floor(Math.random() * candidates.length)].emoji;
+        setCustomEmojiLeft(pick());
+        setCustomEmojiRight(pick());
+      }
+    } catch (error) {
+      console.warn('Randomize blend failed:', error);
+    } finally {
+      setIsLoadingCustomBlend(false);
+    }
+  }, [emojiCatalog]);
 
   const handlePurchaseCustomBlend = useCallback(async () => {
     if (!customBlendPreview) {
@@ -2164,7 +2209,12 @@ export function GardenSection({
 
             {activeCategory === 'custom' && (
               <View style={styles.customBlendCard}>
-                <Text style={styles.customBlendTitle}>Create with Emoji Kitchen</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={styles.customBlendTitle}>Create with Emoji Kitchen</Text>
+                  <Pressable onPress={handleRandomizeBlend} style={{ padding: 4 }}>
+                    <Text style={{ fontSize: 24 }}>🎲</Text>
+                  </Pressable>
+                </View>
                 <Text style={styles.customBlendCopy}>
                   Pick two emoji to blend into a brand-new garden decoration. Premium members can purchase the mashup to
                   add it to their inventory.

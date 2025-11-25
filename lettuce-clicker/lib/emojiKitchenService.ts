@@ -163,3 +163,37 @@ export async function isEmojiKitchenSupported(emoji: string): Promise<boolean> {
   const chunk = await loadEmojiKitchenChunk(cp);
   return Boolean(chunk.data?.[cp]);
 }
+
+function fromCodepoint(codepoint: string): string {
+  try {
+    return String.fromCodePoint(...codepoint.split('-').map(hex => parseInt(hex, 16)));
+  } catch {
+    return '';
+  }
+}
+
+export async function getRandomCompatibleEmoji(baseEmoji: string): Promise<string | null> {
+  const normalized = normalizeEmoji(baseEmoji);
+  if (!normalized) return null;
+
+  const cp = toCodepoint(normalized);
+  const cpStrip = stripVS16(cp);
+
+  // Load chunk for base emoji
+  let chunk = await loadEmojiKitchenChunk(cp);
+  let data = chunk.data?.[cp];
+
+  // If not found, try stripped version
+  if (!data && cp !== cpStrip) {
+    chunk = await loadEmojiKitchenChunk(cpStrip);
+    data = chunk.data?.[cpStrip];
+  }
+
+  if (!data || !data.combinations) return null;
+
+  const keys = Object.keys(data.combinations);
+  if (keys.length === 0) return null;
+
+  const randomKey = keys[Math.floor(Math.random() * keys.length)];
+  return fromCodepoint(randomKey);
+}

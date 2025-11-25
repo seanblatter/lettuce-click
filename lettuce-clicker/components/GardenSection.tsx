@@ -23,6 +23,7 @@ import {
 } from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
 import * as ImagePicker from 'expo-image-picker';
+import { Image as ExpoImage } from 'expo-image';
 import { Directions, Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   cancelAnimation,
@@ -38,7 +39,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { computeBellCurveCost, emojiCategoryOrder, formatClickValue } from '@/constants/emojiCatalog';
 import { EmojiDefinition, Placement, TextStyleId, WidgetPromenadeEntry } from '@/context/GameContext';
-import { fetchEmojiKitchenMash } from '@/lib/emojiKitchenService';
+import { fetchEmojiKitchenMash, formatCustomEmojiName } from '@/lib/emojiKitchenService';
 
 type Props = {
   harvest: number;
@@ -617,7 +618,7 @@ export function GardenSection({
     const blendCost = customBlendCost ?? computeKitchenEmojiCost(compositeEmoji);
 
     const definition = registerCustomEmoji(compositeEmoji, {
-      name: customBlendDescription ? `Emoji Kitchen: ${customBlendDescription}` : undefined,
+      name: customBlendDescription ? formatCustomEmojiName(customBlendDescription) : undefined,
       costOverride: blendCost,
       imageUrl: customBlendPreview,
       tags: ['emoji kitchen', 'blend', compositeEmoji],
@@ -628,9 +629,8 @@ export function GardenSection({
       return;
     }
 
-    await wait(32);
-
-    const success = purchaseEmoji(definition.id);
+    // Pass definition directly to avoid async state race condition
+    const success = purchaseEmoji(definition.id, definition);
 
     if (!success) {
       setCustomBlendError('Earn more clicks to purchase this blend.');
@@ -1451,7 +1451,7 @@ export function GardenSection({
               <View style={styles.shopTileHalo} />
               <View style={[styles.shopTileCircle, locked && styles.shopTileCircleLocked]}>
                 {item.imageUrl ? (
-                  <Image source={{ uri: item.imageUrl }} style={styles.shopTileEmojiImage} resizeMode="contain" />
+                  <ExpoImage source={{ uri: item.imageUrl }} style={styles.shopTileEmojiImage} contentFit="contain" />
                 ) : (
                   <Text style={styles.shopTileEmoji}>{item.emoji}</Text>
                 )}
@@ -1566,7 +1566,7 @@ export function GardenSection({
                   >
                     {emoji && (
                       emoji.imageUrl ? (
-                        <Image source={{ uri: emoji.imageUrl }} style={styles.walletEmojiImage} resizeMode="contain" />
+                        <ExpoImage source={{ uri: emoji.imageUrl }} style={styles.walletEmojiImage} contentFit="contain" />
                       ) : (
                         <Text style={styles.walletEmoji}>{emoji.emoji}</Text>
                       )
@@ -1633,7 +1633,7 @@ export function GardenSection({
                     onGestureActivated={handlePlacementGesture}
                   >
                     {emoji.imageUrl ? (
-                      <Image source={{ uri: emoji.imageUrl }} style={styles.canvasEmojiImage} resizeMode="contain" />
+                      <ExpoImage source={{ uri: emoji.imageUrl }} style={styles.canvasEmojiImage} contentFit="contain" />
                     ) : (
                       <Text style={styles.canvasEmojiGlyph}>{emoji.emoji}</Text>
                     )}
@@ -2174,20 +2174,28 @@ export function GardenSection({
                   <>
                     <View style={styles.customBlendInputs}>
                       <TextInput
-                        style={styles.customBlendInput}
+                        style={[styles.customBlendInput, { color: '#0f172a' }]}
                         value={customEmojiLeft}
-                        onChangeText={(value) => setCustomEmojiLeft(value.trim())}
+                        onChangeText={(value) => {
+                          // Only allow emoji (no letters or numbers)
+                          const emojiOnly = value.replace(/[^\p{Extended_Pictographic}\u200d\uFE0E\uFE0F]/gu, '');
+                          setCustomEmojiLeft(emojiOnly.trim());
+                        }}
                         maxLength={6}
-                        placeholder="🌸"
+                        placeholder=""
                         accessibilityLabel="First emoji for Emoji Kitchen"
                       />
                       <Text style={styles.customBlendPlus}>+</Text>
                       <TextInput
-                        style={styles.customBlendInput}
+                        style={[styles.customBlendInput, { color: '#0f172a' }]}
                         value={customEmojiRight}
-                        onChangeText={(value) => setCustomEmojiRight(value.trim())}
+                        onChangeText={(value) => {
+                          // Only allow emoji (no letters or numbers)
+                          const emojiOnly = value.replace(/[^\p{Extended_Pictographic}\u200d\uFE0E\uFE0F]/gu, '');
+                          setCustomEmojiRight(emojiOnly.trim());
+                        }}
                         maxLength={6}
-                        placeholder="✨"
+                        placeholder=""
                         accessibilityLabel="Second emoji for Emoji Kitchen"
                       />
                     </View>
@@ -2206,14 +2214,16 @@ export function GardenSection({
 
                     {customBlendPreview && (
                       <View style={styles.customBlendPreviewRow}>
-                        <Image
-                          source={{ uri: customBlendPreview }}
-                          style={styles.customBlendImage}
-                          resizeMode="contain"
-                        />
+                        <View style={styles.customBlendImageContainer}>
+                          <ExpoImage
+                            source={{ uri: customBlendPreview }}
+                            style={styles.customBlendImage}
+                            contentFit="contain"
+                          />
+                        </View>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.customBlendName} numberOfLines={2}>
-                            {customBlendDescription || 'Emoji Kitchen blend'}
+                            {customBlendDescription ? formatCustomEmojiName(customBlendDescription) : 'Emoji Kitchen blend'}
                           </Text>
                           <Text style={styles.customBlendPrice}>
                             Costs {formatClickValue(customBlendCost ?? computeKitchenEmojiCost(`${customEmojiLeft}${customEmojiRight}`))}{' '}
@@ -2275,10 +2285,10 @@ export function GardenSection({
                     marginRight: 12,
                   }}>
                     {shopPreview.imageUrl ? (
-                      <Image
+                      <ExpoImage
                         source={{ uri: shopPreview.imageUrl }}
                         style={styles.previewEmojiImage}
-                        resizeMode="contain"
+                        contentFit="contain"
                       />
                     ) : (
                       <Text style={{ fontSize: 32 }}>{shopPreview.emoji}</Text>
@@ -2472,10 +2482,10 @@ export function GardenSection({
                     <View style={styles.emojiStatsHeader}>
                       <View style={styles.emojiStatsIconContainer}>
                         {selectedInventoryEmoji.imageUrl ? (
-                          <Image
+                          <ExpoImage
                             source={{ uri: selectedInventoryEmoji.imageUrl }}
                             style={styles.emojiStatsIconImage}
-                            resizeMode="contain"
+                            contentFit="contain"
                           />
                         ) : (
                           <Text style={styles.emojiStatsIcon}>{selectedInventoryEmoji.emoji}</Text>
@@ -2714,7 +2724,7 @@ function InventoryTileItem({
             isSelected && { borderColor: '#0f766e', backgroundColor: '#ecfdf3' }
           ]}>
               {item.imageUrl ? (
-                <Image source={{ uri: item.imageUrl }} style={styles.shopTileEmojiImage} resizeMode="contain" />
+                <ExpoImage source={{ uri: item.imageUrl }} style={styles.shopTileEmojiImage} contentFit="contain" />
               ) : (
                 <Text style={styles.shopTileEmoji}>{item.emoji}</Text>
               )}
@@ -3811,11 +3821,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
+  customBlendImageContainer: {
+    width: 78,
+    height: 78,
+    borderRadius: 39,
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
   customBlendImage: {
     width: 78,
     height: 78,
-    borderRadius: 14,
-    backgroundColor: '#fff',
   },
   customBlendName: {
     fontSize: 16,

@@ -167,7 +167,7 @@ type GameContextValue = {
   spendHarvestAmount: (amount: number) => boolean;
   purchaseUpgrade: (upgradeId: string) => boolean;
   purchaseEmojiTheme: (themeId: HomeEmojiTheme) => boolean;
-  purchaseEmoji: (emojiId: string) => boolean;
+  purchaseEmoji: (emojiId: string, definition?: EmojiDefinition) => boolean;
   grantEmojiUnlock: (emojiId: string) => boolean;
   placeEmoji: (emojiId: string, position: { x: number; y: number }) => boolean;
   addPhotoPlacement: (imageUri: string, position: { x: number; y: number }) => boolean;
@@ -724,61 +724,58 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         .filter((value): value is string => Boolean(value))
         .join('-');
 
-      if (!idFragment) {
+      // For Emoji Kitchen blends, we might have a very long ID or complex sequence.
+      // If we have an imageUrl, we should trust it's a valid custom emoji even if the ID generation is tricky.
+      // However, we still need a unique ID.
+      if (!idFragment && !options?.imageUrl) {
         return null;
       }
 
-      const customId = `custom-${idFragment}`;
+      const customId = `custom-${idFragment || Date.now().toString()}`;
 
       if (customEmojiCatalog[customId]) {
         return customEmojiCatalog[customId];
       }
 
-      let createdDefinition: EmojiDefinition | null = null;
+      // We need to return the definition immediately for the caller to use it.
+      // Since setCustomEmojiCatalog is async/batched, we can't rely on reading it back from state immediately.
+      // We'll construct the definition, schedule the update, and return the definition directly.
+
+      const metaName = options?.name
+        ? options.name
+        : (emojiNameMap && (emojiNameMap[normalized] || emojiNameMap[trimmed])) || null;
+      
+      const titleCase = (value: string) =>
+        value
+          .split(/\s+/)
+          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(' ');
+
+      const nextDefinition: EmojiDefinition = {
+        id: customId,
+        emoji: trimmed,
+        name: metaName ? titleCase(metaName as string) : `Garden Emoji ${trimmed}`,
+        cost: options?.costOverride ?? computeCustomEmojiCost(normalized),
+        category: pickCustomCategory(normalized),
+        tags: [
+          ...(metaName ? (metaName as string).split(/\s+/).map((s) => s.toLowerCase()) : []),
+          trimmed.toLowerCase(),
+          normalized.toLowerCase(),
+          ...(metaName ? [] : ['custom emoji']),
+          ...(options?.tags ?? []),
+        ],
+        popularity: 1000 + Object.keys(customEmojiCatalog).length,
+        imageUrl: options?.imageUrl,
+      };
 
       setCustomEmojiCatalog((prev) => {
         if (prev[customId]) {
-          createdDefinition = prev[customId];
           return prev;
         }
-
-        const metaName = options?.name
-          ? options.name
-          : (emojiNameMap && (emojiNameMap[normalized] || emojiNameMap[trimmed])) || null;
-        const titleCase = (value: string) =>
-          value
-            .split(/\s+/)
-            .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-            .join(' ');
-
-        // Debug: log any time a custom emoji is registered and what meta info we found
-        // This helps validate the mapping for emoji glyphs like '❤️' or multi-codepoint sequences
-        // and is safe to keep for now since it's only an informational log.
-        // eslint-disable-next-line no-console
-        console.log('Registering custom emoji', { trimmed, normalized, metaName });
-
-        const nextDefinition: EmojiDefinition = {
-          id: customId,
-          emoji: trimmed,
-          name: metaName ? titleCase(metaName as string) : `Garden Emoji ${trimmed}`,
-          cost: options?.costOverride ?? computeCustomEmojiCost(normalized),
-          category: pickCustomCategory(normalized),
-          tags: [
-            ...(metaName ? (metaName as string).split(/\s+/).map((s) => s.toLowerCase()) : []),
-            trimmed.toLowerCase(),
-            normalized.toLowerCase(),
-            ...(metaName ? [] : ['custom emoji']),
-            ...(options?.tags ?? []),
-          ],
-          popularity: 1000 + Object.keys(prev).length,
-          imageUrl: options?.imageUrl,
-        };
-
-        createdDefinition = nextDefinition;
         return { ...prev, [customId]: nextDefinition };
       });
 
-      return createdDefinition;
+      return nextDefinition;
     },
     [
       computeCustomEmojiCost,
@@ -1048,8 +1045,8 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   };
 
   const purchaseEmoji = useCallback(
-    (emojiId: string) => {
-      const emoji = findEmojiDefinition(emojiId);
+    (emojiId: string, definition?: EmojiDefinition) => {
+      const emoji = definition || findEmojiDefinition(emojiId);
 
       if (!emoji) {
         return false;
